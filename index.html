@@ -152,6 +152,42 @@
 
       <section class="canvas-wrap">
         <div id="drawingHint" class="drawing-hint" hidden>Select points counterclockwise.</div>
+        <div id="transformPanel" class="transform-panel" hidden>
+          <div class="transform-header">
+            <strong id="transformTitle">Transform Triangle</strong>
+            <button id="closeTransformPanel" type="button" class="mini-btn">Close</button>
+          </div>
+
+          <div id="movePanel" hidden>
+            <div class="transform-grid">
+              <label for="moveXSlider">Move X</label>
+              <input id="moveXSlider" type="range" min="-8" max="8" step="0.1" value="0" />
+              <span id="moveXValue">0.0</span>
+
+              <label for="moveYSlider">Move Y</label>
+              <input id="moveYSlider" type="range" min="-8" max="8" step="0.1" value="0" />
+              <span id="moveYValue">0.0</span>
+            </div>
+            <div class="transform-actions">
+              <button id="applyMoveTriangle" type="button">Apply Move</button>
+              <button id="cancelMoveTriangle" type="button">Cancel</button>
+            </div>
+          </div>
+
+          <div id="rotatePanel" hidden>
+            <div class="compass-wrap">
+              <div id="rotationCompass" class="rotation-compass">
+                <div id="compassArm" class="compass-arm"></div>
+                <div class="compass-center"></div>
+              </div>
+              <div class="rotation-readout"><span id="rotateValue">0°</span></div>
+            </div>
+            <div class="transform-actions">
+              <button id="applyRotateTriangle" type="button">Apply Rotation</button>
+              <button id="cancelRotateTriangle" type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
         <div id="jxgbox" class="jxgbox" aria-label="Geometry board"></div>
       </section>
     </main>
