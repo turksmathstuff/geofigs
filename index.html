@@ -47,10 +47,30 @@
         <section>
           <h2>Annotate</h2>
           <div class="grid-buttons">
-            <button id="markTick1">1 Tick</button>
-            <button id="markTick2">2 Ticks</button>
-            <button id="markTick3">3 Ticks</button>
-            <button id="markAngle">Angle Arc</button>
+            <details class="annotate-group">
+              <summary>Segment Ticks</summary>
+              <div class="annotate-subgrid">
+                <button id="markTick1">1 Tick</button>
+                <button id="markTick2">2 Ticks</button>
+                <button id="markTick3">3 Ticks</button>
+              </div>
+            </details>
+            <details class="annotate-group">
+              <summary>Angle Arcs</summary>
+              <div class="annotate-subgrid">
+                <button id="markAngle1">1 Angle Arc</button>
+                <button id="markAngle2">2 Angle Arcs</button>
+                <button id="markAngle3">3 Angle Arcs</button>
+              </div>
+            </details>
+            <details class="annotate-group">
+              <summary>Parallel Marks</summary>
+              <div class="annotate-subgrid">
+                <button id="markParallel1">1 Mark</button>
+                <button id="markParallel2">2 Marks</button>
+                <button id="markParallel3">3 Marks</button>
+              </div>
+            </details>
             <button id="markRightAngle">Right Angle</button>
             <button id="addLabel">Add Label</button>
             <button id="autoLabel">Auto Label</button>
@@ -82,13 +102,6 @@
 
         <section>
           <h2>Export</h2>
-          <div class="form-row">
-            <label for="sizePreset">Size</label>
-            <select id="sizePreset">
-              <option value="800x600">800x600</option>
-              <option value="1200x900">1200x900</option>
-            </select>
-          </div>
           <div class="form-row">
             <label for="pngScale">PNG Scale</label>
             <select id="pngScale">
@@ -131,6 +144,7 @@
       </aside>
 
       <section class="canvas-wrap">
+        <div id="drawingHint" class="drawing-hint" hidden>Select points counterclockwise.</div>
         <div id="jxgbox" class="jxgbox" aria-label="Geometry board"></div>
       </section>
     </main>

@@ -121,6 +121,42 @@ h2 {
   text-align: left;
 }
 
+.annotate-group {
+  grid-column: span 2;
+  border: 1px solid #bac7d6;
+  border-radius: 8px;
+  background: #f9fbfd;
+  padding: 0.25rem 0.35rem 0.35rem;
+}
+
+.annotate-group summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #314152;
+}
+
+.annotate-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.annotate-group summary::before {
+  content: "▸ ";
+  color: #516274;
+}
+
+.annotate-group[open] summary::before {
+  content: "▾ ";
+}
+
+.annotate-subgrid {
+  margin-top: 0.35rem;
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 button,
 .file-label {
   border: 1px solid #bac7d6;
@@ -173,11 +209,29 @@ button.active {
 }
 
 .canvas-wrap {
+  position: relative;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
   padding: 0.8rem;
   min-height: 640px;
+}
+
+.drawing-hint {
+  position: absolute;
+  top: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(255, 250, 226, 0.96);
+  border: 1px solid #e4c36e;
+  color: #4d3a00;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 24px rgba(33, 27, 10, 0.14);
 }
 
 .jxgbox {
