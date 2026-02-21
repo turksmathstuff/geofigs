@@ -247,6 +247,111 @@ button.active {
   pointer-events: none;
 }
 
+.transform-panel {
+  position: absolute;
+  right: 1.2rem;
+  top: 1.2rem;
+  z-index: 22;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #c8d3e0;
+  border-radius: 10px;
+  padding: 0.65rem;
+  min-width: 270px;
+  box-shadow: 0 10px 30px rgba(23, 32, 47, 0.14);
+}
+
+.transform-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.transform-grid {
+  display: grid;
+  grid-template-columns: 56px 1fr 42px;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+}
+
+.transform-grid label {
+  font-size: 0.86rem;
+  color: #4f5f70;
+}
+
+.transform-grid span {
+  text-align: right;
+  font-size: 0.84rem;
+  color: #445261;
+}
+
+.transform-actions {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.compass-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+}
+
+.rotation-compass {
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: 1px solid #b9c6d5;
+  background:
+    radial-gradient(circle at center, rgba(170, 185, 203, 0.2) 0 4px, transparent 5px),
+    conic-gradient(from 0deg, #f7fafc, #edf3f8, #f7fafc);
+  position: relative;
+  cursor: grab;
+}
+
+.rotation-compass.dragging {
+  cursor: grabbing;
+}
+
+.compass-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  background: #0f766e;
+  border-radius: 50%;
+}
+
+.compass-arm {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 2px;
+  background: #0f766e;
+  transform-origin: 0 50%;
+  transform: translateY(-50%) rotate(0deg);
+}
+
+.compass-arm::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translateY(-50%) rotate(45deg);
+  background: #0f766e;
+}
+
+.rotation-readout {
+  font-size: 0.92rem;
+  color: #334155;
+}
+
 .jxgbox {
   width: 100%;
   height: calc(100vh - 120px);
