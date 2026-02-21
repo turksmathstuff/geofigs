@@ -1,9 +1,10 @@
 export class BoardController {
-  constructor(containerId, onBoardClick, onObjectClick, onBoardMove) {
+  constructor(containerId, onBoardClick, onObjectClick, onBoardMove, onObjectMove) {
     this.containerId = containerId;
     this.onBoardClick = onBoardClick;
     this.onObjectClick = onObjectClick;
     this.onBoardMove = onBoardMove;
+    this.onObjectMove = onObjectMove;
     this.board = null;
     this.elements = new Map();
     this.suppressNextBoardDown = false;
@@ -83,14 +84,50 @@ export class BoardController {
     this.board.update();
   }
 
+  showPreviewLinear(p1, p2, kind = "segment") {
+    this.clearPreview();
+    const attrs = {
+      strokeColor: "#9ca3af",
+      strokeWidth: 2,
+      dash: 2,
+      fixed: true,
+      highlight: false,
+    };
+    const a = this.board.create("point", [p1.x, p1.y], { visible: false, fixed: true, name: "" });
+    const b = this.board.create("point", [p2.x, p2.y], { visible: false, fixed: true, name: "" });
+    let line;
+    if (kind === "segment") {
+      line = this.board.create("segment", [a, b], attrs);
+    } else if (kind === "ray") {
+      line = this.board.create("line", [a, b], { ...attrs, straightFirst: false, straightLast: true });
+    } else {
+      line = this.board.create("line", [a, b], { ...attrs, straightFirst: true, straightLast: true });
+    }
+    this.previewElements = [line, a, b];
+    this.board.update();
+  }
+
   registerElement(logicalId, type, el) {
     el.visProp.highlight = false;
     this.elements.set(logicalId, { type, el });
     el.on("down", (evt) => {
-      this.suppressNextBoardDown = true;
-      evt.stopPropagation();
+      let consume = true;
       if (this.onObjectClick) {
-        this.onObjectClick(logicalId, type, evt);
+        consume = this.onObjectClick(logicalId, type, evt) !== false;
+      }
+      if (consume) {
+        this.suppressNextBoardDown = true;
+        evt.stopPropagation();
+      } else {
+        this.suppressNextBoardDown = false;
+      }
+    });
+    el.on("up", () => {
+      if (!this.onObjectMove) {
+        return;
+      }
+      if (type === "point" || type === "label") {
+        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() });
       }
     });
     return el;
@@ -228,11 +265,74 @@ export class BoardController {
     return this.registerElement(id, "congruency", el);
   }
 
+  createParallelChevronMarks(id, target, markCount, style = {}) {
+    if (!target?.point1 || !target?.point2) {
+      return this.createTickMark(id, target, markCount, style);
+    }
+    const segments = [];
+    const count = Math.max(1, Number(markCount || 1));
+    const spacing = 0.42;
+    const arm = 0.5;
+    const spread = 0.22;
+
+    const px = () => target.point2.X() - target.point1.X();
+    const py = () => target.point2.Y() - target.point1.Y();
+    const plen = () => Math.hypot(px(), py()) || 1;
+    const ux = () => px() / plen();
+    const uy = () => py() / plen();
+    const nx = () => -uy();
+    const ny = () => ux();
+    const cx = () => (target.point1.X() + target.point2.X()) / 2;
+    const cy = () => (target.point1.Y() + target.point2.Y()) / 2;
+
+    for (let i = 0; i < count; i += 1) {
+      const offset = (i - (count - 1) / 2) * spacing;
+      const mx = () => cx() + ux() * offset;
+      const my = () => cy() + uy() * offset;
+
+      // Chevron vertex stays on the line; arms trail along line direction.
+      const pLeft = this.board.create("point", [() => mx() - ux() * arm + nx() * spread, () => my() - uy() * arm + ny() * spread], {
+        visible: false,
+        fixed: true,
+        name: "",
+      });
+      const pMid = this.board.create("point", [() => mx(), () => my()], {
+        visible: false,
+        fixed: true,
+        name: "",
+      });
+      const pRight = this.board.create("point", [() => mx() - ux() * arm - nx() * spread, () => my() - uy() * arm - ny() * spread], {
+        visible: false,
+        fixed: true,
+        name: "",
+      });
+      const segA = this.board.create("segment", [pLeft, pMid], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: 0,
+      });
+      const segB = this.board.create("segment", [pMid, pRight], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: 0,
+      });
+      segments.push(segA, segB);
+    }
+
+    const primary = this.registerElement(id, "congruency", segments[0]);
+    for (let i = 1; i < segments.length; i += 1) {
+      segments[i].visProp.highlight = false;
+    }
+    this.board.update();
+    return primary;
+  }
+
   createText(id, x, y, text, style = {}) {
     const el = this.board.create("text", [x, y, text], {
       fontSize: style.fontSize || 16,
       color: style.strokeColor || "#111",
-      fixed: true,
+      fixed: false,
+      draggable: true,
     });
     return this.registerElement(id, "label", el);
   }
