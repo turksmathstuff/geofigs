@@ -1296,6 +1296,86 @@ function createSimilarTriangleCopy() {
   });
 }
 
+function triangleCentroid(pointIds) {
+  const pts = pointIds.map((id) => getPointById(id)).filter(Boolean);
+  if (pts.length !== 3) {
+    return null;
+  }
+  return {
+    x: (pts[0].x + pts[1].x + pts[2].x) / 3,
+    y: (pts[0].y + pts[1].y + pts[2].y) / 3,
+  };
+}
+
+function moveSelectedTriangle() {
+  const pointIds = findTriangleFromSelection();
+  if (!pointIds) {
+    alert("Select one triangle first (3 points or its 3 sides).");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const dxText = prompt("Move triangle: Δx", "1");
+  if (dxText === null) {
+    return;
+  }
+  const dyText = prompt("Move triangle: Δy", "0");
+  if (dyText === null) {
+    return;
+  }
+  const dx = Number(dxText);
+  const dy = Number(dyText);
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+    alert("Please enter valid numeric values for Δx and Δy.");
+    return;
+  }
+
+  runMutation("move-selected-triangle", () => {
+    for (const id of pointIds) {
+      const p = getPointById(id);
+      if (!p) {
+        continue;
+      }
+      p.x += dx;
+      p.y += dy;
+    }
+  });
+}
+
+function rotateSelectedTriangle() {
+  const pointIds = findTriangleFromSelection();
+  if (!pointIds) {
+    alert("Select one triangle first (3 points or its 3 sides).");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const degText = prompt("Rotate triangle: degrees (counterclockwise +)", "15");
+  if (degText === null) {
+    return;
+  }
+  const deg = Number(degText);
+  if (!Number.isFinite(deg)) {
+    alert("Please enter a valid numeric degree value.");
+    return;
+  }
+  const center = triangleCentroid(pointIds);
+  if (!center) {
+    return;
+  }
+  const angleRad = (deg * Math.PI) / 180;
+
+  runMutation("rotate-selected-triangle", () => {
+    for (const id of pointIds) {
+      const p = getPointById(id);
+      if (!p) {
+        continue;
+      }
+      const transformed = transformPointAround(p, center, 1, angleRad, { x: 0, y: 0 });
+      p.x = transformed.x;
+      p.y = transformed.y;
+    }
+  });
+}
+
 function applyStyleToSelection() {
   const color = document.getElementById("strokeColor").value;
   const width = Number(document.getElementById("strokeWidth").value);
@@ -1693,6 +1773,8 @@ function wireUi() {
   document.getElementById("makePerpendicular").addEventListener("click", () => createParallelOrPerpendicular("perpendicular"));
   document.getElementById("makeCongruentTriangle").addEventListener("click", createCongruentTriangleCopy);
   document.getElementById("makeSimilarTriangle").addEventListener("click", createSimilarTriangleCopy);
+  document.getElementById("moveSelectedTriangle").addEventListener("click", moveSelectedTriangle);
+  document.getElementById("rotateSelectedTriangle").addEventListener("click", rotateSelectedTriangle);
 
   document.getElementById("deleteSelected").addEventListener("click", deleteSelected);
   document.getElementById("clearBoard").addEventListener("click", clearBoard);
