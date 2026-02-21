@@ -18,8 +18,20 @@ export class AppStore {
     return cloneFigureDoc(this.doc);
   }
 
+  comparableSnapshot(doc) {
+    return {
+      canvas: doc.canvas,
+      objects: doc.objects,
+      annotations: doc.annotations,
+      styles: doc.styles,
+      title: doc.metadata?.title || "",
+    };
+  }
+
   commitSnapshot(label, before, after, applyDoc) {
-    if (JSON.stringify(before) === JSON.stringify(after)) {
+    const beforeCmp = this.comparableSnapshot(before);
+    const afterCmp = this.comparableSnapshot(after);
+    if (JSON.stringify(beforeCmp) === JSON.stringify(afterCmp)) {
       return;
     }
     this.commandStack.record({

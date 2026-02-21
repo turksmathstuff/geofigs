@@ -13,6 +13,8 @@ import { timestampForFile } from "./utils/time.js";
 
 const store = new AppStore();
 const statusEl = document.getElementById("statusText");
+const drawingHintEl = document.getElementById("drawingHint");
+const autoLabelBtn = document.getElementById("autoLabel");
 const modeButtons = [...document.querySelectorAll("button[data-mode]")];
 const triangleMenuBtn = document.getElementById("triangleMenuBtn");
 const triangleMenuPanel = document.getElementById("triangleMenuPanel");
@@ -21,6 +23,7 @@ const triangleModeButtons = [...document.querySelectorAll("button[data-triangle-
 let currentMode = ToolMode.SELECT;
 let pendingPointIds = [];
 let pendingAngleIsRight = false;
+let pendingAngleArcCount = 1;
 let triangleVariant = "three-point";
 
 const boardController = new BoardController(
@@ -51,7 +54,26 @@ function modeLabel(mode) {
     }
     return "3-Point Triangle";
   }
+  if (mode === ToolMode.LABEL) {
+    return "Auto Label";
+  }
   return mode.charAt(0).toUpperCase() + mode.slice(1);
+}
+
+function canvasHintText() {
+  if (currentMode === ToolMode.ANGLE) {
+    return "Select points counterclockwise.";
+  }
+  if (currentMode === ToolMode.LABEL) {
+    return "Click objects to add label. Click labeled objects to remove label.";
+  }
+  if (currentMode === ToolMode.SELECT) {
+    return "Hold Shift to select more than one object.";
+  }
+  if ([ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY, ToolMode.TRIANGLE].includes(currentMode)) {
+    return "Hold Shift to move horizontal/vertical.";
+  }
+  return "";
 }
 
 function updateModeUi() {
@@ -64,7 +86,15 @@ function updateModeUi() {
   triangleModeButtons.forEach((btn) => {
     btn.classList.toggle("active", currentMode === ToolMode.TRIANGLE && btn.dataset.triangleMode === triangleVariant);
   });
+  if (autoLabelBtn) {
+    autoLabelBtn.classList.toggle("active", currentMode === ToolMode.LABEL);
+  }
   statusEl.textContent = `Mode: ${modeLabel(currentMode)}`;
+  if (drawingHintEl) {
+    const text = canvasHintText();
+    drawingHintEl.textContent = text;
+    drawingHintEl.hidden = !text;
+  }
 }
 
 function setMode(mode) {
@@ -75,6 +105,7 @@ function setMode(mode) {
   pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
     pendingAngleIsRight = false;
+    pendingAngleArcCount = 1;
   }
   boardController.clearPreview();
   updateModeUi();
@@ -89,18 +120,15 @@ function setTriangleMode(variant) {
   setMode(ToolMode.TRIANGLE);
 }
 
-function parseSizePreset() {
-  const size = document.getElementById("sizePreset").value;
-  const [width, height] = size.split("x").map(Number);
-  return { width, height };
-}
-
 function pointNeeds(mode) {
   if (mode === ToolMode.SEGMENT || mode === ToolMode.LINE || mode === ToolMode.RAY) {
     return 2;
   }
   if (mode === ToolMode.TRIANGLE) {
-    return triangleVariant === "three-point" ? 3 : 2;
+    if (triangleVariant === "right") {
+      return 2;
+    }
+    return 3;
   }
   if (mode === ToolMode.ANGLE) {
     return 3;
@@ -118,6 +146,10 @@ function getObjectById(id) {
 function getPointById(id) {
   const o = getObjectById(id);
   return o && o.type === "point" ? o : null;
+}
+
+function getAutoLabelObjectByTargetId(targetId) {
+  return store.doc.objects.find((o) => o.type === "label" && o.auto === true && o.targetId === targetId);
 }
 
 function addObject(obj) {
@@ -195,10 +227,133 @@ function addTriangleEdges(pointIds, style) {
   addObject({ id: makeId("seg"), type: "segment", pointIds: [pointIds[2], pointIds[0]], style });
 }
 
+function usedLabels() {
+  const used = new Set();
+  for (const obj of store.doc.objects) {
+    if (obj.type === "point" && obj.name) {
+      used.add(obj.name);
+    }
+    if (obj.type === "label" && obj.text) {
+      used.add(obj.text);
+    }
+  }
+  return used;
+}
+
+function nextAutoLabel() {
+  const used = usedLabels();
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (let idx = 0; idx < 5000; idx += 1) {
+    const candidate =
+      alphabet[idx % alphabet.length] + (idx >= alphabet.length ? Math.floor(idx / alphabet.length) : "");
+    if (!used.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `L${Date.now()}`;
+}
+
+function autoLabelAnchorForObject(obj) {
+  if (obj.type === "point") {
+    return null;
+  }
+  if (Array.isArray(obj.pointIds) && obj.pointIds.length >= 2) {
+    const p1 = getPointById(obj.pointIds[0]);
+    const p2 = getPointById(obj.pointIds[1]);
+    if (p1 && p2) {
+      return { x: (p1.x + p2.x) / 2 + 0.4, y: (p1.y + p2.y) / 2 + 0.4 };
+    }
+  }
+  if (obj.throughPointId) {
+    const p = getPointById(obj.throughPointId);
+    if (p) {
+      return { x: p.x + 0.4, y: p.y + 0.4 };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+
+function toggleAutoLabelForObject(targetId) {
+  const target = getObjectById(targetId);
+  if (!target) {
+    return;
+  }
+
+  runMutation("toggle-auto-label", () => {
+    if (target.type === "point") {
+      if (target.name) {
+        target.name = "";
+      } else {
+        target.name = nextAutoLabel();
+      }
+      return;
+    }
+
+    const existing = getAutoLabelObjectByTargetId(target.id);
+    if (existing) {
+      store.doc.objects = store.doc.objects.filter((o) => o.id !== existing.id);
+      return;
+    }
+
+    const anchor = autoLabelAnchorForObject(target);
+    addObject({
+      id: makeId("label"),
+      type: "label",
+      x: anchor.x,
+      y: anchor.y,
+      text: nextAutoLabel(),
+      auto: true,
+      targetId: target.id,
+      style: defaultStyle(),
+    });
+  });
+}
+
 function pointObjectFromCoords(coords) {
   return {
     x: coords.x,
     y: coords.y,
+  };
+}
+
+function snapToAxis(anchor, raw) {
+  const dx = raw.x - anchor.x;
+  const dy = raw.y - anchor.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return { x: raw.x, y: anchor.y };
+  }
+  return { x: anchor.x, y: raw.y };
+}
+
+function getPointInputCoords(rawCoords, evt) {
+  if (!evt?.shiftKey || !pendingPointIds.length) {
+    return rawCoords;
+  }
+  const anchor = getPointById(pendingPointIds[pendingPointIds.length - 1]);
+  if (!anchor) {
+    return rawCoords;
+  }
+  return snapToAxis(anchor, rawCoords);
+}
+
+function isoscelesApexFromCursor(pointA, pointB, cursor) {
+  const baseLen = distance(pointA, pointB);
+  if (baseLen < 0.0001) {
+    return null;
+  }
+  const vx = pointB.x - pointA.x;
+  const vy = pointB.y - pointA.y;
+  const perpX = -vy / baseLen;
+  const perpY = vx / baseLen;
+  const midX = (pointA.x + pointB.x) / 2;
+  const midY = (pointA.y + pointB.y) / 2;
+
+  const projectedHeight = (cursor.x - midX) * perpX + (cursor.y - midY) * perpY;
+  const fallbackHeight = baseLen * 0.6;
+  const height = Math.abs(projectedHeight) < 0.0001 ? fallbackHeight : projectedHeight;
+  return {
+    x: midX + perpX * height,
+    y: midY + perpY * height,
   };
 }
 
@@ -223,6 +378,46 @@ function updateTrianglePreview(cursorCoords) {
     return;
   }
 
+  if (triangleVariant === "right") {
+    if (pendingPointIds.length < 1) {
+      boardController.clearPreview();
+      return;
+    }
+    const p1 = getPointById(pendingPointIds[0]);
+    if (!p1) {
+      boardController.clearPreview();
+      return;
+    }
+    const p2 = cursorCoords;
+    const p3 = triangleVerticesFromVariant(pointObjectFromCoords(p1), p2);
+    if (!p3) {
+      boardController.clearPreview();
+      return;
+    }
+    boardController.showPreviewTriangle(pointObjectFromCoords(p1), p2, p3);
+    return;
+  }
+
+  if (triangleVariant === "isosceles") {
+    if (pendingPointIds.length < 2) {
+      boardController.clearPreview();
+      return;
+    }
+    const p1 = getPointById(pendingPointIds[0]);
+    const p2 = getPointById(pendingPointIds[1]);
+    if (!p1 || !p2) {
+      boardController.clearPreview();
+      return;
+    }
+    const p3 = isoscelesApexFromCursor(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords);
+    if (!p3) {
+      boardController.clearPreview();
+      return;
+    }
+    boardController.showPreviewTriangle(pointObjectFromCoords(p1), pointObjectFromCoords(p2), p3);
+    return;
+  }
+
   if (pendingPointIds.length < 1) {
     boardController.clearPreview();
     return;
@@ -233,13 +428,7 @@ function updateTrianglePreview(cursorCoords) {
     boardController.clearPreview();
     return;
   }
-  const p2 = cursorCoords;
-  const p3 = triangleVerticesFromVariant(pointObjectFromCoords(p1), p2);
-  if (!p3) {
-    boardController.clearPreview();
-    return;
-  }
-  boardController.showPreviewTriangle(pointObjectFromCoords(p1), p2, p3);
+  boardController.clearPreview();
 }
 
 function addPointInput(pointId, skipMutation = false) {
@@ -278,6 +467,20 @@ function addPointInput(pointId, skipMutation = false) {
     } else if (modeForCreate === ToolMode.TRIANGLE) {
       if (triangleVariant === "three-point") {
         addTriangleEdges(pointsForCreate, style);
+      } else if (triangleVariant === "isosceles") {
+        const pointA = getPointById(pointsForCreate[0]);
+        const pointB = getPointById(pointsForCreate[1]);
+        const cursorPoint = getPointById(pointsForCreate[2]);
+        if (!pointA || !pointB || !cursorPoint) {
+          return;
+        }
+        const apex = isoscelesApexFromCursor(pointA, pointB, cursorPoint);
+        if (!apex) {
+          return;
+        }
+        cursorPoint.x = apex.x;
+        cursorPoint.y = apex.y;
+        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
       } else {
         const pointA = getPointById(pointsForCreate[0]);
         const pointB = getPointById(pointsForCreate[1]);
@@ -304,6 +507,7 @@ function addPointInput(pointId, skipMutation = false) {
             type: "angle",
             pointIds: [pointsForCreate[1], pointsForCreate[0], apexId],
             right: true,
+            arcCount: 1,
             style,
           });
         }
@@ -314,6 +518,7 @@ function addPointInput(pointId, skipMutation = false) {
         type: "angle",
         pointIds: pointsForCreate,
         right: isRightAngle,
+        arcCount: isRightAngle ? 1 : pendingAngleArcCount,
         style,
       });
     }
@@ -331,23 +536,25 @@ function addPointInput(pointId, skipMutation = false) {
   updateModeUi();
 }
 
-function handleBoardClick(coords) {
+function handleBoardClick(coords, evt) {
   if (currentMode === ToolMode.SELECT) {
     store.clearSelection();
     renderCurrentDoc();
     return;
   }
 
+  const snappedCoords = getPointInputCoords(coords, evt);
+
   if (currentMode === ToolMode.POINT) {
     runMutation("create-point", () => {
-      maybeCreatePoint(coords);
+      maybeCreatePoint(snappedCoords);
     });
     return;
   }
 
   if (pointNeeds(currentMode) > 0) {
     runMutation("create-inline-point", () => {
-      const ptId = maybeCreatePoint(coords);
+      const ptId = maybeCreatePoint(snappedCoords);
       addPointInput(ptId, true);
     });
   }
@@ -368,14 +575,19 @@ function handleObjectClick(id, type, evt) {
     return;
   }
 
-  if (currentMode === ToolMode.SELECT || currentMode === ToolMode.CONGRUENCY || currentMode === ToolMode.LABEL) {
+  if (currentMode === ToolMode.LABEL) {
+    toggleAutoLabelForObject(id);
+    return;
+  }
+
+  if (currentMode === ToolMode.SELECT || currentMode === ToolMode.CONGRUENCY) {
     store.toggleSelection(id, multi);
     renderCurrentDoc();
   }
 }
 
-function handleBoardMove(coords) {
-  updateTrianglePreview(coords);
+function handleBoardMove(coords, evt) {
+  updateTrianglePreview(getPointInputCoords(coords, evt));
 }
 
 function removeWithDependencies(selectedSet) {
@@ -398,12 +610,20 @@ function removeWithDependencies(selectedSet) {
         selectedSet.add(obj.id);
         changed = true;
       }
+      if (obj.targetId && selectedSet.has(obj.targetId)) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
     }
     for (const ann of [...store.doc.annotations]) {
       if (selectedSet.has(ann.id)) {
         continue;
       }
       if (ann.segmentId && selectedSet.has(ann.segmentId)) {
+        selectedSet.add(ann.id);
+        changed = true;
+      }
+      if (ann.targetId && selectedSet.has(ann.targetId)) {
         selectedSet.add(ann.id);
         changed = true;
       }
@@ -500,15 +720,32 @@ function renderCurrentDoc(applySelection = true) {
       if (segment) {
         boardController.createTickMark(ann.id, segment, ann.tickCount, style);
       }
+    } else if (ann.type === "parallelMark") {
+      const target = boardController.getElement(ann.targetId);
+      if (target) {
+        boardController.createTickMark(ann.id, target, ann.markCount, style);
+      }
     } else if (ann.type === "angle") {
       const p1 = points.get(ann.pointIds[0]);
       const p2 = points.get(ann.pointIds[1]);
       const p3 = points.get(ann.pointIds[2]);
       if (p1 && p2 && p3) {
-        boardController.createAngle(ann.id, p1, p2, p3, {
-          ...style,
-          right: ann.right,
-        });
+        const arcCount = Math.max(1, Number(ann.arcCount || 1));
+        if (ann.right) {
+          boardController.createAngle(ann.id, p1, p2, p3, {
+            ...style,
+            right: true,
+            radius: 1,
+          });
+        } else {
+          for (let i = 0; i < arcCount; i += 1) {
+            boardController.createAngle(`${ann.id}_arc_${i + 1}`, p1, p2, p3, {
+              ...style,
+              right: false,
+              radius: 1 + i * 0.35,
+            });
+          }
+        }
       }
     }
   }
@@ -634,7 +871,28 @@ function addTicks(tickCount) {
   });
 }
 
-function addAngleFromSelection(isRight) {
+function addParallelMarks(markCount) {
+  const targets = selectedOfTypes(["segment", "line"]);
+  if (!targets.length) {
+    alert("Select one or more segments/lines first.");
+    return;
+  }
+  const groupId = makeId("pm");
+  runMutation(`parallel-mark-${markCount}`, () => {
+    for (const targetId of targets) {
+      addAnnotation({
+        id: makeId("pmk"),
+        type: "parallelMark",
+        groupId,
+        targetId,
+        markCount,
+        style: defaultStyle(),
+      });
+    }
+  });
+}
+
+function addAngleFromSelection(isRight, arcCount = 1) {
   const pts = selectedOfTypes(["point"]);
   if (pts.length === 3) {
     runMutation("add-angle", () => {
@@ -643,6 +901,7 @@ function addAngleFromSelection(isRight) {
         type: "angle",
         pointIds: pts,
         right: isRight,
+        arcCount: isRight ? 1 : arcCount,
         style: defaultStyle(),
       });
     });
@@ -683,19 +942,11 @@ function promptLabel() {
 }
 
 function autoLabelPoints() {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  runMutation("auto-label-points", () => {
-    let idx = 0;
-    for (const obj of store.doc.objects) {
-      if (obj.type !== "point") {
-        continue;
-      }
-      if (!obj.name) {
-        obj.name = alphabet[idx % alphabet.length] + (idx >= alphabet.length ? Math.floor(idx / alphabet.length) : "");
-        idx += 1;
-      }
-    }
-  });
+  if (currentMode === ToolMode.LABEL) {
+    setMode(ToolMode.SELECT);
+  } else {
+    setMode(ToolMode.LABEL);
+  }
 }
 
 function clearBoard() {
@@ -708,22 +959,20 @@ function clearBoard() {
 }
 
 async function downloadSvg() {
-  const { width, height } = parseSizePreset();
   const background = document.getElementById("bgMode").value;
   const tight = document.getElementById("tightSvg").checked;
   const raw = boardController.exportBoardSvg();
-  const svg = exportSVG(raw, { width, height, background, tight });
+  const svg = exportSVG(raw, { background, tight });
   const name = `figure-${timestampForFile()}.svg`;
   triggerDownload(name, svg, "image/svg+xml");
 }
 
 async function downloadPng() {
-  const { width, height } = parseSizePreset();
   const background = document.getElementById("bgMode").value;
   const scale = Number(document.getElementById("pngScale").value);
   const raw = boardController.exportBoardSvg();
-  const svg = exportSVG(raw, { width, height, background });
-  const blob = await exportPNG(svg, { width, height, background, scale });
+  const svg = exportSVG(raw, { background, tight: true });
+  const blob = await exportPNG(svg, { background, scale });
   const name = `figure-${timestampForFile()}.png`;
   downloadBlob(name, blob);
 }
@@ -777,17 +1026,38 @@ function wireUi() {
   document.getElementById("markTick1").addEventListener("click", () => addTicks(1));
   document.getElementById("markTick2").addEventListener("click", () => addTicks(2));
   document.getElementById("markTick3").addEventListener("click", () => addTicks(3));
+  document.getElementById("markParallel1").addEventListener("click", () => addParallelMarks(1));
+  document.getElementById("markParallel2").addEventListener("click", () => addParallelMarks(2));
+  document.getElementById("markParallel3").addEventListener("click", () => addParallelMarks(3));
 
-  document.getElementById("markAngle").addEventListener("click", () => {
-    if (!addAngleFromSelection(false)) {
+  document.getElementById("markAngle1").addEventListener("click", () => {
+    if (!addAngleFromSelection(false, 1)) {
       pendingAngleIsRight = false;
+      pendingAngleArcCount = 1;
+      setMode(ToolMode.ANGLE);
+    }
+  });
+
+  document.getElementById("markAngle2").addEventListener("click", () => {
+    if (!addAngleFromSelection(false, 2)) {
+      pendingAngleIsRight = false;
+      pendingAngleArcCount = 2;
+      setMode(ToolMode.ANGLE);
+    }
+  });
+
+  document.getElementById("markAngle3").addEventListener("click", () => {
+    if (!addAngleFromSelection(false, 3)) {
+      pendingAngleIsRight = false;
+      pendingAngleArcCount = 3;
       setMode(ToolMode.ANGLE);
     }
   });
 
   document.getElementById("markRightAngle").addEventListener("click", () => {
-    if (!addAngleFromSelection(true)) {
+    if (!addAngleFromSelection(true, 1)) {
       pendingAngleIsRight = true;
+      pendingAngleArcCount = 1;
       setMode(ToolMode.ANGLE);
     }
   });

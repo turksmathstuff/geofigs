@@ -131,7 +131,7 @@ export class BoardController {
       fillColor: style.strokeColor || "#111",
       name: style.name || "",
       withLabel: !!style.name,
-      label: { offset: [6, -6] },
+      label: { offset: [6, -6], fontSize: style.fontSize || 16 },
       fixed: false,
     });
     return this.registerElement(id, "point", el);
@@ -167,8 +167,27 @@ export class BoardController {
     return this.registerElement(id, "circle", el);
   }
 
+  normalizeReferenceLine(sourceLine) {
+    if (!sourceLine) {
+      return null;
+    }
+    if (sourceLine.elementClass === JXG.OBJECT_CLASS_LINE && sourceLine.visProp?.straightFirst && sourceLine.visProp?.straightLast) {
+      return sourceLine;
+    }
+    if (sourceLine.point1 && sourceLine.point2) {
+      return this.board.create("line", [sourceLine.point1, sourceLine.point2], {
+        visible: false,
+        fixed: true,
+        strokeOpacity: 0,
+        highlight: false,
+      });
+    }
+    return sourceLine;
+  }
+
   createParallelLine(id, sourceLine, throughPoint, style = {}) {
-    const el = this.board.create("parallel", [sourceLine, throughPoint], {
+    const refLine = this.normalizeReferenceLine(sourceLine);
+    const el = this.board.create("parallel", [refLine, throughPoint], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash || 2,
@@ -177,7 +196,8 @@ export class BoardController {
   }
 
   createPerpendicularLine(id, sourceLine, throughPoint, style = {}) {
-    const el = this.board.create("perpendicular", [sourceLine, throughPoint], {
+    const refLine = this.normalizeReferenceLine(sourceLine);
+    const el = this.board.create("perpendicular", [refLine, throughPoint], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash || 2,
@@ -187,11 +207,13 @@ export class BoardController {
 
   createAngle(id, p1, vertex, p3, style = {}) {
     const attrs = {
-      radius: 1,
+      radius: style.radius || 1,
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       fillOpacity: 0,
       orthoType: style.right ? "square" : "sector",
+      withLabel: false,
+      name: "",
     };
     const angleType = style.right ? "angle" : "nonreflexangle";
     const el = this.board.create(angleType, [p1, vertex, p3], attrs);
