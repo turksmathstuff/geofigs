@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Geometry Figure Generator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
+    <script type="module" defer src="./src/app.js"></script>
+  </head>
+  <body>
+    <div id="protocolWarning" class="protocol-warning" hidden>
+      This app must be run from a local web server (not opened directly as a file).
+      Run <code>python3 -m http.server 8000</code> in this folder, then open
+      <code>http://localhost:8000</code>.
+    </div>
+    <header class="topbar">
+      <h1>Geometry Figure Generator</h1>
+      <div class="status" id="statusText">Mode: Select</div>
+    </header>
+
+    <main class="layout">
+      <aside class="toolbar" aria-label="Toolbox">
+        <section>
+          <h2>Construct</h2>
+          <div class="grid-buttons">
+            <button data-mode="select">Select</button>
+            <button data-mode="point">Point</button>
+            <button data-mode="segment">Segment</button>
+            <button data-mode="line">Line</button>
+            <button data-mode="ray">Ray</button>
+            <div class="triangle-menu">
+              <button id="triangleMenuBtn" type="button">Triangle ▾</button>
+              <div id="triangleMenuPanel" class="triangle-menu-panel" hidden>
+                <button type="button" data-triangle-mode="three-point">3-Point Triangle</button>
+                <button type="button" data-triangle-mode="right">Right Triangle</button>
+                <button type="button" data-triangle-mode="isosceles">Isosceles Triangle</button>
+              </div>
+            </div>
+            <button data-mode="circle">Circle</button>
+            <button id="makeParallel">Parallel</button>
+            <button id="makePerpendicular">Perpendicular</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Annotate</h2>
+          <div class="grid-buttons">
+            <button id="markTick1">1 Tick</button>
+            <button id="markTick2">2 Ticks</button>
+            <button id="markTick3">3 Ticks</button>
+            <button id="markAngle">Angle Arc</button>
+            <button id="markRightAngle">Right Angle</button>
+            <button id="addLabel">Add Label</button>
+            <button id="autoLabel">Auto Label</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Style</h2>
+          <div class="form-row">
+            <label for="strokeColor">Color</label>
+            <input id="strokeColor" type="color" value="#111111" />
+          </div>
+          <div class="form-row">
+            <label for="strokeWidth">Width</label>
+            <input id="strokeWidth" type="range" min="1" max="6" step="1" value="2" />
+          </div>
+          <div class="form-row">
+            <label for="lineStyle">Line</label>
+            <select id="lineStyle">
+              <option value="solid">Solid</option>
+              <option value="dashed">Dashed</option>
+            </select>
+          </div>
+          <div class="form-row checkbox-row">
+            <label for="examMode">Exam Mode</label>
+            <input id="examMode" type="checkbox" />
+          </div>
+        </section>
+
+        <section>
+          <h2>Export</h2>
+          <div class="form-row">
+            <label for="sizePreset">Size</label>
+            <select id="sizePreset">
+              <option value="800x600">800x600</option>
+              <option value="1200x900">1200x900</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="pngScale">PNG Scale</label>
+            <select id="pngScale">
+              <option value="1">1x</option>
+              <option value="2" selected>2x</option>
+              <option value="3">3x</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="bgMode">Background</label>
+            <select id="bgMode">
+              <option value="transparent" selected>Transparent</option>
+              <option value="white">White</option>
+            </select>
+          </div>
+          <div class="form-row checkbox-row">
+            <label for="tightSvg">Tight SVG</label>
+            <input id="tightSvg" type="checkbox" checked />
+          </div>
+          <div class="grid-buttons">
+            <button id="downloadSvg">Download SVG</button>
+            <button id="downloadPng">Download PNG</button>
+            <button id="saveDoc">Save .geojson</button>
+            <label class="file-label">
+              Open .geojson
+              <input id="openDoc" type="file" accept=".geojson,application/json" />
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <h2>Edit</h2>
+          <div class="grid-buttons">
+            <button id="undoBtn">Undo</button>
+            <button id="redoBtn">Redo</button>
+            <button id="deleteSelected">Delete Selected</button>
+            <button id="clearBoard">Clear Board</button>
+          </div>
+        </section>
+      </aside>
+
+      <section class="canvas-wrap">
+        <div id="jxgbox" class="jxgbox" aria-label="Geometry board"></div>
+      </section>
+    </main>
+    <script>
+      if (window.location.protocol === "file:") {
+        const warning = document.getElementById("protocolWarning");
+        if (warning) {
+          warning.hidden = false;
+        }
+      }
+    </script>
+  </body>
+</html>

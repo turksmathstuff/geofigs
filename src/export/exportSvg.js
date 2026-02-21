@@ -1,0 +1,117 @@
+function parseViewBox(viewBoxText) {
+  if (!viewBoxText) {
+    return null;
+  }
+  const values = viewBoxText
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number)
+    .filter((v) => Number.isFinite(v));
+  if (values.length !== 4) {
+    return null;
+  }
+  return { x: values[0], y: values[1], width: values[2], height: values[3] };
+}
+
+function getFallbackBounds(svg, options) {
+  const fromViewBox = parseViewBox(svg.getAttribute("viewBox"));
+  if (fromViewBox) {
+    return fromViewBox;
+  }
+
+  const width = Number(svg.getAttribute("width")) || Number(options.width) || 800;
+  const height = Number(svg.getAttribute("height")) || Number(options.height) || 600;
+  return { x: 0, y: 0, width, height };
+}
+
+function computeTightBounds(svgMarkup, fallback) {
+  const mount = document.createElement("div");
+  mount.style.position = "fixed";
+  mount.style.left = "-100000px";
+  mount.style.top = "-100000px";
+  mount.style.visibility = "hidden";
+  mount.style.pointerEvents = "none";
+  mount.innerHTML = svgMarkup;
+  const svg = mount.querySelector("svg");
+  if (!svg) {
+    return fallback;
+  }
+
+  document.body.appendChild(mount);
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const nodes = svg.querySelectorAll("path,line,circle,ellipse,polygon,polyline,rect,text,use");
+
+  for (const node of nodes) {
+    if (node.closest("defs")) {
+      continue;
+    }
+    if (node.getAttribute("display") === "none" || node.getAttribute("visibility") === "hidden") {
+      continue;
+    }
+    try {
+      const bb = node.getBBox();
+      if (!Number.isFinite(bb.x) || !Number.isFinite(bb.y) || !Number.isFinite(bb.width) || !Number.isFinite(bb.height)) {
+        continue;
+      }
+      if (bb.width <= 0 && bb.height <= 0) {
+        continue;
+      }
+      minX = Math.min(minX, bb.x);
+      minY = Math.min(minY, bb.y);
+      maxX = Math.max(maxX, bb.x + bb.width);
+      maxY = Math.max(maxY, bb.y + bb.height);
+    } catch (_err) {
+      // Some SVG nodes don't support getBBox in all browsers.
+    }
+  }
+
+  mount.remove();
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return fallback;
+  }
+
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  return { x: minX, y: minY, width, height };
+}
+
+export function exportSVG(svgString, options = {}) {
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(svgString, "image/svg+xml");
+  const svg = xml.documentElement;
+  const fallbackBounds = getFallbackBounds(svg, options);
+  const bounds = options.tight
+    ? computeTightBounds(new XMLSerializer().serializeToString(svg), fallbackBounds)
+    : fallbackBounds;
+
+  svg.setAttribute("viewBox", `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
+  svg.setAttribute("width", String(Math.ceil(bounds.width)));
+  svg.setAttribute("height", String(Math.ceil(bounds.height)));
+
+  if (options.background === "white") {
+    const bg = xml.createElementNS("http://www.w3.org/2000/svg", "rect");
+    bg.setAttribute("x", String(bounds.x));
+    bg.setAttribute("y", String(bounds.y));
+    bg.setAttribute("width", String(bounds.width));
+    bg.setAttribute("height", String(bounds.height));
+    bg.setAttribute("fill", "white");
+    svg.insertBefore(bg, svg.firstChild);
+  }
+
+  return new XMLSerializer().serializeToString(xml);
+}
+
+export function triggerDownload(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
