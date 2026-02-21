@@ -49,6 +49,13 @@ export class BoardController {
     return { x: c.usrCoords[1], y: c.usrCoords[2] };
   }
 
+  screenToUser(clientX, clientY) {
+    const rect = this.board.containerObj.getBoundingClientRect();
+    const screenPos = [clientX - rect.left, clientY - rect.top];
+    const c = new JXG.Coords(JXG.COORDS_BY_SCREEN, screenPos, this.board);
+    return { x: c.usrCoords[1], y: c.usrCoords[2] };
+  }
+
   resetBoard() {
     this.board.removeObject(this.board.objectsList.slice());
     this.elements.clear();
