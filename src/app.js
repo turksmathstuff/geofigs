@@ -16,6 +16,17 @@ const statusEl = document.getElementById("statusText");
 const drawingHintEl = document.getElementById("drawingHint");
 const autoLabelBtn = document.getElementById("autoLabel");
 const boardEl = document.getElementById("jxgbox");
+const transformPanelEl = document.getElementById("transformPanel");
+const transformTitleEl = document.getElementById("transformTitle");
+const movePanelEl = document.getElementById("movePanel");
+const rotatePanelEl = document.getElementById("rotatePanel");
+const moveXSliderEl = document.getElementById("moveXSlider");
+const moveYSliderEl = document.getElementById("moveYSlider");
+const moveXValueEl = document.getElementById("moveXValue");
+const moveYValueEl = document.getElementById("moveYValue");
+const rotationCompassEl = document.getElementById("rotationCompass");
+const compassArmEl = document.getElementById("compassArm");
+const rotateValueEl = document.getElementById("rotateValue");
 const modeButtons = [...document.querySelectorAll("button[data-mode]")];
 const triangleMenuBtn = document.getElementById("triangleMenuBtn");
 const triangleMenuPanel = document.getElementById("triangleMenuPanel");
@@ -27,6 +38,8 @@ let pendingAngleIsRight = false;
 let pendingAngleArcCount = 1;
 let triangleVariant = "three-point";
 let marqueeState = null;
+let transformSession = null;
+let compassDragging = false;
 
 const boardController = new BoardController(
   "jxgbox",
@@ -103,6 +116,9 @@ function updateModeUi() {
 function setMode(mode) {
   if (!isToolMode(mode)) {
     return;
+  }
+  if (transformSession) {
+    cancelTransformSession();
   }
   currentMode = mode;
   pendingPointIds = [];
@@ -1307,73 +1323,161 @@ function triangleCentroid(pointIds) {
   };
 }
 
-function moveSelectedTriangle() {
+function startTriangleTransformSession(kind) {
   const pointIds = findTriangleFromSelection();
   if (!pointIds) {
     alert("Select one triangle first (3 points or its 3 sides).");
     setMode(ToolMode.SELECT);
-    return;
-  }
-  const dxText = prompt("Move triangle: Δx", "1");
-  if (dxText === null) {
-    return;
-  }
-  const dyText = prompt("Move triangle: Δy", "0");
-  if (dyText === null) {
-    return;
-  }
-  const dx = Number(dxText);
-  const dy = Number(dyText);
-  if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
-    alert("Please enter valid numeric values for Δx and Δy.");
-    return;
+    return false;
   }
 
-  runMutation("move-selected-triangle", () => {
-    for (const id of pointIds) {
-      const p = getPointById(id);
-      if (!p) {
-        continue;
-      }
-      p.x += dx;
-      p.y += dy;
+  const basePoints = {};
+  for (const id of pointIds) {
+    const p = getPointById(id);
+    if (!p) {
+      return false;
     }
-  });
-}
-
-function rotateSelectedTriangle() {
-  const pointIds = findTriangleFromSelection();
-  if (!pointIds) {
-    alert("Select one triangle first (3 points or its 3 sides).");
-    setMode(ToolMode.SELECT);
-    return;
-  }
-  const degText = prompt("Rotate triangle: degrees (counterclockwise +)", "15");
-  if (degText === null) {
-    return;
-  }
-  const deg = Number(degText);
-  if (!Number.isFinite(deg)) {
-    alert("Please enter a valid numeric degree value.");
-    return;
+    basePoints[id] = { x: p.x, y: p.y };
   }
   const center = triangleCentroid(pointIds);
   if (!center) {
+    return false;
+  }
+
+  transformSession = {
+    kind,
+    pointIds,
+    center,
+    basePoints,
+    beforeDoc: store.snapshot(),
+    dx: 0,
+    dy: 0,
+    angleDeg: 0,
+  };
+  return true;
+}
+
+function applyTransformPreview() {
+  if (!transformSession) {
     return;
   }
-  const angleRad = (deg * Math.PI) / 180;
-
-  runMutation("rotate-selected-triangle", () => {
-    for (const id of pointIds) {
-      const p = getPointById(id);
-      if (!p) {
-        continue;
-      }
-      const transformed = transformPointAround(p, center, 1, angleRad, { x: 0, y: 0 });
-      p.x = transformed.x;
-      p.y = transformed.y;
+  const { pointIds, basePoints, center, dx, dy, angleDeg } = transformSession;
+  const angleRad = (angleDeg * Math.PI) / 180;
+  for (const id of pointIds) {
+    const base = basePoints[id];
+    const target = getPointById(id);
+    if (!base || !target) {
+      continue;
     }
-  });
+    const transformed = transformPointAround(base, center, 1, angleRad, { x: dx, y: dy });
+    target.x = transformed.x;
+    target.y = transformed.y;
+  }
+  renderCurrentDoc(false);
+}
+
+function showTransformPanel(kind) {
+  if (!transformPanelEl) {
+    return;
+  }
+  transformPanelEl.hidden = false;
+  movePanelEl.hidden = kind !== "move";
+  rotatePanelEl.hidden = kind !== "rotate";
+  transformTitleEl.textContent = kind === "move" ? "Move Triangle" : "Rotate Triangle";
+}
+
+function hideTransformPanel() {
+  if (transformPanelEl) {
+    transformPanelEl.hidden = true;
+  }
+  if (rotationCompassEl) {
+    rotationCompassEl.classList.remove("dragging");
+  }
+  compassDragging = false;
+}
+
+function commitTransformSession(label) {
+  if (!transformSession) {
+    return;
+  }
+  const after = store.snapshot();
+  store.doc.metadata.updatedAt = new Date().toISOString();
+  store.commitSnapshot(label, transformSession.beforeDoc, after, applyDoc);
+  transformSession = null;
+  hideTransformPanel();
+  renderCurrentDoc();
+}
+
+function cancelTransformSession() {
+  if (!transformSession) {
+    hideTransformPanel();
+    return;
+  }
+  store.setDoc(transformSession.beforeDoc);
+  transformSession = null;
+  hideTransformPanel();
+  renderCurrentDoc();
+}
+
+function updateMoveReadouts() {
+  if (!transformSession) {
+    return;
+  }
+  if (moveXValueEl) {
+    moveXValueEl.textContent = transformSession.dx.toFixed(1);
+  }
+  if (moveYValueEl) {
+    moveYValueEl.textContent = transformSession.dy.toFixed(1);
+  }
+}
+
+function updateCompassReadout() {
+  if (!transformSession) {
+    return;
+  }
+  if (rotateValueEl) {
+    rotateValueEl.textContent = `${transformSession.angleDeg.toFixed(1)}°`;
+  }
+  if (compassArmEl) {
+    compassArmEl.style.transform = `translateY(-50%) rotate(${transformSession.angleDeg}deg)`;
+  }
+}
+
+function angleFromCompassEvent(evt) {
+  const rect = rotationCompassEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = evt.clientX - cx;
+  const dy = evt.clientY - cy;
+  const rad = Math.atan2(dy, dx);
+  return (rad * 180) / Math.PI;
+}
+
+function moveSelectedTriangle() {
+  if (!startTriangleTransformSession("move")) {
+    return;
+  }
+  transformSession.dx = 0;
+  transformSession.dy = 0;
+  showTransformPanel("move");
+  if (moveXSliderEl) {
+    moveXSliderEl.value = "0";
+  }
+  if (moveYSliderEl) {
+    moveYSliderEl.value = "0";
+  }
+  updateMoveReadouts();
+  applyTransformPreview();
+}
+
+function rotateSelectedTriangle() {
+  if (!startTriangleTransformSession("rotate")) {
+    return;
+  }
+  transformSession.angleDeg = 0;
+  showTransformPanel("rotate");
+  updateCompassReadout();
+  applyTransformPreview();
 }
 
 function applyStyleToSelection() {
@@ -1775,6 +1879,57 @@ function wireUi() {
   document.getElementById("makeSimilarTriangle").addEventListener("click", createSimilarTriangleCopy);
   document.getElementById("moveSelectedTriangle").addEventListener("click", moveSelectedTriangle);
   document.getElementById("rotateSelectedTriangle").addEventListener("click", rotateSelectedTriangle);
+  document.getElementById("closeTransformPanel").addEventListener("click", cancelTransformSession);
+  document.getElementById("cancelMoveTriangle").addEventListener("click", cancelTransformSession);
+  document.getElementById("cancelRotateTriangle").addEventListener("click", cancelTransformSession);
+  document.getElementById("applyMoveTriangle").addEventListener("click", () => commitTransformSession("move-selected-triangle"));
+  document.getElementById("applyRotateTriangle").addEventListener("click", () => commitTransformSession("rotate-selected-triangle"));
+
+  moveXSliderEl.addEventListener("input", () => {
+    if (!transformSession || transformSession.kind !== "move") {
+      return;
+    }
+    transformSession.dx = Number(moveXSliderEl.value);
+    updateMoveReadouts();
+    applyTransformPreview();
+  });
+  moveYSliderEl.addEventListener("input", () => {
+    if (!transformSession || transformSession.kind !== "move") {
+      return;
+    }
+    transformSession.dy = Number(moveYSliderEl.value);
+    updateMoveReadouts();
+    applyTransformPreview();
+  });
+
+  rotationCompassEl.addEventListener("mousedown", (evt) => {
+    if (!transformSession || transformSession.kind !== "rotate") {
+      return;
+    }
+    evt.preventDefault();
+    compassDragging = true;
+    rotationCompassEl.classList.add("dragging");
+    transformSession.angleDeg = angleFromCompassEvent(evt);
+    updateCompassReadout();
+    applyTransformPreview();
+  });
+
+  window.addEventListener("mousemove", (evt) => {
+    if (!compassDragging || !transformSession || transformSession.kind !== "rotate") {
+      return;
+    }
+    transformSession.angleDeg = angleFromCompassEvent(evt);
+    updateCompassReadout();
+    applyTransformPreview();
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!compassDragging) {
+      return;
+    }
+    compassDragging = false;
+    rotationCompassEl.classList.remove("dragging");
+  });
 
   document.getElementById("deleteSelected").addEventListener("click", deleteSelected);
   document.getElementById("clearBoard").addEventListener("click", clearBoard);

@@ -13,6 +13,9 @@ All notable changes to this project are documented in this file.
   - `Congruent △` duplicates a selected triangle, rotates it slightly, and moves it.
   - `Similar △` duplicates a selected triangle as a larger copy, rotates it slightly, and moves it.
 - Drag-to-select marquee in `Select` mode (with Shift-additive multi-select).
+- Interactive selected-triangle transform controls:
+  - `Move △` now uses draggable X/Y sliders with live preview.
+  - `Rotate △` now uses a compass-style drag arm with live preview.
 - Post-creation triangle transform actions: `Move △` and `Rotate △` for selected triangles.
 
 ### Changed
