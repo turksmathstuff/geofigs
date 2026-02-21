@@ -15,6 +15,7 @@ const store = new AppStore();
 const statusEl = document.getElementById("statusText");
 const drawingHintEl = document.getElementById("drawingHint");
 const autoLabelBtn = document.getElementById("autoLabel");
+const boardEl = document.getElementById("jxgbox");
 const modeButtons = [...document.querySelectorAll("button[data-mode]")];
 const triangleMenuBtn = document.getElementById("triangleMenuBtn");
 const triangleMenuPanel = document.getElementById("triangleMenuPanel");
@@ -25,6 +26,7 @@ let pendingPointIds = [];
 let pendingAngleIsRight = false;
 let pendingAngleArcCount = 1;
 let triangleVariant = "three-point";
+let marqueeState = null;
 
 const boardController = new BoardController(
   "jxgbox",
@@ -69,7 +71,7 @@ function canvasHintText() {
     return "Click objects to add label. Click labeled objects to remove label.";
   }
   if (currentMode === ToolMode.SELECT) {
-    return "Hold Shift to select more than one object.";
+    return "Hold Shift to select more than one object. Drag to box-select.";
   }
   if ([ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY, ToolMode.TRIANGLE].includes(currentMode)) {
     return "Hold Shift to move horizontal/vertical.";
@@ -651,6 +653,9 @@ function addPointInput(pointId, skipMutation = false) {
 
 function handleBoardClick(coords, evt) {
   if (currentMode === ToolMode.SELECT) {
+    if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
+      return;
+    }
     store.clearSelection();
     renderCurrentDoc();
     return;
@@ -710,6 +715,142 @@ function handleObjectClick(id, type, evt) {
     store.toggleSelection(id, multi);
     renderCurrentDoc();
   }
+}
+
+function objectRepresentativePoint(obj) {
+  if (obj.type === "point" || obj.type === "label") {
+    return { x: obj.x, y: obj.y };
+  }
+  if (obj.type === "segment" || obj.type === "line") {
+    const p1 = getPointById(obj.pointIds?.[0]);
+    const p2 = getPointById(obj.pointIds?.[1]);
+    if (p1 && p2) {
+      return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    }
+  }
+  if (obj.type === "circle") {
+    const c = getPointById(obj.pointIds?.[0]);
+    if (c) {
+      return { x: c.x, y: c.y };
+    }
+  }
+  if (obj.type === "parallel" || obj.type === "perpendicular") {
+    const p = getPointById(obj.throughPointId);
+    if (p) {
+      return { x: p.x, y: p.y };
+    }
+  }
+  return null;
+}
+
+function inBounds(pt, bounds) {
+  return pt.x >= bounds.minX && pt.x <= bounds.maxX && pt.y >= bounds.minY && pt.y <= bounds.maxY;
+}
+
+function applyMarqueeSelection(bounds, additive) {
+  const selected = additive ? new Set(store.selectedIds()) : new Set();
+  for (const obj of store.doc.objects) {
+    const rep = objectRepresentativePoint(obj);
+    if (rep && inBounds(rep, bounds)) {
+      selected.add(obj.id);
+    }
+  }
+  for (const ann of store.doc.annotations) {
+    if (ann.segmentId && selected.has(ann.segmentId)) {
+      selected.add(ann.id);
+    } else if (ann.targetId && selected.has(ann.targetId)) {
+      selected.add(ann.id);
+    } else if (ann.pointIds && ann.pointIds.every((pid) => selected.has(pid))) {
+      selected.add(ann.id);
+    }
+  }
+  store.clearSelection();
+  for (const id of selected) {
+    store.selection.add(id);
+  }
+  renderCurrentDoc();
+}
+
+function removeMarqueeRect() {
+  if (marqueeState?.rectEl) {
+    marqueeState.rectEl.remove();
+  }
+}
+
+function startMarqueeSelection() {
+  if (!boardEl) {
+    return;
+  }
+
+  boardEl.addEventListener("mousedown", (evt) => {
+    if (currentMode !== ToolMode.SELECT || evt.button !== 0) {
+      return;
+    }
+    const tag = String(evt.target?.tagName || "").toLowerCase();
+    if (tag !== "svg" && evt.target !== boardEl) {
+      return;
+    }
+    const rect = boardEl.getBoundingClientRect();
+    const wrapRect = boardEl.parentElement.getBoundingClientRect();
+    marqueeState = {
+      startX: evt.clientX,
+      startY: evt.clientY,
+      lastX: evt.clientX,
+      lastY: evt.clientY,
+      additive: evt.shiftKey || evt.metaKey || evt.ctrlKey,
+      dragging: false,
+      rectEl: null,
+      boardRect: rect,
+      wrapRect,
+    };
+  });
+
+  window.addEventListener("mousemove", (evt) => {
+    if (!marqueeState || currentMode !== ToolMode.SELECT) {
+      return;
+    }
+    marqueeState.lastX = evt.clientX;
+    marqueeState.lastY = evt.clientY;
+    const dx = Math.abs(evt.clientX - marqueeState.startX);
+    const dy = Math.abs(evt.clientY - marqueeState.startY);
+    if (!marqueeState.dragging && Math.max(dx, dy) < 6) {
+      return;
+    }
+    marqueeState.dragging = true;
+    if (!marqueeState.rectEl) {
+      const rectEl = document.createElement("div");
+      rectEl.className = "marquee-select";
+      boardEl.parentElement.appendChild(rectEl);
+      marqueeState.rectEl = rectEl;
+    }
+    const minX = Math.max(marqueeState.boardRect.left, Math.min(marqueeState.startX, evt.clientX));
+    const minY = Math.max(marqueeState.boardRect.top, Math.min(marqueeState.startY, evt.clientY));
+    const maxX = Math.min(marqueeState.boardRect.right, Math.max(marqueeState.startX, evt.clientX));
+    const maxY = Math.min(marqueeState.boardRect.bottom, Math.max(marqueeState.startY, evt.clientY));
+    marqueeState.rectEl.style.left = `${minX - marqueeState.wrapRect.left}px`;
+    marqueeState.rectEl.style.top = `${minY - marqueeState.wrapRect.top}px`;
+    marqueeState.rectEl.style.width = `${Math.max(0, maxX - minX)}px`;
+    marqueeState.rectEl.style.height = `${Math.max(0, maxY - minY)}px`;
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!marqueeState) {
+      return;
+    }
+    if (marqueeState.dragging) {
+      const p1 = boardController.screenToUser(marqueeState.startX, marqueeState.startY);
+      const p2 = boardController.screenToUser(marqueeState.lastX, marqueeState.lastY);
+      const bounds = {
+        minX: Math.min(p1.x, p2.x),
+        maxX: Math.max(p1.x, p2.x),
+        minY: Math.min(p1.y, p2.y),
+        maxY: Math.max(p1.y, p2.y),
+      };
+      applyMarqueeSelection(bounds, marqueeState.additive);
+    }
+    removeMarqueeRect();
+    marqueeState = null;
+  });
 }
 
 function handleBoardMove(coords, evt) {
@@ -924,6 +1065,234 @@ function selectedOfTypes(types) {
       return false;
     }
     return types.includes(obj.type);
+  });
+}
+
+function pointsAreNonCollinear(pointIds) {
+  if (pointIds.length !== 3) {
+    return false;
+  }
+  const p1 = getPointById(pointIds[0]);
+  const p2 = getPointById(pointIds[1]);
+  const p3 = getPointById(pointIds[2]);
+  if (!p1 || !p2 || !p3) {
+    return false;
+  }
+  const twiceArea = Math.abs((p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x));
+  return twiceArea > 1e-5;
+}
+
+function segmentConnects(a, b, segment) {
+  const [s1, s2] = segment.pointIds;
+  return (s1 === a && s2 === b) || (s1 === b && s2 === a);
+}
+
+function findTriangleFromSelection() {
+  const selectedPoints = selectedOfTypes(["point"]);
+  if (selectedPoints.length === 3 && pointsAreNonCollinear(selectedPoints)) {
+    return selectedPoints;
+  }
+
+  const selectedSegments = selectedOfTypes(["segment"]).map((id) => getObjectById(id));
+  if (selectedSegments.length !== 3) {
+    return null;
+  }
+  const pointIdSet = new Set();
+  for (const seg of selectedSegments) {
+    pointIdSet.add(seg.pointIds[0]);
+    pointIdSet.add(seg.pointIds[1]);
+  }
+  const pointIds = [...pointIdSet];
+  if (pointIds.length !== 3 || !pointsAreNonCollinear(pointIds)) {
+    return null;
+  }
+
+  const [a, b, c] = pointIds;
+  const closed =
+    selectedSegments.some((s) => segmentConnects(a, b, s)) &&
+    selectedSegments.some((s) => segmentConnects(b, c, s)) &&
+    selectedSegments.some((s) => segmentConnects(c, a, s));
+  return closed ? pointIds : null;
+}
+
+function transformPointAround(point, center, scale, angleRad, offset) {
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  const rx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
+  const ry = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
+  return {
+    x: center.x + rx * scale + offset.x,
+    y: center.y + ry * scale + offset.y,
+  };
+}
+
+function projectPolygon(points, axis) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of points) {
+    const v = p.x * axis.x + p.y * axis.y;
+    min = Math.min(min, v);
+    max = Math.max(max, v);
+  }
+  return { min, max };
+}
+
+function polygonsOverlap(polyA, polyB) {
+  const polys = [polyA, polyB];
+  for (const poly of polys) {
+    for (let i = 0; i < poly.length; i += 1) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      const edge = { x: b.x - a.x, y: b.y - a.y };
+      const axis = { x: -edge.y, y: edge.x };
+      const axisLen = Math.hypot(axis.x, axis.y);
+      if (axisLen < 1e-9) {
+        continue;
+      }
+      axis.x /= axisLen;
+      axis.y /= axisLen;
+      const projA = projectPolygon(polyA, axis);
+      const projB = projectPolygon(polyB, axis);
+      if (projA.max < projB.min || projB.max < projA.min) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function centroid(points) {
+  return {
+    x: (points[0].x + points[1].x + points[2].x) / 3,
+    y: (points[0].y + points[1].y + points[2].y) / 3,
+  };
+}
+
+function minVertexDistance(polyA, polyB) {
+  let best = Infinity;
+  for (const a of polyA) {
+    for (const b of polyB) {
+      best = Math.min(best, distance(a, b));
+    }
+  }
+  return best;
+}
+
+function resolveTriangleOffsetNoOverlap(sourcePoints, transformedPoints, baseOffset, span) {
+  const srcCent = centroid(sourcePoints);
+  let dir = { x: baseOffset.x, y: baseOffset.y };
+  const dirLen = Math.hypot(dir.x, dir.y);
+  if (dirLen < 1e-9) {
+    dir = { x: 1, y: 0.12 };
+  } else {
+    dir.x /= dirLen;
+    dir.y /= dirLen;
+  }
+
+  let candidate = transformedPoints;
+  let safety = 0;
+  const step = Math.max(0.18 * span, 0.22);
+  while ((polygonsOverlap(sourcePoints, candidate) || minVertexDistance(sourcePoints, candidate) < 0.18 * span) && safety < 40) {
+    const shift = step * (safety + 1);
+    candidate = candidate.map((p) => ({ x: p.x + dir.x * shift, y: p.y + dir.y * shift }));
+    safety += 1;
+  }
+
+  // Fallback: if still overlapping, push directly away from source centroid.
+  if (polygonsOverlap(sourcePoints, candidate)) {
+    candidate = candidate.map((p) => {
+      const vx = p.x - srcCent.x;
+      const vy = p.y - srcCent.y;
+      const vLen = Math.hypot(vx, vy) || 1;
+      return {
+        x: p.x + (vx / vLen) * 0.6 * span,
+        y: p.y + (vy / vLen) * 0.6 * span,
+      };
+    });
+  }
+
+  return candidate;
+}
+
+function findTriangleSegmentStyle(pointIds) {
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "segment") {
+      continue;
+    }
+    const [a, b] = obj.pointIds;
+    if (pointIds.includes(a) && pointIds.includes(b)) {
+      return obj.style || defaultStyle();
+    }
+  }
+  return defaultStyle();
+}
+
+function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offsetFactorY, label }) {
+  const sourcePointIds = findTriangleFromSelection();
+  if (!sourcePointIds) {
+    alert("Select one triangle first (3 points or its 3 sides).");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+
+  runMutation(label, () => {
+    const sourcePoints = sourcePointIds.map((id) => getPointById(id));
+    const center = {
+      x: (sourcePoints[0].x + sourcePoints[1].x + sourcePoints[2].x) / 3,
+      y: (sourcePoints[0].y + sourcePoints[1].y + sourcePoints[2].y) / 3,
+    };
+    const span = Math.max(
+      distance(sourcePoints[0], sourcePoints[1]),
+      distance(sourcePoints[1], sourcePoints[2]),
+      distance(sourcePoints[2], sourcePoints[0])
+    );
+    const offset = {
+      x: span * offsetFactorX,
+      y: span * offsetFactorY,
+    };
+    const angleRad = (rotateDeg * Math.PI) / 180;
+    const segStyle = findTriangleSegmentStyle(sourcePointIds);
+
+    const transformedPoints = sourcePoints.map((source) =>
+      transformPointAround(source, center, scale, angleRad, offset)
+    );
+    const nonOverlapping = resolveTriangleOffsetNoOverlap(sourcePoints, transformedPoints, offset, span);
+
+    const newPointIds = [];
+    for (let i = 0; i < nonOverlapping.length; i += 1) {
+      const id = makeId("pt");
+      addObject({
+        id,
+        type: "point",
+        x: nonOverlapping[i].x,
+        y: nonOverlapping[i].y,
+        name: "",
+        style: sourcePoints[i].style || defaultStyle(),
+      });
+      newPointIds.push(id);
+    }
+    addTriangleEdges(newPointIds, segStyle);
+    store.clearSelection();
+  });
+}
+
+function createCongruentTriangleCopy() {
+  createTriangleCopyFromSelection({
+    scale: 1,
+    rotateDeg: 18,
+    offsetFactorX: 0.95,
+    offsetFactorY: 0.08,
+    label: "create-congruent-triangle",
+  });
+}
+
+function createSimilarTriangleCopy() {
+  createTriangleCopyFromSelection({
+    scale: 1.45,
+    rotateDeg: 14,
+    offsetFactorX: 1.1,
+    offsetFactorY: 0.1,
+    label: "create-similar-triangle",
   });
 }
 
@@ -1322,6 +1691,8 @@ function wireUi() {
 
   document.getElementById("makeParallel").addEventListener("click", () => createParallelOrPerpendicular("parallel"));
   document.getElementById("makePerpendicular").addEventListener("click", () => createParallelOrPerpendicular("perpendicular"));
+  document.getElementById("makeCongruentTriangle").addEventListener("click", createCongruentTriangleCopy);
+  document.getElementById("makeSimilarTriangle").addEventListener("click", createSimilarTriangleCopy);
 
   document.getElementById("deleteSelected").addEventListener("click", deleteSelected);
   document.getElementById("clearBoard").addEventListener("click", clearBoard);
@@ -1411,5 +1782,6 @@ function wireUi() {
 }
 
 wireUi();
+startMarqueeSelection();
 updateModeUi();
 renderCurrentDoc();

@@ -9,11 +9,17 @@ All notable changes to this project are documented in this file.
   - `Angle Measure` creates numeric angle labels from selected points/angle marks and defaults to degree notation.
 - Intersection snap support for `Point` tool when clicking near line/segment/ray intersections.
 - Dashed live preview for `Segment`, `Line`, and `Ray` during point placement.
+- Triangle transform actions in Construct:
+  - `Congruent △` duplicates a selected triangle, rotates it slightly, and moves it.
+  - `Similar △` duplicates a selected triangle as a larger copy, rotates it slightly, and moves it.
+- Drag-to-select marquee in `Select` mode (with Shift-additive multi-select).
 
 ### Changed
 - Auto Label now targets clicked objects only (toggle mode), instead of labeling all points at once.
 - Auto-labeled segments now use lowercase letters by default.
 - Manual and auto-generated labels can be dragged after placement.
+- Congruent/Similar triangle copies now spawn closer to originals with minimal vertical offset.
+- Congruent/Similar triangle copies now auto-shift to avoid overlapping the source triangle.
 - Parallel-line annotation marks now render as chevrons (1/2/3) instead of hatch ticks.
 - Parallel chevron orientation adjusted so the chevron vertex sits on the line and arms run along line direction.
 - Parallel chevrons widened for better visibility.
