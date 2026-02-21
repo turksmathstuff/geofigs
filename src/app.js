@@ -30,7 +30,8 @@ const boardController = new BoardController(
   "jxgbox",
   (coords, evt) => handleBoardClick(coords, evt),
   (id, type, evt) => handleObjectClick(id, type, evt),
-  (coords, evt) => handleBoardMove(coords, evt)
+  (coords, evt) => handleBoardMove(coords, evt),
+  (id, type, pos) => handleObjectMove(id, type, pos)
 );
 boardController.init();
 
@@ -240,9 +241,9 @@ function usedLabels() {
   return used;
 }
 
-function nextAutoLabel() {
+function nextAutoLabel(targetType = "point") {
   const used = usedLabels();
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const alphabet = targetType === "segment" ? "abcdefghijklmnopqrstuvwxyz" : "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   for (let idx = 0; idx < 5000; idx += 1) {
     const candidate =
       alphabet[idx % alphabet.length] + (idx >= alphabet.length ? Math.floor(idx / alphabet.length) : "");
@@ -280,11 +281,18 @@ function toggleAutoLabelForObject(targetId) {
   }
 
   runMutation("toggle-auto-label", () => {
+    if (target.type === "label") {
+      if (target.auto) {
+        store.doc.objects = store.doc.objects.filter((o) => o.id !== target.id);
+      }
+      return;
+    }
+
     if (target.type === "point") {
       if (target.name) {
         target.name = "";
       } else {
-        target.name = nextAutoLabel();
+        target.name = nextAutoLabel("point");
       }
       return;
     }
@@ -301,7 +309,7 @@ function toggleAutoLabelForObject(targetId) {
       type: "label",
       x: anchor.x,
       y: anchor.y,
-      text: nextAutoLabel(),
+      text: nextAutoLabel(target.type === "segment" ? "segment" : "object"),
       auto: true,
       targetId: target.id,
       style: defaultStyle(),
@@ -355,6 +363,111 @@ function isoscelesApexFromCursor(pointA, pointB, cursor) {
     x: midX + perpX * height,
     y: midY + perpY * height,
   };
+}
+
+function getLinearDefinition(obj) {
+  if (!obj || !Array.isArray(obj.pointIds) || obj.pointIds.length < 2) {
+    return null;
+  }
+  if (obj.type !== "segment" && obj.type !== "line") {
+    return null;
+  }
+  const a = getPointById(obj.pointIds[0]);
+  const b = getPointById(obj.pointIds[1]);
+  if (!a || !b) {
+    return null;
+  }
+  const kind = obj.type === "segment" ? "segment" : obj.lineType === "ray" ? "ray" : "line";
+  return { kind, a, b };
+}
+
+function intersectInfiniteLines(l1, l2) {
+  const x1 = l1.a.x;
+  const y1 = l1.a.y;
+  const x2 = l1.b.x;
+  const y2 = l1.b.y;
+  const x3 = l2.a.x;
+  const y3 = l2.a.y;
+  const x4 = l2.b.x;
+  const y4 = l2.b.y;
+  const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(den) < 1e-9) {
+    return null;
+  }
+  const cross1 = x1 * y2 - y1 * x2;
+  const cross2 = x3 * y4 - y3 * x4;
+  const px = (cross1 * (x3 - x4) - (x1 - x2) * cross2) / den;
+  const py = (cross1 * (y3 - y4) - (y1 - y2) * cross2) / den;
+  return { x: px, y: py };
+}
+
+function pointFitsLinearDef(pt, def) {
+  const ax = def.a.x;
+  const ay = def.a.y;
+  const bx = def.b.x;
+  const by = def.b.y;
+  const vx = bx - ax;
+  const vy = by - ay;
+  const wx = pt.x - ax;
+  const wy = pt.y - ay;
+  const vLen2 = vx * vx + vy * vy;
+  if (vLen2 < 1e-12) {
+    return false;
+  }
+  const t = (wx * vx + wy * vy) / vLen2;
+  if (def.kind === "segment") {
+    return t >= -1e-6 && t <= 1 + 1e-6;
+  }
+  if (def.kind === "ray") {
+    return t >= -1e-6;
+  }
+  return true;
+}
+
+function findIntersectionSnapPoint(rawPoint) {
+  const linearDefs = store.doc.objects.map(getLinearDefinition).filter(Boolean);
+  if (linearDefs.length < 2) {
+    return null;
+  }
+
+  let best = null;
+  let bestDist = Infinity;
+  const threshold = 0.9;
+  for (let i = 0; i < linearDefs.length; i += 1) {
+    for (let j = i + 1; j < linearDefs.length; j += 1) {
+      const candidate = intersectInfiniteLines(linearDefs[i], linearDefs[j]);
+      if (!candidate) {
+        continue;
+      }
+      if (!pointFitsLinearDef(candidate, linearDefs[i]) || !pointFitsLinearDef(candidate, linearDefs[j])) {
+        continue;
+      }
+      const dist = distance(rawPoint, candidate);
+      if (dist < threshold && dist < bestDist) {
+        best = candidate;
+        bestDist = dist;
+      }
+    }
+  }
+  return best;
+}
+
+function updateLinearPreview(cursorCoords) {
+  if (![ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY].includes(currentMode)) {
+    return false;
+  }
+  if (pendingPointIds.length < 1) {
+    boardController.clearPreview();
+    return true;
+  }
+  const p1 = getPointById(pendingPointIds[0]);
+  if (!p1) {
+    boardController.clearPreview();
+    return true;
+  }
+  const previewKind = currentMode === ToolMode.SEGMENT ? "segment" : currentMode === ToolMode.RAY ? "ray" : "line";
+  boardController.showPreviewLinear(pointObjectFromCoords(p1), cursorCoords, previewKind);
+  return true;
 }
 
 function updateTrianglePreview(cursorCoords) {
@@ -546,8 +659,10 @@ function handleBoardClick(coords, evt) {
   const snappedCoords = getPointInputCoords(coords, evt);
 
   if (currentMode === ToolMode.POINT) {
+    const intersectionSnap = findIntersectionSnapPoint(snappedCoords);
+    const pointCoords = intersectionSnap || snappedCoords;
     runMutation("create-point", () => {
-      maybeCreatePoint(snappedCoords);
+      maybeCreatePoint(pointCoords);
     });
     return;
   }
@@ -563,6 +678,10 @@ function handleBoardClick(coords, evt) {
 function handleObjectClick(id, type, evt) {
   const multi = evt.shiftKey || evt.metaKey || evt.ctrlKey;
 
+  if (currentMode === ToolMode.POINT) {
+    return false;
+  }
+
   if (currentMode === ToolMode.DELETE) {
     store.clearSelection();
     store.selection.add(id);
@@ -574,10 +693,17 @@ function handleObjectClick(id, type, evt) {
     addPointInput(id);
     return;
   }
+  if (pointNeeds(currentMode) > 0 && type !== "point") {
+    return false;
+  }
 
   if (currentMode === ToolMode.LABEL) {
     toggleAutoLabelForObject(id);
     return;
+  }
+
+  if (currentMode === ToolMode.SELECT && type === "label" && !multi) {
+    return false;
   }
 
   if (currentMode === ToolMode.SELECT || currentMode === ToolMode.CONGRUENCY) {
@@ -587,7 +713,32 @@ function handleObjectClick(id, type, evt) {
 }
 
 function handleBoardMove(coords, evt) {
-  updateTrianglePreview(getPointInputCoords(coords, evt));
+  const adjusted = getPointInputCoords(coords, evt);
+  if (updateLinearPreview(adjusted)) {
+    return;
+  }
+  updateTrianglePreview(adjusted);
+}
+
+function handleObjectMove(id, type, pos) {
+  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
+    return;
+  }
+  if (type !== "point" && type !== "label") {
+    return;
+  }
+  const obj = getObjectById(id);
+  if (!obj) {
+    return;
+  }
+  if (Math.abs((obj.x ?? 0) - pos.x) < 0.0001 && Math.abs((obj.y ?? 0) - pos.y) < 0.0001) {
+    return;
+  }
+
+  runMutation(`move-${type}`, () => {
+    obj.x = pos.x;
+    obj.y = pos.y;
+  });
 }
 
 function removeWithDependencies(selectedSet) {
@@ -723,7 +874,7 @@ function renderCurrentDoc(applySelection = true) {
     } else if (ann.type === "parallelMark") {
       const target = boardController.getElement(ann.targetId);
       if (target) {
-        boardController.createTickMark(ann.id, target, ann.markCount, style);
+        boardController.createParallelChevronMarks(ann.id, target, ann.markCount, style);
       }
     } else if (ann.type === "angle") {
       const p1 = points.get(ann.pointIds[0]);
@@ -814,6 +965,7 @@ function createParallelOrPerpendicular(kind) {
   const selected = store.selectedIds();
   if (selected.length !== 2) {
     alert("Select one line/segment and one point.");
+    setMode(ToolMode.SELECT);
     return;
   }
 
@@ -834,6 +986,7 @@ function createParallelOrPerpendicular(kind) {
 
   if (!sourceLineId || !throughPointId) {
     alert("Select one line/segment and one point.");
+    setMode(ToolMode.SELECT);
     return;
   }
 
@@ -853,6 +1006,7 @@ function addTicks(tickCount) {
   const segments = selectedOfTypes(["segment"]);
   if (!segments.length) {
     alert("Select one or more segments first.");
+    setMode(ToolMode.SELECT);
     return;
   }
   const groupId = makeId("cg");
@@ -875,6 +1029,7 @@ function addParallelMarks(markCount) {
   const targets = selectedOfTypes(["segment", "line"]);
   if (!targets.length) {
     alert("Select one or more segments/lines first.");
+    setMode(ToolMode.SELECT);
     return;
   }
   const groupId = makeId("pm");
@@ -908,6 +1063,104 @@ function addAngleFromSelection(isRight, arcCount = 1) {
     return true;
   }
   return false;
+}
+
+function angleDegrees(p1, vertex, p3) {
+  const v1x = p1.x - vertex.x;
+  const v1y = p1.y - vertex.y;
+  const v2x = p3.x - vertex.x;
+  const v2y = p3.y - vertex.y;
+  const a1 = Math.atan2(v1y, v1x);
+  const a2 = Math.atan2(v2y, v2x);
+  let diff = Math.abs((a2 - a1) * (180 / Math.PI));
+  if (diff > 180) {
+    diff = 360 - diff;
+  }
+  return diff;
+}
+
+function addSideMeasure() {
+  const segments = selectedOfTypes(["segment"]);
+  if (segments.length !== 1) {
+    alert("Select exactly one segment.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const segment = getObjectById(segments[0]);
+  const p1 = getPointById(segment.pointIds[0]);
+  const p2 = getPointById(segment.pointIds[1]);
+  if (!p1 || !p2) {
+    return;
+  }
+  const value = distance(p1, p2);
+  const defaultText = value.toFixed(2);
+  const text = prompt("Side length label:", defaultText);
+  if (text === null) {
+    return;
+  }
+
+  runMutation("add-side-measure", () => {
+    addObject({
+      id: makeId("label"),
+      type: "label",
+      x: (p1.x + p2.x) / 2 + 0.35,
+      y: (p1.y + p2.y) / 2 + 0.35,
+      text: text.trim() || defaultText,
+      targetId: segment.id,
+      style: defaultStyle(),
+    });
+  });
+}
+
+function resolveAngleMeasurePointIds() {
+  const pts = selectedOfTypes(["point"]);
+  if (pts.length === 3) {
+    return pts;
+  }
+  const selectedAngles = selectedOfTypes(["angle"]);
+  if (selectedAngles.length === 1) {
+    const ann = store.doc.annotations.find((a) => a.id === selectedAngles[0] && a.type === "angle");
+    if (ann) {
+      return ann.pointIds;
+    }
+  }
+  return null;
+}
+
+function addAngleMeasure() {
+  const pointIds = resolveAngleMeasurePointIds();
+  if (!pointIds) {
+    alert("Select 3 points (counterclockwise) or one angle mark.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const p1 = getPointById(pointIds[0]);
+  const p2 = getPointById(pointIds[1]);
+  const p3 = getPointById(pointIds[2]);
+  if (!p1 || !p2 || !p3) {
+    return;
+  }
+  const deg = angleDegrees(p1, p2, p3);
+  const rounded = `${deg.toFixed(0)}°`;
+  const textInput = prompt("Angle measure label:", rounded);
+  if (textInput === null) {
+    return;
+  }
+  let text = textInput.trim() || rounded;
+  if (!text.includes("°")) {
+    text = `${text}°`;
+  }
+
+  runMutation("add-angle-measure", () => {
+    addObject({
+      id: makeId("label"),
+      type: "label",
+      x: p2.x + 0.55,
+      y: p2.y + 0.55,
+      text,
+      style: defaultStyle(),
+    });
+  });
 }
 
 function promptLabel() {
@@ -1029,6 +1282,8 @@ function wireUi() {
   document.getElementById("markParallel1").addEventListener("click", () => addParallelMarks(1));
   document.getElementById("markParallel2").addEventListener("click", () => addParallelMarks(2));
   document.getElementById("markParallel3").addEventListener("click", () => addParallelMarks(3));
+  document.getElementById("addSideMeasure").addEventListener("click", addSideMeasure);
+  document.getElementById("addAngleMeasure").addEventListener("click", addAngleMeasure);
 
   document.getElementById("markAngle1").addEventListener("click", () => {
     if (!addAngleFromSelection(false, 1)) {
@@ -1099,6 +1354,11 @@ function wireUi() {
 
   document.getElementById("strokeColor").addEventListener("input", applyStyleToSelection);
   document.getElementById("strokeWidth").addEventListener("input", applyStyleToSelection);
+  document.getElementById("resetStrokeWidth").addEventListener("click", () => {
+    const widthInput = document.getElementById("strokeWidth");
+    widthInput.value = "2";
+    applyStyleToSelection();
+  });
   document.getElementById("lineStyle").addEventListener("change", applyStyleToSelection);
 
   document.getElementById("examMode").addEventListener("change", (evt) => {
