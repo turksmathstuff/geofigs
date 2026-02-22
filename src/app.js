@@ -25,6 +25,8 @@ const moveYValueEl = document.getElementById("moveYValue");
 const rotationCompassEl = document.getElementById("rotationCompass");
 const compassArmEl = document.getElementById("compassArm");
 const rotateValueEl = document.getElementById("rotateValue");
+const rayExtensionInputEl = document.getElementById("rayExtension");
+const rayExtensionValueEl = document.getElementById("rayExtensionValue");
 const modeButtons = [...document.querySelectorAll("button[data-mode]")];
 const triangleMenuBtn = document.getElementById("triangleMenuBtn");
 const triangleMenuPanel = document.getElementById("triangleMenuPanel");
@@ -54,7 +56,45 @@ function defaultStyle() {
     strokeColor: styles.examMode ? "#000000" : styles.defaultStrokeColor,
     strokeWidth: styles.defaultStrokeWidth,
     dash: styles.defaultDash,
+    rayExtension: styles.rayExtension,
+    lineExtensionStart: styles.lineExtensionStart,
+    lineExtensionEnd: styles.lineExtensionEnd,
     fontSize: styles.fontSize,
+  };
+}
+
+function normalizedRayExtension(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 4;
+}
+
+function getRayExtensionForObject(obj) {
+  return normalizedRayExtension(obj?.style?.rayExtension ?? store.doc.styles.rayExtension);
+}
+
+function normalizedLineExtension(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : 4;
+}
+
+function getLineExtentsForObject(obj) {
+  return {
+    start: normalizedLineExtension(obj?.style?.lineExtensionStart ?? store.doc.styles.lineExtensionStart),
+    end: normalizedLineExtension(obj?.style?.lineExtensionEnd ?? store.doc.styles.lineExtensionEnd),
+  };
+}
+
+function rayEndpoint(a, b, extension) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) {
+    return { x: b.x, y: b.y };
+  }
+  const ext = normalizedRayExtension(extension);
+  return {
+    x: b.x + (dx / len) * ext,
+    y: b.y + (dy / len) * ext,
   };
 }
 
@@ -458,7 +498,17 @@ function getLinearDefinition(obj) {
   if (!a || !b) {
     return null;
   }
-  const kind = obj.type === "segment" ? "segment" : obj.lineType === "ray" ? "ray" : "line";
+  if (obj.type === "line" && obj.lineType === "ray") {
+    return {
+      kind: "segment",
+      a,
+      b: rayEndpoint(a, b, getRayExtensionForObject(obj)),
+    };
+  }
+  if (obj.type === "line" && obj.lineType === "line") {
+    return { kind: "line", a, b };
+  }
+  const kind = obj.type === "segment" ? "segment" : "line";
   return { kind, a, b };
 }
 
@@ -547,7 +597,17 @@ function updateLinearPreview(cursorCoords) {
     return true;
   }
   const previewKind = currentMode === ToolMode.SEGMENT ? "segment" : currentMode === ToolMode.RAY ? "ray" : "line";
-  boardController.showPreviewLinear(pointObjectFromCoords(p1), cursorCoords, previewKind);
+  const previewP2 =
+    previewKind === "ray"
+      ? { ...cursorCoords, rayExtension: normalizedRayExtension(store.doc.styles.rayExtension) }
+      : previewKind === "line"
+        ? {
+            ...cursorCoords,
+            lineExtensionStart: normalizedLineExtension(store.doc.styles.lineExtensionStart),
+            lineExtensionEnd: normalizedLineExtension(store.doc.styles.lineExtensionEnd),
+          }
+      : cursorCoords;
+  boardController.showPreviewLinear(pointObjectFromCoords(p1), previewP2, previewKind);
   return true;
 }
 
@@ -625,6 +685,23 @@ function updateTrianglePreview(cursorCoords) {
   boardController.clearPreview();
 }
 
+function updateCirclePreview(cursorCoords) {
+  if (currentMode !== ToolMode.CIRCLE) {
+    return false;
+  }
+  if (pendingPointIds.length < 1) {
+    boardController.clearPreview();
+    return true;
+  }
+  const center = getPointById(pendingPointIds[0]);
+  if (!center) {
+    boardController.clearPreview();
+    return true;
+  }
+  boardController.showPreviewCircle(pointObjectFromCoords(center), cursorCoords);
+  return true;
+}
+
 function addPointInput(pointId, skipMutation = false) {
   pendingPointIds.push(pointId);
   const need = pointNeeds(currentMode);
@@ -646,7 +723,11 @@ function addPointInput(pointId, skipMutation = false) {
         type: "line",
         pointIds: pointsForCreate,
         lineType: "line",
-        style: { ...style, straightFirst: true, straightLast: true },
+        style: {
+          ...style,
+          lineExtensionStart: normalizedLineExtension(store.doc.styles.lineExtensionStart),
+          lineExtensionEnd: normalizedLineExtension(store.doc.styles.lineExtensionEnd),
+        },
       });
     } else if (modeForCreate === ToolMode.RAY) {
       addObject({
@@ -654,7 +735,7 @@ function addPointInput(pointId, skipMutation = false) {
         type: "line",
         pointIds: pointsForCreate,
         lineType: "ray",
-        style: { ...style, straightFirst: false, straightLast: true },
+        style: { ...style, rayExtension: normalizedRayExtension(store.doc.styles.rayExtension) },
       });
     } else if (modeForCreate === ToolMode.CIRCLE) {
       addObject({ id: makeId("circle"), type: "circle", pointIds: pointsForCreate, style });
@@ -766,6 +847,8 @@ function handleBoardClick(coords, evt) {
 
 function handleObjectClick(id, type, evt) {
   const multi = evt.shiftKey || evt.metaKey || evt.ctrlKey;
+  const eventType = String(evt?.type || "").toLowerCase();
+  const isReleaseEvent = eventType.includes("up") || eventType.includes("end");
 
   if (currentMode === ToolMode.POINT) {
     return false;
@@ -791,8 +874,8 @@ function handleObjectClick(id, type, evt) {
     return;
   }
 
-  if (currentMode === ToolMode.SELECT && type === "label" && !multi) {
-    return false;
+  if (currentMode === ToolMode.SELECT && !multi && !isReleaseEvent) {
+    return { deferUntilUp: true };
   }
 
   if (currentMode === ToolMode.SELECT || currentMode === ToolMode.CONGRUENCY) {
@@ -942,10 +1025,99 @@ function handleBoardMove(coords, evt) {
   if (updateLinearPreview(adjusted)) {
     return;
   }
+  if (updateCirclePreview(adjusted)) {
+    return;
+  }
   updateTrianglePreview(adjusted);
 }
 
 function handleObjectMove(id, type, pos) {
+  if (type === "ray") {
+    const rayObj = getObjectById(id);
+    if (!rayObj || rayObj.type !== "line" || rayObj.lineType !== "ray") {
+      return;
+    }
+    if (pos && "rayExtension" in pos) {
+      const nextExt = normalizedRayExtension(pos.rayExtension);
+      const prevExt = getRayExtensionForObject(rayObj);
+      if (Math.abs(nextExt - prevExt) < 0.0001) {
+        return;
+      }
+      runMutation("resize-ray-visible", () => {
+        rayObj.style = rayObj.style || {};
+        rayObj.style.rayExtension = nextExt;
+      });
+      return;
+    }
+    if (!pos?.p1 || !pos?.p2) {
+      return;
+    }
+    const p1Obj = getPointById(rayObj.pointIds?.[0]);
+    const p2Obj = getPointById(rayObj.pointIds?.[1]);
+    if (!p1Obj || !p2Obj) {
+      return;
+    }
+    const unchanged =
+      Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
+      Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
+      Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
+      Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
+    if (unchanged) {
+      return;
+    }
+    runMutation("move-ray", () => {
+      p1Obj.x = pos.p1.x;
+      p1Obj.y = pos.p1.y;
+      p2Obj.x = pos.p2.x;
+      p2Obj.y = pos.p2.y;
+    });
+    return;
+  }
+
+  if (type === "line") {
+    const lineObj = getObjectById(id);
+    if (!lineObj || lineObj.type !== "line") {
+      return;
+    }
+    if (pos?.p1 && pos?.p2) {
+      const p1Obj = getPointById(lineObj.pointIds?.[0]);
+      const p2Obj = getPointById(lineObj.pointIds?.[1]);
+      if (!p1Obj || !p2Obj) {
+        return;
+      }
+      const unchanged =
+        Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
+        Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
+        Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
+        Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
+      if (unchanged) {
+        return;
+      }
+      runMutation("move-line", () => {
+        p1Obj.x = pos.p1.x;
+        p1Obj.y = pos.p1.y;
+        p2Obj.x = pos.p2.x;
+        p2Obj.y = pos.p2.y;
+      });
+      return;
+    }
+    if (pos && ("lineExtensionStart" in pos || "lineExtensionEnd" in pos)) {
+      const nextStart = normalizedLineExtension(pos.lineExtensionStart ?? lineObj.style?.lineExtensionStart);
+      const nextEnd = normalizedLineExtension(pos.lineExtensionEnd ?? lineObj.style?.lineExtensionEnd);
+      const prevStart = normalizedLineExtension(lineObj.style?.lineExtensionStart ?? store.doc.styles.lineExtensionStart);
+      const prevEnd = normalizedLineExtension(lineObj.style?.lineExtensionEnd ?? store.doc.styles.lineExtensionEnd);
+      if (Math.abs(nextStart - prevStart) < 0.0001 && Math.abs(nextEnd - prevEnd) < 0.0001) {
+        return;
+      }
+      runMutation("resize-line-visible", () => {
+        lineObj.style = lineObj.style || {};
+        lineObj.style.lineExtensionStart = nextStart;
+        lineObj.style.lineExtensionEnd = nextEnd;
+      });
+    }
+    return;
+  }
+
   if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
     return;
   }
@@ -1025,13 +1197,56 @@ function deleteSelected() {
   });
 }
 
+function hideSelected() {
+  const ids = new Set(store.selectedIds());
+  if (!ids.size) {
+    return;
+  }
+  runMutation("hide-selected", () => {
+    for (const obj of store.doc.objects) {
+      if (ids.has(obj.id)) {
+        obj.hidden = true;
+      }
+    }
+    for (const ann of store.doc.annotations) {
+      if (ids.has(ann.id)) {
+        ann.hidden = true;
+      }
+    }
+    store.clearSelection();
+  });
+}
+
+function showAllHidden() {
+  const hasHidden =
+    store.doc.objects.some((o) => o.hidden) || store.doc.annotations.some((a) => a.hidden);
+  if (!hasHidden) {
+    return;
+  }
+  runMutation("show-all", () => {
+    for (const obj of store.doc.objects) {
+      if (obj.hidden) {
+        obj.hidden = false;
+      }
+    }
+    for (const ann of store.doc.annotations) {
+      if (ann.hidden) {
+        ann.hidden = false;
+      }
+    }
+    store.clearSelection();
+  });
+}
+
 function buildPointMap() {
   const map = new Map();
   for (const obj of store.doc.objects) {
     if (obj.type !== "point") {
       continue;
     }
-    const pt = boardController.createPoint(obj.id, obj.x, obj.y, { ...obj.style });
+    const pt = obj.hidden
+      ? boardController.createSupportPoint(obj.x, obj.y)
+      : boardController.createPoint(obj.id, obj.x, obj.y, { ...obj.style });
     map.set(obj.id, pt);
   }
   return map;
@@ -1075,6 +1290,9 @@ function renderCurrentDoc(applySelection = true) {
   const points = buildPointMap();
 
   for (const obj of store.doc.objects) {
+    if (obj.hidden) {
+      continue;
+    }
     if (obj.type === "point") {
       continue;
     }
@@ -1091,8 +1309,8 @@ function renderCurrentDoc(applySelection = true) {
       if (p1 && p2) {
         boardController.createLine(obj.id, p1, p2, {
           ...style,
-          straightFirst: obj.style.straightFirst,
-          straightLast: obj.style.straightLast,
+          rayExtension: getRayExtensionForObject(obj),
+          ...getLineExtentsForObject(obj),
           lineType: obj.lineType,
         });
       }
@@ -1120,6 +1338,9 @@ function renderCurrentDoc(applySelection = true) {
   }
 
   for (const ann of store.doc.annotations) {
+    if (ann.hidden) {
+      continue;
+    }
     const style = { ...defaultStyle(), ...ann.style };
     if (ann.type === "tick") {
       const segment = boardController.getElement(ann.segmentId);
@@ -1166,6 +1387,9 @@ function renderCurrentDoc(applySelection = true) {
 
 function applyDoc(doc, fromCommand = false) {
   store.setDoc(doc);
+  store.doc.styles.rayExtension = normalizedRayExtension(store.doc.styles.rayExtension);
+  store.doc.styles.lineExtensionStart = normalizedLineExtension(store.doc.styles.lineExtensionStart);
+  store.doc.styles.lineExtensionEnd = normalizedLineExtension(store.doc.styles.lineExtensionEnd);
   if (!Number.isFinite(store.doc.styles.fontSize) || store.doc.styles.fontSize < 20) {
     store.doc.styles.fontSize = 20;
   }
@@ -1174,6 +1398,34 @@ function applyDoc(doc, fromCommand = false) {
     store.commandStack.clear();
   }
   renderCurrentDoc();
+  syncStyleInputsFromDoc();
+}
+
+function syncStyleInputsFromDoc() {
+  const styles = store.doc.styles || {};
+  const strokeColorEl = document.getElementById("strokeColor");
+  const strokeWidthEl = document.getElementById("strokeWidth");
+  const lineStyleEl = document.getElementById("lineStyle");
+  const examModeEl = document.getElementById("examMode");
+  if (strokeColorEl && styles.defaultStrokeColor) {
+    strokeColorEl.value = styles.defaultStrokeColor;
+  }
+  if (strokeWidthEl && Number.isFinite(styles.defaultStrokeWidth)) {
+    strokeWidthEl.value = String(styles.defaultStrokeWidth);
+  }
+  if (lineStyleEl) {
+    lineStyleEl.value = Number(styles.defaultDash) ? "dashed" : "solid";
+  }
+  if (examModeEl) {
+    examModeEl.checked = !!styles.examMode;
+  }
+  if (rayExtensionInputEl) {
+    const ext = normalizedRayExtension(styles.rayExtension);
+    rayExtensionInputEl.value = String(ext);
+    if (rayExtensionValueEl) {
+      rayExtensionValueEl.textContent = ext.toFixed(1);
+    }
+  }
 }
 
 function selectedOfTypes(types) {
@@ -1642,12 +1894,17 @@ function applyStyleToSelection() {
   const width = Number(document.getElementById("strokeWidth").value);
   const lineStyle = document.getElementById("lineStyle").value;
   const dash = lineStyle === "dashed" ? 2 : 0;
+  const rayExtension = normalizedRayExtension(rayExtensionInputEl?.value);
+  if (rayExtensionValueEl) {
+    rayExtensionValueEl.textContent = rayExtension.toFixed(1);
+  }
 
   const selectedIds = store.selectedIds();
   if (!selectedIds.length) {
     store.doc.styles.defaultStrokeColor = color;
     store.doc.styles.defaultStrokeWidth = width;
     store.doc.styles.defaultDash = dash;
+    store.doc.styles.rayExtension = rayExtension;
     renderCurrentDoc(false);
     return;
   }
@@ -1660,6 +1917,9 @@ function applyStyleToSelection() {
         obj.style.strokeColor = color;
         obj.style.strokeWidth = width;
         obj.style.dash = dash;
+        if (obj.type === "line" && obj.lineType === "ray") {
+          obj.style.rayExtension = rayExtension;
+        }
       }
       const ann = store.doc.annotations.find((a) => a.id === id);
       if (ann) {
@@ -1706,7 +1966,7 @@ function createParallelOrPerpendicular(kind) {
       type: kind,
       sourceLineId,
       throughPointId,
-      style: defaultStyle(),
+      style: { ...defaultStyle(), dash: 0 },
     });
     store.clearSelection();
   });
@@ -2100,6 +2360,8 @@ function wireUi() {
   });
 
   document.getElementById("deleteSelected").addEventListener("click", deleteSelected);
+  document.getElementById("hideSelected").addEventListener("click", hideSelected);
+  document.getElementById("showAll").addEventListener("click", showAllHidden);
   document.getElementById("clearBoard").addEventListener("click", clearBoard);
 
   document.getElementById("undoBtn").addEventListener("click", () => {
@@ -2136,6 +2398,9 @@ function wireUi() {
     applyStyleToSelection();
   });
   document.getElementById("lineStyle").addEventListener("change", applyStyleToSelection);
+  if (rayExtensionInputEl) {
+    rayExtensionInputEl.addEventListener("input", applyStyleToSelection);
+  }
 
   document.getElementById("examMode").addEventListener("change", (evt) => {
     runMutation("toggle-exam-mode", () => {
@@ -2189,4 +2454,5 @@ function wireUi() {
 wireUi();
 startMarqueeSelection();
 updateModeUi();
+syncStyleInputsFromDoc();
 renderCurrentDoc();
