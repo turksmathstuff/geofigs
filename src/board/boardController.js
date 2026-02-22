@@ -288,6 +288,16 @@ export class BoardController {
         } else {
           meta.lineExtensionEnd = next;
         }
+        if (this.onObjectMove) {
+          if (type === "ray") {
+            this.onObjectMove(logicalId, "ray", { rayExtension: meta.rayExtension }, { transient: true });
+          } else {
+            this.onObjectMove(logicalId, "line", {
+              lineExtensionStart: meta.lineExtensionStart,
+              lineExtensionEnd: meta.lineExtensionEnd,
+            }, { transient: true });
+          }
+        }
         this.syncLinearExtentHandles(type, baseP1, baseP2, meta);
         this.board.update();
       });
@@ -298,12 +308,12 @@ export class BoardController {
           return;
         }
         if (type === "ray") {
-          this.onObjectMove(logicalId, "ray", { rayExtension: meta.rayExtension });
+          this.onObjectMove(logicalId, "ray", { rayExtension: meta.rayExtension }, { transient: false });
         } else {
           this.onObjectMove(logicalId, "line", {
             lineExtensionStart: meta.lineExtensionStart,
             lineExtensionEnd: meta.lineExtensionEnd,
-          });
+          }, { transient: false });
         }
       });
     };
@@ -366,8 +376,22 @@ export class BoardController {
       meta.basePoint1.setPosition(JXG.COORDS_BY_USER, [dragStartLinearPoints.p1.x + dx, dragStartLinearPoints.p1.y + dy]);
       meta.basePoint2.setPosition(JXG.COORDS_BY_USER, [dragStartLinearPoints.p2.x + dx, dragStartLinearPoints.p2.y + dy]);
       this.syncLinearExtentHandles(type, meta.basePoint1, meta.basePoint2, meta);
+      if (this.onObjectMove) {
+        this.onObjectMove(logicalId, type, {
+          p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
+          p2: { x: meta.basePoint2.X(), y: meta.basePoint2.Y() },
+        }, { transient: true });
+      }
       this.board.update();
     });
+    if (type === "point" || type === "label") {
+      el.on("drag", () => {
+        if (!this.onObjectMove) {
+          return;
+        }
+        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: true });
+      });
+    }
     el.on("up", (evt) => {
       if (deferredClick && this.onObjectClick) {
         let moved = false;
@@ -391,12 +415,12 @@ export class BoardController {
         return;
       }
       if (type === "point" || type === "label") {
-        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() });
+        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: false });
       } else if ((type === "ray" || type === "line") && meta.basePoint1 && meta.basePoint2) {
         this.onObjectMove(logicalId, type, {
           p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
           p2: { x: meta.basePoint2.X(), y: meta.basePoint2.Y() },
-        });
+        }, { transient: false });
       }
       deferredClick = false;
       pointerDownObjPos = null;
@@ -442,7 +466,7 @@ export class BoardController {
       fillColor: style.strokeColor || "#111",
       name: "",
       withLabel: false,
-      fixed: false,
+      fixed: !!style.fixed,
     });
     return this.registerElement(id, "point", el);
   }
