@@ -18,8 +18,6 @@ const autoLabelBtn = document.getElementById("autoLabel");
 const boardEl = document.getElementById("jxgbox");
 const transformPanelEl = document.getElementById("transformPanel");
 const transformTitleEl = document.getElementById("transformTitle");
-const movePanelEl = document.getElementById("movePanel");
-const rotatePanelEl = document.getElementById("rotatePanel");
 const moveXSliderEl = document.getElementById("moveXSlider");
 const moveYSliderEl = document.getElementById("moveYSlider");
 const moveXValueEl = document.getElementById("moveXValue");
@@ -171,6 +169,17 @@ function getAutoLabelObjectByTargetId(targetId) {
   return store.doc.objects.find((o) => o.type === "label" && o.auto === true && o.targetId === targetId);
 }
 
+function getPointNameLabelByTargetId(targetId) {
+  return store.doc.objects.find(
+    (o) => o.type === "label" && o.pointName === true && o.targetId === targetId
+  );
+}
+
+function getPointNameText(pointId) {
+  const label = getPointNameLabelByTargetId(pointId);
+  return label?.text?.trim() || "";
+}
+
 function addObject(obj) {
   store.doc.objects.push(obj);
 }
@@ -272,9 +281,45 @@ function nextAutoLabel(targetType = "point") {
   return `L${Date.now()}`;
 }
 
+function findTriangleOppositePointForSegment(segmentObj) {
+  if (!segmentObj || segmentObj.type !== "segment") {
+    return null;
+  }
+  const [a, b] = segmentObj.pointIds;
+  const segments = store.doc.objects.filter((o) => o.type === "segment");
+  const points = new Set();
+  for (const seg of segments) {
+    points.add(seg.pointIds[0]);
+    points.add(seg.pointIds[1]);
+  }
+  for (const c of points) {
+    if (c === a || c === b) {
+      continue;
+    }
+    const hasAC = segments.some((s) => segmentConnects(a, c, s));
+    const hasBC = segments.some((s) => segmentConnects(b, c, s));
+    if (hasAC && hasBC) {
+      return c;
+    }
+  }
+  return null;
+}
+
+function conventionalSegmentLabel(segmentObj) {
+  const oppositePointId = findTriangleOppositePointForSegment(segmentObj);
+  if (!oppositePointId) {
+    return "";
+  }
+  const pointText = getPointNameText(oppositePointId);
+  if (!pointText) {
+    return "";
+  }
+  return pointText.toLowerCase();
+}
+
 function autoLabelAnchorForObject(obj) {
   if (obj.type === "point") {
-    return null;
+    return { x: obj.x + 0.45, y: obj.y + 0.45 };
   }
   if (Array.isArray(obj.pointIds) && obj.pointIds.length >= 2) {
     const p1 = getPointById(obj.pointIds[0]);
@@ -307,10 +352,24 @@ function toggleAutoLabelForObject(targetId) {
     }
 
     if (target.type === "point") {
-      if (target.name) {
+      const existingPointLabel = getPointNameLabelByTargetId(target.id);
+      if (existingPointLabel) {
+        store.doc.objects = store.doc.objects.filter((o) => o.id !== existingPointLabel.id);
+      } else if (target.name) {
         target.name = "";
       } else {
-        target.name = nextAutoLabel("point");
+        const anchor = autoLabelAnchorForObject(target);
+        addObject({
+          id: makeId("label"),
+          type: "label",
+          x: anchor.x,
+          y: anchor.y,
+          text: nextAutoLabel("point"),
+          auto: true,
+          pointName: true,
+          targetId: target.id,
+          style: defaultStyle(),
+        });
       }
       return;
     }
@@ -322,12 +381,16 @@ function toggleAutoLabelForObject(targetId) {
     }
 
     const anchor = autoLabelAnchorForObject(target);
+    const segmentLabel =
+      target.type === "segment" ? conventionalSegmentLabel(target) : "";
     addObject({
       id: makeId("label"),
       type: "label",
       x: anchor.x,
       y: anchor.y,
-      text: nextAutoLabel(target.type === "segment" ? "segment" : "object"),
+      text:
+        segmentLabel ||
+        nextAutoLabel(target.type === "segment" ? "segment" : "object"),
       auto: true,
       targetId: target.id,
       style: defaultStyle(),
@@ -669,6 +732,11 @@ function addPointInput(pointId, skipMutation = false) {
 
 function handleBoardClick(coords, evt) {
   if (currentMode === ToolMode.SELECT) {
+    const tag = String(evt?.target?.tagName || "").toLowerCase();
+    const isBoardBackground = tag === "svg" || evt?.target === boardEl;
+    if (!isBoardBackground) {
+      return;
+    }
     if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
       return;
     }
@@ -963,13 +1031,43 @@ function buildPointMap() {
     if (obj.type !== "point") {
       continue;
     }
-    const pt = boardController.createPoint(obj.id, obj.x, obj.y, {
-      ...obj.style,
-      name: obj.name,
-    });
+    const pt = boardController.createPoint(obj.id, obj.x, obj.y, { ...obj.style });
     map.set(obj.id, pt);
   }
   return map;
+}
+
+function migratePointNamesToDraggableLabels() {
+  let changed = false;
+  const existingTargets = new Set(
+    store.doc.objects
+      .filter((o) => o.type === "label" && o.pointName === true && o.targetId)
+      .map((o) => o.targetId)
+  );
+
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "point" || !obj.name) {
+      continue;
+    }
+    if (!existingTargets.has(obj.id)) {
+      addObject({
+        id: makeId("label"),
+        type: "label",
+        x: obj.x + 0.45,
+        y: obj.y + 0.45,
+        text: obj.name,
+        auto: true,
+        pointName: true,
+        targetId: obj.id,
+        style: defaultStyle(),
+      });
+    }
+    obj.name = "";
+    changed = true;
+  }
+  if (changed) {
+    store.doc.metadata.updatedAt = new Date().toISOString();
+  }
 }
 
 function renderCurrentDoc(applySelection = true) {
@@ -1068,6 +1166,10 @@ function renderCurrentDoc(applySelection = true) {
 
 function applyDoc(doc, fromCommand = false) {
   store.setDoc(doc);
+  if (!Number.isFinite(store.doc.styles.fontSize) || store.doc.styles.fontSize < 20) {
+    store.doc.styles.fontSize = 20;
+  }
+  migratePointNamesToDraggableLabels();
   if (!fromCommand) {
     store.commandStack.clear();
   }
@@ -1131,6 +1233,13 @@ function findTriangleFromSelection() {
   return closed ? pointIds : null;
 }
 
+function triangleSegmentIds(pointIds) {
+  const set = new Set(pointIds);
+  return store.doc.objects
+    .filter((o) => o.type === "segment" && set.has(o.pointIds?.[0]) && set.has(o.pointIds?.[1]))
+    .map((o) => o.id);
+}
+
 function transformPointAround(point, center, scale, angleRad, offset) {
   const dx = point.x - center.x;
   const dy = point.y - center.y;
@@ -1139,6 +1248,17 @@ function transformPointAround(point, center, scale, angleRad, offset) {
   return {
     x: center.x + rx * scale + offset.x,
     y: center.y + ry * scale + offset.y,
+  };
+}
+
+function transformPointBySession(base, center, angleRad, offset, mirrorX = 1, mirrorY = 1) {
+  const dx = (base.x - center.x) * mirrorX;
+  const dy = (base.y - center.y) * mirrorY;
+  const rx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
+  const ry = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
+  return {
+    x: center.x + rx + offset.x,
+    y: center.y + ry + offset.y,
   };
 }
 
@@ -1243,6 +1363,22 @@ function findTriangleSegmentStyle(pointIds) {
   return defaultStyle();
 }
 
+function chooseCopyOffset(sourcePoints, span, offsetFactorX, offsetFactorY) {
+  const xs = sourcePoints.map((p) => p.x);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const bbox = boardController.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+  const boardLeft = Math.min(bbox[0], bbox[2]);
+  const boardRight = Math.max(bbox[0], bbox[2]);
+  const leftRoom = minX - boardLeft;
+  const rightRoom = boardRight - maxX;
+  const direction = rightRoom >= leftRoom ? 1 : -1;
+  return {
+    x: direction * span * offsetFactorX,
+    y: span * offsetFactorY,
+  };
+}
+
 function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offsetFactorY, label }) {
   const sourcePointIds = findTriangleFromSelection();
   if (!sourcePointIds) {
@@ -1262,10 +1398,7 @@ function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offs
       distance(sourcePoints[1], sourcePoints[2]),
       distance(sourcePoints[2], sourcePoints[0])
     );
-    const offset = {
-      x: span * offsetFactorX,
-      y: span * offsetFactorY,
-    };
+    const offset = chooseCopyOffset(sourcePoints, span, offsetFactorX, offsetFactorY);
     const angleRad = (rotateDeg * Math.PI) / 180;
     const segStyle = findTriangleSegmentStyle(sourcePointIds);
 
@@ -1295,9 +1428,9 @@ function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offs
 function createCongruentTriangleCopy() {
   createTriangleCopyFromSelection({
     scale: 1,
-    rotateDeg: 18,
+    rotateDeg: 0,
     offsetFactorX: 0.95,
-    offsetFactorY: 0.08,
+    offsetFactorY: 0.03,
     label: "create-congruent-triangle",
   });
 }
@@ -1305,9 +1438,9 @@ function createCongruentTriangleCopy() {
 function createSimilarTriangleCopy() {
   createTriangleCopyFromSelection({
     scale: 1.45,
-    rotateDeg: 14,
+    rotateDeg: 0,
     offsetFactorX: 1.1,
-    offsetFactorY: 0.1,
+    offsetFactorY: 0.03,
     label: "create-similar-triangle",
   });
 }
@@ -1344,15 +1477,35 @@ function startTriangleTransformSession(kind) {
     return false;
   }
 
+  const triSegmentIds = triangleSegmentIds(pointIds);
+  const targetIds = new Set([...pointIds, ...triSegmentIds]);
+  const labelIds = [];
+  const baseLabelPoints = {};
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "label" || !obj.targetId) {
+      continue;
+    }
+    if (!targetIds.has(obj.targetId)) {
+      continue;
+    }
+    labelIds.push(obj.id);
+    baseLabelPoints[obj.id] = { x: obj.x, y: obj.y };
+  }
+
   transformSession = {
     kind,
     pointIds,
+    segmentIds: triSegmentIds,
+    labelIds,
     center,
     basePoints,
+    baseLabelPoints,
     beforeDoc: store.snapshot(),
     dx: 0,
     dy: 0,
     angleDeg: 0,
+    mirrorX: 1,
+    mirrorY: 1,
   };
   return true;
 }
@@ -1361,7 +1514,7 @@ function applyTransformPreview() {
   if (!transformSession) {
     return;
   }
-  const { pointIds, basePoints, center, dx, dy, angleDeg } = transformSession;
+  const { pointIds, labelIds, basePoints, baseLabelPoints, center, dx, dy, angleDeg, mirrorX, mirrorY } = transformSession;
   const angleRad = (angleDeg * Math.PI) / 180;
   for (const id of pointIds) {
     const base = basePoints[id];
@@ -1369,21 +1522,31 @@ function applyTransformPreview() {
     if (!base || !target) {
       continue;
     }
-    const transformed = transformPointAround(base, center, 1, angleRad, { x: dx, y: dy });
+    const transformed = transformPointBySession(base, center, angleRad, { x: dx, y: dy }, mirrorX, mirrorY);
     target.x = transformed.x;
     target.y = transformed.y;
   }
+
+  for (const labelId of labelIds) {
+    const base = baseLabelPoints[labelId];
+    const labelObj = getObjectById(labelId);
+    if (!base || !labelObj || labelObj.type !== "label") {
+      continue;
+    }
+    const transformed = transformPointBySession(base, center, angleRad, { x: dx, y: dy }, mirrorX, mirrorY);
+    labelObj.x = transformed.x;
+    labelObj.y = transformed.y;
+  }
+
   renderCurrentDoc(false);
 }
 
-function showTransformPanel(kind) {
+function showTransformPanel() {
   if (!transformPanelEl) {
     return;
   }
   transformPanelEl.hidden = false;
-  movePanelEl.hidden = kind !== "move";
-  rotatePanelEl.hidden = kind !== "rotate";
-  transformTitleEl.textContent = kind === "move" ? "Move Triangle" : "Rotate Triangle";
+  transformTitleEl.textContent = "Rotate/Slide Triangle";
 }
 
 function hideTransformPanel() {
@@ -1453,13 +1616,16 @@ function angleFromCompassEvent(evt) {
   return (rad * 180) / Math.PI;
 }
 
-function moveSelectedTriangle() {
-  if (!startTriangleTransformSession("move")) {
+function transformSelectedTriangle() {
+  if (!startTriangleTransformSession("transform")) {
     return;
   }
   transformSession.dx = 0;
   transformSession.dy = 0;
-  showTransformPanel("move");
+  transformSession.angleDeg = 0;
+  transformSession.mirrorX = 1;
+  transformSession.mirrorY = 1;
+  showTransformPanel();
   if (moveXSliderEl) {
     moveXSliderEl.value = "0";
   }
@@ -1467,15 +1633,6 @@ function moveSelectedTriangle() {
     moveYSliderEl.value = "0";
   }
   updateMoveReadouts();
-  applyTransformPreview();
-}
-
-function rotateSelectedTriangle() {
-  if (!startTriangleTransformSession("rotate")) {
-    return;
-  }
-  transformSession.angleDeg = 0;
-  showTransformPanel("rotate");
   updateCompassReadout();
   applyTransformPreview();
 }
@@ -1877,16 +2034,27 @@ function wireUi() {
   document.getElementById("makePerpendicular").addEventListener("click", () => createParallelOrPerpendicular("perpendicular"));
   document.getElementById("makeCongruentTriangle").addEventListener("click", createCongruentTriangleCopy);
   document.getElementById("makeSimilarTriangle").addEventListener("click", createSimilarTriangleCopy);
-  document.getElementById("moveSelectedTriangle").addEventListener("click", moveSelectedTriangle);
-  document.getElementById("rotateSelectedTriangle").addEventListener("click", rotateSelectedTriangle);
+  document.getElementById("transformSelectedTriangle").addEventListener("click", transformSelectedTriangle);
   document.getElementById("closeTransformPanel").addEventListener("click", cancelTransformSession);
-  document.getElementById("cancelMoveTriangle").addEventListener("click", cancelTransformSession);
-  document.getElementById("cancelRotateTriangle").addEventListener("click", cancelTransformSession);
-  document.getElementById("applyMoveTriangle").addEventListener("click", () => commitTransformSession("move-selected-triangle"));
-  document.getElementById("applyRotateTriangle").addEventListener("click", () => commitTransformSession("rotate-selected-triangle"));
+  document.getElementById("cancelTransformTriangle").addEventListener("click", cancelTransformSession);
+  document.getElementById("applyTransformTriangle").addEventListener("click", () => commitTransformSession("transform-selected-triangle"));
+  document.getElementById("reflectHorizontalTriangle").addEventListener("click", () => {
+    if (!transformSession) {
+      return;
+    }
+    transformSession.mirrorY *= -1;
+    applyTransformPreview();
+  });
+  document.getElementById("reflectVerticalTriangle").addEventListener("click", () => {
+    if (!transformSession) {
+      return;
+    }
+    transformSession.mirrorX *= -1;
+    applyTransformPreview();
+  });
 
   moveXSliderEl.addEventListener("input", () => {
-    if (!transformSession || transformSession.kind !== "move") {
+    if (!transformSession) {
       return;
     }
     transformSession.dx = Number(moveXSliderEl.value);
@@ -1894,7 +2062,7 @@ function wireUi() {
     applyTransformPreview();
   });
   moveYSliderEl.addEventListener("input", () => {
-    if (!transformSession || transformSession.kind !== "move") {
+    if (!transformSession) {
       return;
     }
     transformSession.dy = Number(moveYSliderEl.value);
@@ -1903,7 +2071,7 @@ function wireUi() {
   });
 
   rotationCompassEl.addEventListener("mousedown", (evt) => {
-    if (!transformSession || transformSession.kind !== "rotate") {
+    if (!transformSession) {
       return;
     }
     evt.preventDefault();
@@ -1915,7 +2083,7 @@ function wireUi() {
   });
 
   window.addEventListener("mousemove", (evt) => {
-    if (!compassDragging || !transformSession || transformSession.kind !== "rotate") {
+    if (!compassDragging || !transformSession) {
       return;
     }
     transformSession.angleDeg = angleFromCompassEvent(evt);

@@ -19,6 +19,15 @@ All notable changes to this project are documented in this file.
 - Post-creation triangle transform actions: `Move △` and `Rotate △` for selected triangles.
 
 ### Changed
+- Congruent/Similar copy defaults now use zero rotation and side placement (left or right chosen by available board space), with minimal vertical offset.
+- Rotate/Slide panel now includes `Reflect Horizontal` and `Reflect Vertical` controls for selected triangles.
+- `Rotate/Slide Triangle` button now spans full width in the Congruent/Similar Triangles submenu.
+- Triangle transform naming updated to `Rotate/Slide Triangle` in both menu button and transform popup title.
+- Construct pane reordered (Parallel/Ray grouping and requested tool order) and triangle transform labels renamed to `Congruent/Similar Triangles` with panel title `Slide/Rotate Triangle`.
+- Triangle transform UI consolidated: `Congruent △`, `Similar △`, and unified `Transform △` are grouped in one collapsible menu; transform panel now combines rotation (top) and move sliders (bottom).
+- Default label font size increased (new and migrated docs now use larger label text).
+- Triangle-aware auto-labeling: segment labels use the lowercase of the opposite labeled vertex when available (A opposite side a).
+- Point-name labels are now draggable (implemented as linked label objects, with migration from legacy fixed point names).
 - Auto Label now targets clicked objects only (toggle mode), instead of labeling all points at once.
 - Auto-labeled segments now use lowercase letters by default.
 - Manual and auto-generated labels can be dragged after placement.
@@ -30,6 +39,9 @@ All notable changes to this project are documented in this file.
 - Style panel now includes a `Default` reset action for line width.
 
 ### Fixed
+- Rotate/Slide transform now carries linked labels with their triangle points/sides (during preview and apply).
+- SVG export now includes draggable labels by rendering label text as internal SVG text elements.
+- Refined label dragging: background-click clearing is now ignored when interacting with label text objects.
 - Label and point dragging now persists by updating stored coordinates on drag end.
 - Browser hard refresh shortcut (`Cmd/Ctrl+Shift+R`) works again after removing `Cmd/Ctrl+R` override.
 - Annotation/construction actions that require preselection now auto-switch to `Select` after warning prompts.
