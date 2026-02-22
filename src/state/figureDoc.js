@@ -11,7 +11,7 @@ export function createEmptyFigureDoc() {
     objects: [],
     annotations: [],
     styles: {
-      defaultStrokeColor: "#111111",
+      defaultStrokeColor: "#000000",
       defaultStrokeWidth: 2,
       defaultDash: 0,
       rayExtension: 4,
