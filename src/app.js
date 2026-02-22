@@ -35,6 +35,7 @@ let pendingPointIds = [];
 let pendingAngleIsRight = false;
 let pendingAngleArcCount = 1;
 let triangleVariant = "three-point";
+let pendingRightTriangleForceIso = false;
 let marqueeState = null;
 let transformSession = null;
 let compassDragging = false;
@@ -125,6 +126,9 @@ function canvasHintText() {
   if (currentMode === ToolMode.ANGLE) {
     return "Select points counterclockwise.";
   }
+  if (currentMode === ToolMode.TRIANGLE && triangleVariant === "right") {
+    return "Right angle first, then base vertex, then height.";
+  }
   if (currentMode === ToolMode.LABEL) {
     return "Click objects to add label. Click labeled objects to remove label.";
   }
@@ -190,9 +194,6 @@ function pointNeeds(mode) {
     return 2;
   }
   if (mode === ToolMode.TRIANGLE) {
-    if (triangleVariant === "right") {
-      return 2;
-    }
     return 3;
   }
   if (mode === ToolMode.ANGLE) {
@@ -268,6 +269,22 @@ function applyPointConstraintToDraggedPosition(pointObj, pos) {
   }
   if (pointObj.constraint.kind === "intersection") {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
+  }
+  if (pointObj.constraint.kind === "rightTriangleApex") {
+    const rightVertex = getPointById(pointObj.constraint.rightVertexId);
+    const baseVertex = getPointById(pointObj.constraint.baseVertexId);
+    if (!rightVertex || !baseVertex) {
+      return { pos, changedConstraint: false };
+    }
+    const projected = rightTriangleApexFromCursor(rightVertex, baseVertex, pos);
+    if (!projected) {
+      return { pos, changedConstraint: false };
+    }
+    pointObj.constraint.height = projected.height;
+    return {
+      pos: { x: projected.x, y: projected.y },
+      changedConstraint: true,
+    };
   }
   if (pointObj.constraint.kind !== "onObject") {
     return { pos, changedConstraint: false };
@@ -413,13 +430,6 @@ function triangleVerticesFromVariant(pointA, pointB) {
   const perpX = -uy;
   const perpY = ux;
 
-  if (triangleVariant === "right") {
-    return {
-      x: pointA.x + perpX * baseLen,
-      y: pointA.y + perpY * baseLen,
-    };
-  }
-
   if (triangleVariant === "isosceles") {
     const midX = (pointA.x + pointB.x) / 2;
     const midY = (pointA.y + pointB.y) / 2;
@@ -431,6 +441,42 @@ function triangleVerticesFromVariant(pointA, pointB) {
   }
 
   return null;
+}
+
+function rightTriangleApexFromCursor(pointRight, pointBase, cursor, options = {}) {
+  const baseLen = distance(pointRight, pointBase);
+  if (baseLen < 0.0001) {
+    return null;
+  }
+  const vx = pointBase.x - pointRight.x;
+  const vy = pointBase.y - pointRight.y;
+  const perpX = -vy / baseLen;
+  const perpY = vx / baseLen;
+  const rawHeight = (cursor.x - pointRight.x) * perpX + (cursor.y - pointRight.y) * perpY;
+  let height = Math.abs(rawHeight) < 0.0001 ? baseLen * 0.8 : rawHeight;
+  if (options.forceIsosceles) {
+    height = baseLen * (rawHeight < 0 ? -1 : 1);
+  }
+  return {
+    x: pointRight.x + perpX * height,
+    y: pointRight.y + perpY * height,
+    height,
+  };
+}
+
+function ccwAnglePointIds(p1Id, vertexId, p3Id) {
+  const p1 = getPointById(p1Id);
+  const v = getPointById(vertexId);
+  const p3 = getPointById(p3Id);
+  if (!p1 || !v || !p3) {
+    return [p1Id, vertexId, p3Id];
+  }
+  const ax = p1.x - v.x;
+  const ay = p1.y - v.y;
+  const bx = p3.x - v.x;
+  const by = p3.y - v.y;
+  const cross = ax * by - ay * bx;
+  return cross >= 0 ? [p1Id, vertexId, p3Id] : [p3Id, vertexId, p1Id];
 }
 
 function addTriangleEdges(pointIds, style) {
@@ -587,6 +633,10 @@ function pointObjectFromCoords(coords) {
     x: coords.x,
     y: coords.y,
   };
+}
+
+function rightTriangleIsoModifierActive(evt) {
+  return !!evt?.shiftKey && !!(evt?.metaKey || evt?.ctrlKey);
 }
 
 function snapToAxis(anchor, raw) {
@@ -1023,6 +1073,25 @@ function recomputeConstrainedPoints() {
       }
       obj.x = point.x;
       obj.y = point.y;
+      continue;
+    }
+    if (obj.constraint.kind === "rightTriangleApex") {
+      const rightVertex = getPointById(obj.constraint.rightVertexId);
+      const baseVertex = getPointById(obj.constraint.baseVertexId);
+      if (!rightVertex || !baseVertex) {
+        continue;
+      }
+      const baseLen = distance(rightVertex, baseVertex);
+      if (baseLen < 0.0001) {
+        continue;
+      }
+      const vx = baseVertex.x - rightVertex.x;
+      const vy = baseVertex.y - rightVertex.y;
+      const perpX = -vy / baseLen;
+      const perpY = vx / baseLen;
+      const height = Number.isFinite(obj.constraint.height) ? obj.constraint.height : baseLen * 0.8;
+      obj.x = rightVertex.x + perpX * height;
+      obj.y = rightVertex.y + perpY * height;
     }
   }
 }
@@ -1078,7 +1147,7 @@ function updateLinearPreview(cursorCoords) {
   return true;
 }
 
-function updateTrianglePreview(cursorCoords) {
+function updateTrianglePreview(cursorCoords, evt) {
   if (currentMode !== ToolMode.TRIANGLE) {
     boardController.clearPreview();
     return;
@@ -1100,22 +1169,24 @@ function updateTrianglePreview(cursorCoords) {
   }
 
   if (triangleVariant === "right") {
-    if (pendingPointIds.length < 1) {
+    if (pendingPointIds.length < 2) {
       boardController.clearPreview();
       return;
     }
     const p1 = getPointById(pendingPointIds[0]);
-    if (!p1) {
+    const p2 = getPointById(pendingPointIds[1]);
+    if (!p1 || !p2) {
       boardController.clearPreview();
       return;
     }
-    const p2 = cursorCoords;
-    const p3 = triangleVerticesFromVariant(pointObjectFromCoords(p1), p2);
+    const p3 = rightTriangleApexFromCursor(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords, {
+      forceIsosceles: rightTriangleIsoModifierActive(evt),
+    });
     if (!p3) {
       boardController.clearPreview();
       return;
     }
-    boardController.showPreviewTriangle(pointObjectFromCoords(p1), p2, p3);
+    boardController.showPreviewTriangle(pointObjectFromCoords(p1), pointObjectFromCoords(p2), p3);
     return;
   }
 
@@ -1240,6 +1311,36 @@ function addPointInput(pointId, skipMutation = false) {
     } else if (modeForCreate === ToolMode.TRIANGLE) {
       if (triangleVariant === "three-point") {
         addTriangleEdges(pointsForCreate, style);
+      } else if (triangleVariant === "right") {
+        const pointRight = getPointById(pointsForCreate[0]);
+        const pointBase = getPointById(pointsForCreate[1]);
+        const cursorPoint = getPointById(pointsForCreate[2]);
+        if (!pointRight || !pointBase || !cursorPoint) {
+          return;
+        }
+        const apex = rightTriangleApexFromCursor(pointRight, pointBase, cursorPoint, {
+          forceIsosceles: pendingRightTriangleForceIso,
+        });
+        if (!apex) {
+          return;
+        }
+        cursorPoint.x = apex.x;
+        cursorPoint.y = apex.y;
+        cursorPoint.constraint = {
+          kind: "rightTriangleApex",
+          rightVertexId: pointsForCreate[0],
+          baseVertexId: pointsForCreate[1],
+          height: apex.height,
+        };
+        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
+        addAnnotation({
+          id: makeId("ang"),
+          type: "angle",
+          pointIds: ccwAnglePointIds(pointsForCreate[1], pointsForCreate[0], pointsForCreate[2]),
+          right: true,
+          arcCount: 1,
+          style,
+        });
       } else if (triangleVariant === "isosceles") {
         const pointA = getPointById(pointsForCreate[0]);
         const pointB = getPointById(pointsForCreate[1]);
@@ -1274,16 +1375,6 @@ function addPointInput(pointId, skipMutation = false) {
           style,
         });
         addTriangleEdges([pointsForCreate[0], pointsForCreate[1], apexId], style);
-        if (triangleVariant === "right") {
-          addAnnotation({
-            id: makeId("ang"),
-            type: "angle",
-            pointIds: [pointsForCreate[1], pointsForCreate[0], apexId],
-            right: true,
-            arcCount: 1,
-            style,
-          });
-        }
       }
     } else if (modeForCreate === ToolMode.ANGLE) {
       addAnnotation({
@@ -1306,6 +1397,7 @@ function addPointInput(pointId, skipMutation = false) {
 
   pendingPointIds = [];
   pendingAngleIsRight = false;
+  pendingRightTriangleForceIso = false;
   boardController.clearPreview();
   updateModeUi();
   renderCurrentDoc(false);
@@ -1348,6 +1440,9 @@ function handleBoardClick(coords, evt) {
   }
 
   if (pointNeeds(currentMode) > 0) {
+    if (currentMode === ToolMode.TRIANGLE && triangleVariant === "right" && pendingPointIds.length === 2) {
+      pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
+    }
     const nearbyPoint = findNearbyVisiblePoint(snappedCoords);
     if (nearbyPoint) {
       addPointInput(nearbyPoint.id);
@@ -1385,6 +1480,9 @@ function handleObjectClick(id, type, evt) {
   }
 
   if (pointNeeds(currentMode) > 0 && type === "point") {
+    if (currentMode === ToolMode.TRIANGLE && triangleVariant === "right" && pendingPointIds.length === 2) {
+      pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
+    }
     addPointInput(id);
     return;
   }
@@ -1554,7 +1652,7 @@ function handleBoardMove(coords, evt) {
   if (updateAnglePreview(adjusted)) {
     return;
   }
-  updateTrianglePreview(adjusted);
+  updateTrianglePreview(adjusted, evt);
 }
 
 function handleObjectMove(id, type, pos, options = {}) {
