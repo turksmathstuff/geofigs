@@ -17,12 +17,14 @@ It is intended as a practical reference for using and testing the UI.
 - In `Select` mode, dragging should show live motion for draggable objects.
 - Click-vs-drag is deferred: a drag does not immediately re-render selection and interrupt motion.
 - Constrained intersection points update live while related source geometry is dragged/resized.
+- Holding `Shift` during supported drags axis-locks motion to horizontal/vertical.
 - Draggable items include:
   - Points
   - Labels
   - Rays (dragging the visible ray moves both defining points)
   - Lines (dragging the visible line moves both defining points)
-  - Other JSXGraph-draggable objects (e.g., constructed lines) depending on object type support
+  - Parallel/Perpendicular outputs (visible-end resize handles; body drag behavior depends on object type implementation)
+  - Other JSXGraph-draggable objects depending on object type support
 
 ### Keyboard shortcuts
 - `Cmd/Ctrl + Z`: Undo
@@ -38,11 +40,15 @@ It is intended as a practical reference for using and testing the UI.
 - Hidden objects are not rendered and do not appear in export.
 - Hidden points are still kept as invisible support points so dependent objects can continue rendering.
 
+### Floating canvas hints
+- The yellow on-canvas hint banner (tool guidance) hides when the cursor is over it.
+- It reappears when the cursor leaves the banner (if the current mode still has a hint).
+
 ## Construct section
 
 ### Select
 - Primary interaction mode for selecting, dragging, and resizing visible line/ray extents.
-- For lines/rays with arrows:
+- For lines/rays with arrows (and constructed parallel/perpendicular lines with arrows):
   - Drag the body of the visible line/ray to move it.
   - Drag arrow tip hit targets to resize visible extent.
 
@@ -68,6 +74,7 @@ It is intended as a practical reference for using and testing the UI.
 - Hold `Shift` while placing the next point to constrain horizontal/vertical relative to the previous selected point.
 - After creation:
   - Drag either endpoint point to move/tilt/resize the segment.
+  - Hold `Shift` while dragging an endpoint to lock horizontal/vertical relative to the connected endpoint.
   - Dragging the segment body depends on JSXGraph behavior (not custom-translated like line/ray).
 
 ### Line
@@ -78,7 +85,9 @@ It is intended as a practical reference for using and testing the UI.
 - Hold `Shift` while placing the second point to constrain horizontal/vertical.
 - After creation:
   - Drag either defining point to tilt/reposition the line.
+  - Hold `Shift` while dragging a defining point to lock horizontal/vertical relative to the other defining point.
   - Drag the visible line body to translate the whole line (moves both defining points).
+  - Hold `Shift` while dragging the line body to lock translation to horizontal/vertical.
   - Drag either arrow tip to resize how much of the line is visible (without changing geometric line direction).
 
 ### Ray
@@ -89,7 +98,9 @@ It is intended as a practical reference for using and testing the UI.
 - Hold `Shift` while placing the second point to constrain horizontal/vertical.
 - After creation:
   - Drag either defining point to change position/direction.
+  - Hold `Shift` while dragging a defining point to lock horizontal/vertical relative to the other defining point.
   - Drag the visible ray body to translate the whole ray (moves both defining points).
+  - Hold `Shift` while dragging the ray body to lock translation to horizontal/vertical.
   - Drag the arrow tip to resize how much of the ray is visible past the second point.
 
 ### Circle
@@ -98,6 +109,7 @@ It is intended as a practical reference for using and testing the UI.
 - While choosing the second point, a dashed preview circle is shown.
 - After creation:
   - Drag center/through points to move or resize the circle.
+  - If the dragged circle point is also connected to a segment/line/ray, `Shift`-drag can axis-lock relative to that connected endpoint.
 
 ### Triangle menu (`Triangle ▾`)
 
@@ -126,20 +138,26 @@ General:
 
 ### Parallel
 - This is a button action (not a click-by-click construction mode).
-- Requires exactly 2 selected objects:
-  - One `line` or `segment`
-  - One `point`
-- Creates a line parallel to the selected line/segment through the selected point.
+- Requires a selection containing:
+  - One point
+  - One line-like source object (`line`, `segment`, `parallel`, or `perpendicular`)
+- Extra selected objects are ignored.
+- Creates a line parallel to the selected source through the selected point.
 - Defaults to solid style.
+- Renders as a finite visible line with arrowheads on both ends, slightly inset from the canvas edges on creation.
+- Arrow tips can be dragged to resize the visible extent.
 - If selection is invalid, shows an alert and returns to `Select` mode.
 
 ### Perpendicular
 - This is a button action (not a click-by-click construction mode).
-- Requires exactly 2 selected objects:
-  - One `line` or `segment`
-  - One `point`
-- Creates a line perpendicular to the selected line/segment through the selected point.
+- Requires a selection containing:
+  - One point
+  - One line-like source object (`line`, `segment`, `parallel`, or `perpendicular`)
+- Extra selected objects are ignored.
+- Creates a line perpendicular to the selected source through the selected point.
 - Defaults to solid style.
+- Renders as a finite visible line with arrowheads on both ends, slightly inset from the canvas edges on creation.
+- Arrow tips can be dragged to resize the visible extent.
 - If selection is invalid, shows an alert and returns to `Select` mode.
 
 ### Congruent/Similar Triangles (details group)
@@ -316,6 +334,7 @@ General:
 - `Line` and `Ray` are visually finite for practicality, but geometry logic still treats:
   - `Line` as infinite for snapping/intersections
   - `Ray` as a ray-like subset (using current visible endpoint logic in intersection checks)
+- `Parallel` and `Perpendicular` constructed objects are also treated as line-like for snapping/intersections and can be reused as sources for additional parallel/perpendicular constructions.
 - Circle intersection snapping currently supports circle + line/segment/ray, but not circle + circle.
 - Arrow-tip resize uses invisible hit targets near the visible arrowheads.
 - Some internal modes (`Congruency`, `Delete`) exist in code but are not exposed as direct toolbar mode buttons in the current UI.

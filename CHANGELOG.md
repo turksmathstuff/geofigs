@@ -17,6 +17,13 @@ All notable changes to this project are documented in this file.
   - `Move △` now uses draggable X/Y sliders with live preview.
   - `Rotate △` now uses a compass-style drag arm with live preview.
 - Post-creation triangle transform actions: `Move △` and `Rotate △` for selected triangles.
+- Hide/show workflow for export cleanup:
+  - `Hide Selected`
+  - `Show All`
+- Interaction behavior reference guide in `INTERACTION_BEHAVIOR_REFERENCE.md`.
+- Constrained intersection points (created with the `Point` tool near intersections) that stay attached to source geometry.
+- Circle + line/segment/ray intersection snapping for constrained intersection points.
+- `H` keyboard shortcut to hide the current selection.
 
 ### Changed
 - Congruent/Similar copy defaults now use zero rotation and side placement (left or right chosen by available board space), with minimal vertical offset.
@@ -37,6 +44,13 @@ All notable changes to this project are documented in this file.
 - Parallel chevron orientation adjusted so the chevron vertex sits on the line and arms run along line direction.
 - Parallel chevrons widened for better visibility.
 - Style panel now includes a `Default` reset action for line width.
+- Rays now render as finite visible rays with arrowheads and draggable visible-end handles.
+- Lines now render with arrowheads on both ends and draggable visible-end handles.
+- Parallel/perpendicular lines now default to solid, render with arrowheads, support draggable visible-end handles, and initially appear inset from canvas edges.
+- Parallel/perpendicular lines can be reused as sources for additional parallel/perpendicular constructions.
+- Dragging interactions show live motion more consistently (including line/ray body drags and constrained intersection updates).
+- Shift axis-locking now applies during supported drags (not just object creation), with point drags locking relative to connected endpoints when available.
+- Canvas hint banner now hides when hovered and reappears when the cursor leaves.
 
 ### Fixed
 - Rotate/Slide transform now carries linked labels with their triangle points/sides (during preview and apply).
@@ -47,6 +61,8 @@ All notable changes to this project are documented in this file.
 - Annotation/construction actions that require preselection now auto-switch to `Select` after warning prompts.
 - Point placement now clicks through linear objects in `Point` mode, enabling intersection snapping when clicking on crossing lines.
 - Label dragging in `Select` mode is preserved (single-click drag on labels no longer gets interrupted by selection rerender).
+- Parallel/perpendicular construction selection is more forgiving (extra selected items no longer block creation as long as a point and line-like source are selected).
+- Constructed parallel/perpendicular lines now participate in intersection snapping and constrained intersection-point updates.
 
 ## [2026-02-21] - Improve geometry UX, labeling flow, and export reliability
 ### Added

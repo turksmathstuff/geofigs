@@ -28,6 +28,7 @@ Do not open `index.html` directly with `file://`.
   - Isosceles Triangle
 - Circle
 - Parallel / Perpendicular through a selected point
+- Parallel / Perpendicular outputs now render with arrowheads and draggable visible-end handles
 - Congruent/Similar triangle duplication tools
 - Rotate/Slide triangle transform panel (with reflect options)
 
@@ -58,13 +59,19 @@ Do not open `index.html` directly with `file://`.
 - Drag on blank canvas in Select mode for marquee box selection.
 - Grab-and-drag shows live motion for draggable objects (points, labels, lines/rays, etc.).
 - Hold Shift while placing segment/line/ray/triangle points to constrain horizontal/vertical movement.
-- Point tool can snap to intersections of existing linear objects when clicking near the intersection.
+- Hold Shift while dragging points / line-ray bodies to axis-lock movement (point drags lock relative to a connected endpoint when available).
+- Point tool can create constrained intersection points by clicking near intersections:
+  - line/segment/ray with line/segment/ray
+  - circle with line/segment/ray
+- Constrained intersection points are highlighted red on screen, move with their source geometry, and export in black by default.
 - Labels are draggable (including point-name labels).
 - Circle tool shows a dashed preview circle after selecting the center point.
 - Ray tool renders as a finite visible ray with an arrowhead; drag the ray itself to move both defining points.
 - Line tool renders with arrowheads on both ends and a finite visible span (geometry behavior remains line-like).
 - Drag arrow tips on rays/lines to resize how much of the object is visible.
-- Parallel/perpendicular lines are solid by default (can be changed with the Solid/Dashed style control).
+- Parallel/perpendicular lines are solid by default (can be changed with the Solid/Dashed style control), appear slightly inset from canvas edges, and have draggable arrow-tip resize handles.
+- Parallel/perpendicular lines can be reused as source lines for later parallel/perpendicular constructions.
+- Floating canvas hints hide when hovered and reappear when the cursor leaves them.
 - Triangle transform panel includes:
   - Compass-style rotation drag
   - X/Y slide sliders
@@ -73,6 +80,7 @@ Do not open `index.html` directly with `file://`.
 ## Keyboard shortcuts
 - Undo: `Cmd/Ctrl + Z`
 - Redo: `Cmd/Ctrl + Shift + Z` or `Ctrl + Y`
+- Hide selected: `H`
 - Delete selected: `Delete` / `Backspace`
 - Escape: reset to Select mode
 
