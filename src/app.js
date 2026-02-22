@@ -208,6 +208,36 @@ function getPointById(id) {
   return o && o.type === "point" ? o : null;
 }
 
+function axisLockAnchorForDraggedPoint(pointId) {
+  for (const obj of store.doc.objects) {
+    if (!Array.isArray(obj.pointIds) || obj.pointIds.length < 2) {
+      continue;
+    }
+    if (obj.type !== "segment" && obj.type !== "line") {
+      continue;
+    }
+    const [a, b] = obj.pointIds;
+    if (a === pointId && b !== pointId) {
+      return getPointById(b);
+    }
+    if (b === pointId && a !== pointId) {
+      return getPointById(a);
+    }
+  }
+  return null;
+}
+
+function maybeAxisLockDraggedPoint(pointId, pos, options = {}) {
+  if (!options?.shiftKey || !pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
+    return pos;
+  }
+  const anchor = axisLockAnchorForDraggedPoint(pointId);
+  if (!anchor) {
+    return pos;
+  }
+  return snapToAxis(anchor, pos);
+}
+
 function getAutoLabelObjectByTargetId(targetId) {
   return store.doc.objects.find((o) => o.type === "label" && o.auto === true && o.targetId === targetId);
 }
@@ -1319,10 +1349,13 @@ function handleObjectMove(id, type, pos, options = {}) {
 
   if (type === "line") {
     const lineObj = getObjectById(id);
-    if (!lineObj || lineObj.type !== "line") {
+    if (!lineObj || !["line", "parallel", "perpendicular"].includes(lineObj.type)) {
       return;
     }
     if (pos?.p1 && pos?.p2) {
+      if (lineObj.type !== "line") {
+        return;
+      }
       const p1Obj = getPointById(lineObj.pointIds?.[0]);
       const p2Obj = getPointById(lineObj.pointIds?.[1]);
       if (!p1Obj || !p2Obj) {
@@ -1405,11 +1438,12 @@ function handleObjectMove(id, type, pos, options = {}) {
   if (type !== "point" && type !== "label") {
     return;
   }
+  const adjustedPos = type === "point" ? maybeAxisLockDraggedPoint(id, pos, options) : pos;
   const obj = getObjectById(id);
   if (!obj) {
     return;
   }
-  if (Math.abs((obj.x ?? 0) - pos.x) < 0.0001 && Math.abs((obj.y ?? 0) - pos.y) < 0.0001) {
+  if (Math.abs((obj.x ?? 0) - adjustedPos.x) < 0.0001 && Math.abs((obj.y ?? 0) - adjustedPos.y) < 0.0001) {
     if (!transient) {
       commitTransientSnapshotIfPresent(id, `move-${type}`);
     }
@@ -1418,19 +1452,25 @@ function handleObjectMove(id, type, pos, options = {}) {
 
   if (transient) {
     ensureTransientSnapshot(id);
-    obj.x = pos.x;
-    obj.y = pos.y;
+    obj.x = adjustedPos.x;
+    obj.y = adjustedPos.y;
+    if (type === "point") {
+      const el = boardController.getElement(id);
+      if (el?.setPosition) {
+        el.setPosition(JXG.COORDS_BY_USER, [adjustedPos.x, adjustedPos.y]);
+      }
+    }
     updateConstrainedPointsLive();
   } else {
     if (transientDragSnapshots.has(id)) {
-      obj.x = pos.x;
-      obj.y = pos.y;
+      obj.x = adjustedPos.x;
+      obj.y = adjustedPos.y;
       commitTransientSnapshotIfPresent(id, `move-${type}`);
       return;
     }
     runMutation(`move-${type}`, () => {
-      obj.x = pos.x;
-      obj.y = pos.y;
+      obj.x = adjustedPos.x;
+      obj.y = adjustedPos.y;
     });
   }
 }
@@ -1629,13 +1669,27 @@ function renderCurrentDoc(applySelection = true) {
       const source = boardController.getElement(obj.sourceLineId);
       const through = points.get(obj.throughPointId);
       if (source && through) {
-        boardController.createParallelLine(obj.id, source, through, style);
+        const parallelStyle = { ...style };
+        if (!Object.prototype.hasOwnProperty.call(obj.style || {}, "lineExtensionStart")) {
+          delete parallelStyle.lineExtensionStart;
+        }
+        if (!Object.prototype.hasOwnProperty.call(obj.style || {}, "lineExtensionEnd")) {
+          delete parallelStyle.lineExtensionEnd;
+        }
+        boardController.createParallelLine(obj.id, source, through, parallelStyle);
       }
     } else if (obj.type === "perpendicular") {
       const source = boardController.getElement(obj.sourceLineId);
       const through = points.get(obj.throughPointId);
       if (source && through) {
-        boardController.createPerpendicularLine(obj.id, source, through, style);
+        const perpendicularStyle = { ...style };
+        if (!Object.prototype.hasOwnProperty.call(obj.style || {}, "lineExtensionStart")) {
+          delete perpendicularStyle.lineExtensionStart;
+        }
+        if (!Object.prototype.hasOwnProperty.call(obj.style || {}, "lineExtensionEnd")) {
+          delete perpendicularStyle.lineExtensionEnd;
+        }
+        boardController.createPerpendicularLine(obj.id, source, through, perpendicularStyle);
       }
     } else if (obj.type === "label") {
       boardController.createText(obj.id, obj.x, obj.y, obj.text, style);
@@ -2250,12 +2304,15 @@ function createParallelOrPerpendicular(kind) {
   }
 
   runMutation(`create-${kind}`, () => {
+    const style = { ...defaultStyle(), dash: 0 };
+    delete style.lineExtensionStart;
+    delete style.lineExtensionEnd;
     addObject({
       id: makeId(kind === "parallel" ? "par" : "perp"),
       type: kind,
       sourceLineId,
       throughPointId,
-      style: { ...defaultStyle(), dash: 0 },
+      style,
     });
     store.clearSelection();
   });
