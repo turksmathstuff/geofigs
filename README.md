@@ -44,7 +44,6 @@ Do not open `index.html` directly with `file://`.
 - Stroke color
 - Stroke width (with Default reset)
 - Solid / dashed
-- Ray extension length control (`Ray Ext.` slider)
 - Exam mode toggle
 
 ### Export / persistence
