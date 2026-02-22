@@ -411,7 +411,7 @@ export class BoardController {
         ? JXG.getPosition(evt, 0)
         : null;
       pointerDownUserPos = this.getUserCoords(evt);
-      if ((type === "ray" || type === "line") && meta.basePoint1 && meta.basePoint2) {
+      if ((type === "ray" || type === "line" || type === "segment") && meta.basePoint1 && meta.basePoint2) {
         dragStartLinearPoints = {
           p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
           p2: { x: meta.basePoint2.X(), y: meta.basePoint2.Y() },
@@ -444,7 +444,7 @@ export class BoardController {
       }
     });
     el.on("drag", (evt) => {
-      if (!["ray", "line"].includes(type) || !meta.basePoint1 || !meta.basePoint2 || !pointerDownUserPos || !dragStartLinearPoints) {
+      if (!["ray", "line", "segment"].includes(type) || !meta.basePoint1 || !meta.basePoint2 || !pointerDownUserPos || !dragStartLinearPoints) {
         return;
       }
       const current = this.getUserCoords(evt);
@@ -497,10 +497,24 @@ export class BoardController {
         if (!this.onObjectMove) {
           return;
         }
+        if (pointerDownObjPos) {
+          const moved =
+            Math.abs(pointerDownObjPos.x - Number(el.X?.())) > 1e-4 ||
+            Math.abs(pointerDownObjPos.y - Number(el.Y?.())) > 1e-4;
+          if (!moved) {
+            return;
+          }
+        }
         this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: true, shiftKey: !!evt?.shiftKey });
       });
     }
     el.on("up", (evt) => {
+      let pointOrLabelMoved = false;
+      if (pointerDownObjPos && (type === "point" || type === "label")) {
+        pointOrLabelMoved =
+          Math.abs(pointerDownObjPos.x - Number(el.X?.())) > 1e-4 ||
+          Math.abs(pointerDownObjPos.y - Number(el.Y?.())) > 1e-4;
+      }
       if (deferredClick && this.onObjectClick) {
         let moved = false;
         const pointerUpScreenPos = Array.isArray(JXG.getPosition?.(evt, 0))
@@ -522,9 +536,9 @@ export class BoardController {
       if (!this.onObjectMove) {
         return;
       }
-      if (type === "point" || type === "label") {
+      if ((type === "point" || type === "label") && pointOrLabelMoved) {
         this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: false, shiftKey: !!evt?.shiftKey });
-      } else if ((type === "ray" || type === "line") && meta.basePoint1 && meta.basePoint2) {
+      } else if ((type === "ray" || type === "line" || type === "segment") && meta.basePoint1 && meta.basePoint2) {
         this.onObjectMove(logicalId, type, {
           p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
           p2: { x: meta.basePoint2.X(), y: meta.basePoint2.Y() },
@@ -613,7 +627,7 @@ export class BoardController {
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash || 0,
     });
-    return this.registerElement(id, "segment", el);
+    return this.registerElement(id, "segment", el, { basePoint1: p1, basePoint2: p2 });
   }
 
   createLine(id, p1, p2, style = {}) {

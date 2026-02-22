@@ -567,6 +567,48 @@ function autoLabelAnchorForObject(obj) {
   return { x: 0, y: 0 };
 }
 
+function labelFollowBaseAnchor(labelObj) {
+  if (!labelObj?.follow || typeof labelObj.follow !== "object") {
+    return null;
+  }
+  if (labelObj.follow.kind === "sideMeasure") {
+    const segment = getObjectById(labelObj.follow.segmentId || labelObj.targetId);
+    if (!segment || segment.type !== "segment") {
+      return null;
+    }
+    const p1 = getPointById(segment.pointIds?.[0]);
+    const p2 = getPointById(segment.pointIds?.[1]);
+    if (!p1 || !p2) {
+      return null;
+    }
+    return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+  }
+  if (labelObj.follow.kind === "angleMeasure") {
+    const pointIds = Array.isArray(labelObj.follow.pointIds) ? labelObj.follow.pointIds : null;
+    if (!pointIds || pointIds.length !== 3) {
+      return null;
+    }
+    const vertex = getPointById(pointIds[1]);
+    if (!vertex) {
+      return null;
+    }
+    return { x: vertex.x, y: vertex.y };
+  }
+  return null;
+}
+
+function syncFollowLabelPosition(labelObj) {
+  const base = labelFollowBaseAnchor(labelObj);
+  if (!base) {
+    return false;
+  }
+  const offsetX = Number(labelObj.follow?.offsetX ?? 0);
+  const offsetY = Number(labelObj.follow?.offsetY ?? 0);
+  labelObj.x = base.x + offsetX;
+  labelObj.y = base.y + offsetY;
+  return true;
+}
+
 function toggleAutoLabelForObject(targetId) {
   const target = getObjectById(targetId);
   if (!target) {
@@ -1114,9 +1156,31 @@ function syncConstrainedPointsToBoard() {
   }
 }
 
+function syncFollowLabelsToBoard() {
+  let changed = false;
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "label" || !obj.follow) {
+      continue;
+    }
+    if (!syncFollowLabelPosition(obj)) {
+      continue;
+    }
+    const el = boardController.getElement(obj.id);
+    if (!el?.setPosition) {
+      continue;
+    }
+    el.setPosition(JXG.COORDS_BY_USER, [obj.x, obj.y]);
+    changed = true;
+  }
+  if (changed) {
+    boardController.update();
+  }
+}
+
 function updateConstrainedPointsLive() {
   recomputeConstrainedPoints();
   syncConstrainedPointsToBoard();
+  syncFollowLabelsToBoard();
 }
 
 function updateLinearPreview(cursorCoords) {
@@ -1820,6 +1884,53 @@ function handleObjectMove(id, type, pos, options = {}) {
     return;
   }
 
+  if (type === "segment") {
+    const segObj = getObjectById(id);
+    if (!segObj || segObj.type !== "segment" || !pos?.p1 || !pos?.p2) {
+      return;
+    }
+    const p1Obj = getPointById(segObj.pointIds?.[0]);
+    const p2Obj = getPointById(segObj.pointIds?.[1]);
+    if (!p1Obj || !p2Obj) {
+      return;
+    }
+    const unchanged =
+      Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
+      Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
+      Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
+      Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
+    if (unchanged) {
+      if (!transient) {
+        commitTransientSnapshotIfPresent(id, "move-segment");
+      }
+      return;
+    }
+    if (transient) {
+      ensureTransientSnapshot(id);
+      p1Obj.x = pos.p1.x;
+      p1Obj.y = pos.p1.y;
+      p2Obj.x = pos.p2.x;
+      p2Obj.y = pos.p2.y;
+      updateConstrainedPointsLive();
+    } else {
+      if (transientDragSnapshots.has(id)) {
+        p1Obj.x = pos.p1.x;
+        p1Obj.y = pos.p1.y;
+        p2Obj.x = pos.p2.x;
+        p2Obj.y = pos.p2.y;
+        commitTransientSnapshotIfPresent(id, "move-segment");
+        return;
+      }
+      runMutation("move-segment", () => {
+        p1Obj.x = pos.p1.x;
+        p1Obj.y = pos.p1.y;
+        p2Obj.x = pos.p2.x;
+        p2Obj.y = pos.p2.y;
+      });
+    }
+    return;
+  }
+
   if (type === "circle") {
     const circleObj = getObjectById(id);
     if (!circleObj || circleObj.type !== "circle" || !pos?.p1 || !pos?.p2) {
@@ -1892,6 +2003,13 @@ function handleObjectMove(id, type, pos, options = {}) {
     ensureTransientSnapshot(id);
     obj.x = adjustedPos.x;
     obj.y = adjustedPos.y;
+    if (type === "label" && obj.follow) {
+      const base = labelFollowBaseAnchor(obj);
+      if (base) {
+        obj.follow.offsetX = adjustedPos.x - base.x;
+        obj.follow.offsetY = adjustedPos.y - base.y;
+      }
+    }
     if (type === "point") {
       const el = boardController.getElement(id);
       if (el?.setPosition) {
@@ -1903,12 +2021,26 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (transientDragSnapshots.has(id)) {
       obj.x = adjustedPos.x;
       obj.y = adjustedPos.y;
+      if (type === "label" && obj.follow) {
+        const base = labelFollowBaseAnchor(obj);
+        if (base) {
+          obj.follow.offsetX = adjustedPos.x - base.x;
+          obj.follow.offsetY = adjustedPos.y - base.y;
+        }
+      }
       commitTransientSnapshotIfPresent(id, `move-${type}`);
       return;
     }
     runMutation(`move-${type}`, () => {
       obj.x = adjustedPos.x;
       obj.y = adjustedPos.y;
+      if (type === "label" && obj.follow) {
+        const base = labelFollowBaseAnchor(obj);
+        if (base) {
+          obj.follow.offsetX = adjustedPos.x - base.x;
+          obj.follow.offsetY = adjustedPos.y - base.y;
+        }
+      }
     });
   }
 }
@@ -2139,6 +2271,7 @@ function renderCurrentDoc(applySelection = true) {
         boardController.createPerpendicularLine(obj.id, source, through, perpendicularStyle);
       }
     } else if (obj.type === "label") {
+      syncFollowLabelPosition(obj);
       boardController.createText(obj.id, obj.x, obj.y, obj.text, style);
     }
   }
@@ -2870,6 +3003,12 @@ function addSideMeasure() {
       y: (p1.y + p2.y) / 2 + 0.35,
       text: text.trim() || defaultText,
       targetId: segment.id,
+      follow: {
+        kind: "sideMeasure",
+        segmentId: segment.id,
+        offsetX: 0.35,
+        offsetY: 0.35,
+      },
       style: defaultStyle(),
     });
   });
@@ -2921,6 +3060,12 @@ function addAngleMeasure() {
       x: p2.x + 0.55,
       y: p2.y + 0.55,
       text,
+      follow: {
+        kind: "angleMeasure",
+        pointIds: [...pointIds],
+        offsetX: 0.55,
+        offsetY: 0.55,
+      },
       style: defaultStyle(),
     });
   });
