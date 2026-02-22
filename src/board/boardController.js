@@ -169,43 +169,201 @@ export class BoardController {
     this.clearPreview();
     const right = !!options.right;
     const arcCount = Math.max(1, Number(options.arcCount || 1));
+    const decorator = options.decorator || "arc";
+    const tickCount = Math.max(1, Number(options.tickCount || 1));
     const pointA = this.board.create("point", [p1.x, p1.y], { visible: false, fixed: true, name: "" });
     const pointV = this.board.create("point", [vertex.x, vertex.y], { visible: false, fixed: true, name: "" });
     const pointB = this.board.create("point", [p3.x, p3.y], { visible: false, fixed: true, name: "" });
     const preview = [pointA, pointV, pointB];
     if (right) {
-      const ang = this.board.create("angle", [pointA, pointV, pointB], {
+      const mark = this.createRightAngleMarkParts(pointA, pointV, pointB, {
         radius: 1,
         strokeColor: "#9ca3af",
         strokeWidth: 2,
         dash: 2,
-        fillOpacity: 0,
-        orthoType: "square",
-        withLabel: false,
-        name: "",
         fixed: true,
         highlight: false,
       });
-      preview.push(ang);
+      if (mark) {
+        preview.push(...mark.all);
+      }
     } else {
-      for (let i = 0; i < arcCount; i += 1) {
-        const ang = this.board.create("nonreflexangle", [pointA, pointV, pointB], {
-          radius: 1 + i * 0.35,
+      if (decorator === "arcTick") {
+        const mark = this.createArcTickAngleMarkParts(pointA, pointV, pointB, {
+          radius: 1,
+          tickCount,
           strokeColor: "#9ca3af",
           strokeWidth: 2,
           dash: 2,
-          fillOpacity: 0,
-          withLabel: false,
-          name: "",
           fixed: true,
           highlight: false,
         });
-        preview.push(ang);
+        if (mark) {
+          preview.push(...mark.all);
+        }
+      } else {
+        for (let i = 0; i < arcCount; i += 1) {
+          const mark = this.createArcAngleMarkParts(pointA, pointV, pointB, {
+            radius: 1 + i * 0.35,
+            strokeColor: "#9ca3af",
+            strokeWidth: 2,
+            dash: 2,
+            fixed: true,
+            highlight: false,
+          });
+          if (mark) {
+            preview.push(...mark.all);
+          }
+        }
       }
     }
     this.previewElements = preview;
     this.disablePreviewHitTesting(this.previewElements);
     this.board.update();
+  }
+
+  createFunctionalSupportPoint(xFn, yFn) {
+    return this.board.create("point", [xFn, yFn], {
+      visible: false,
+      fixed: true,
+      name: "",
+      withLabel: false,
+      highlight: false,
+    });
+  }
+
+  angleMarkFrame(p1, vertex, p3) {
+    const vx = () => vertex.X();
+    const vy = () => vertex.Y();
+    const a1 = () => Math.atan2(p1.Y() - vy(), p1.X() - vx());
+    const a2 = () => Math.atan2(p3.Y() - vy(), p3.X() - vx());
+    const delta = () => {
+      let d = a2() - a1();
+      while (d <= -Math.PI) d += Math.PI * 2;
+      while (d > Math.PI) d -= Math.PI * 2;
+      if (Math.abs(d) < 1e-6) {
+        d = Math.PI / 12;
+      }
+      return d;
+    };
+    return { vx, vy, a1, delta };
+  }
+
+  createArcAngleMarkParts(p1, vertex, p3, style = {}) {
+    const radius = Math.max(0.15, Number(style.radius || 1));
+    const frame = this.angleMarkFrame(p1, vertex, p3);
+    const pStart = this.createFunctionalSupportPoint(
+      () => frame.vx() + Math.cos(frame.a1()) * radius,
+      () => frame.vy() + Math.sin(frame.a1()) * radius
+    );
+    const pEnd = this.createFunctionalSupportPoint(
+      () => frame.vx() + Math.cos(frame.a1() + frame.delta()) * radius,
+      () => frame.vy() + Math.sin(frame.a1() + frame.delta()) * radius
+    );
+    const arc = this.board.create("arc", [vertex, pStart, pEnd], {
+      strokeColor: style.strokeColor || "#111",
+      strokeWidth: style.strokeWidth || 2,
+      dash: style.dash ?? 0,
+      fillOpacity: 0,
+      fixed: !!style.fixed,
+      highlight: !!style.highlight,
+      withLabel: false,
+      name: "",
+    });
+    return { primary: arc, all: [arc, pStart, pEnd] };
+  }
+
+  createArcTickAngleMarkParts(p1, vertex, p3, style = {}) {
+    const tickCount = Math.max(1, Number(style.tickCount || 1));
+    const radius = Math.max(0.15, Number(style.radius || 1));
+    const base = this.createArcAngleMarkParts(p1, vertex, p3, style);
+    const frame = this.angleMarkFrame(p1, vertex, p3);
+    const tickLen = Math.max(0.2, radius * 0.42);
+    const absDelta = () => Math.abs(frame.delta());
+    const spread = () => Math.min(Math.PI / 10, Math.max(Math.PI / 36, absDelta() / 6));
+    const tickOffsets = tickCount === 1
+      ? [0]
+      : tickCount === 2
+        ? [-spread() * 0.75, spread() * 0.75]
+        : [-spread(), 0, spread()];
+    const extra = [];
+    for (const offset of tickOffsets) {
+      const center = this.createFunctionalSupportPoint(
+        () => frame.vx() + Math.cos(frame.a1() + frame.delta() / 2 + offset) * radius,
+        () => frame.vy() + Math.sin(frame.a1() + frame.delta() / 2 + offset) * radius
+      );
+      const pInner = this.createFunctionalSupportPoint(
+        () => frame.vx() + Math.cos(frame.a1() + frame.delta() / 2 + offset) * (radius - tickLen / 2),
+        () => frame.vy() + Math.sin(frame.a1() + frame.delta() / 2 + offset) * (radius - tickLen / 2)
+      );
+      const pOuter = this.createFunctionalSupportPoint(
+        () => frame.vx() + Math.cos(frame.a1() + frame.delta() / 2 + offset) * (radius + tickLen / 2),
+        () => frame.vy() + Math.sin(frame.a1() + frame.delta() / 2 + offset) * (radius + tickLen / 2)
+      );
+      const tick = this.board.create("segment", [pInner, pOuter], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: 0,
+        fixed: !!style.fixed,
+        highlight: !!style.highlight,
+      });
+      extra.push(tick, center, pInner, pOuter);
+    }
+    return { primary: base.primary, all: [...base.all, ...extra] };
+  }
+
+  createRightAngleMarkParts(p1, vertex, p3, style = {}) {
+    const side = Math.max(0.15, Number(style.radius || 1) * 0.7);
+    const vx = () => vertex.X();
+    const vy = () => vertex.Y();
+    const ux1 = () => {
+      const dx = p1.X() - vx();
+      const dy = p1.Y() - vy();
+      const len = Math.hypot(dx, dy) || 1;
+      return dx / len;
+    };
+    const uy1 = () => {
+      const dx = p1.X() - vx();
+      const dy = p1.Y() - vy();
+      const len = Math.hypot(dx, dy) || 1;
+      return dy / len;
+    };
+    const ux2 = () => {
+      const dx = p3.X() - vx();
+      const dy = p3.Y() - vy();
+      const len = Math.hypot(dx, dy) || 1;
+      return dx / len;
+    };
+    const uy2 = () => {
+      const dx = p3.X() - vx();
+      const dy = p3.Y() - vy();
+      const len = Math.hypot(dx, dy) || 1;
+      return dy / len;
+    };
+
+    const pA = this.createFunctionalSupportPoint(
+      () => vx() + ux1() * side,
+      () => vy() + uy1() * side
+    );
+    const pB = this.createFunctionalSupportPoint(
+      () => vx() + ux2() * side,
+      () => vy() + uy2() * side
+    );
+    const pCorner = this.createFunctionalSupportPoint(
+      () => vx() + (ux1() + ux2()) * side,
+      () => vy() + (uy1() + uy2()) * side
+    );
+
+    const attrs = {
+      strokeColor: style.strokeColor || "#111",
+      strokeWidth: style.strokeWidth || 2,
+      dash: style.dash ?? 0,
+      fixed: !!style.fixed,
+      highlight: !!style.highlight,
+    };
+    const seg1 = this.board.create("segment", [pA, pCorner], attrs);
+    const seg2 = this.board.create("segment", [pCorner, pB], attrs);
+    return { primary: seg1, all: [seg1, seg2, pA, pB, pCorner] };
   }
 
   createRayEndpointPoint(p1, p2, extension = 4) {
@@ -877,18 +1035,21 @@ export class BoardController {
   }
 
   createAngle(id, p1, vertex, p3, style = {}) {
-    const attrs = {
-      radius: style.radius || 1,
-      strokeColor: style.strokeColor || "#111",
-      strokeWidth: style.strokeWidth || 2,
-      fillOpacity: 0,
-      orthoType: style.right ? "square" : "sector",
-      withLabel: false,
-      name: "",
-    };
-    const angleType = style.right ? "angle" : "nonreflexangle";
-    const el = this.board.create(angleType, [p1, vertex, p3], attrs);
-    return this.registerElement(id, "angle", el);
+    const parts = style.right
+      ? this.createRightAngleMarkParts(p1, vertex, p3, style)
+      : style.decorator === "arcTick"
+        ? this.createArcTickAngleMarkParts(p1, vertex, p3, style)
+        : this.createArcAngleMarkParts(p1, vertex, p3, style);
+    if (!parts?.primary) {
+      return null;
+    }
+    const primary = this.registerElement(id, "angle", parts.primary);
+    for (const el of parts.all) {
+      if (el !== parts.primary && el?.visProp) {
+        el.visProp.highlight = false;
+      }
+    }
+    return primary;
   }
 
   createTickMark(id, segment, tickCount, style = {}) {

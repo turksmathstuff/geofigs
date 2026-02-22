@@ -64,11 +64,14 @@
               </div>
             </details>
             <details class="annotate-group">
-              <summary>Angle Arcs</summary>
+              <summary>Angle Marks</summary>
               <div class="annotate-subgrid">
-                <button id="markAngle1">1 Angle Arc</button>
-                <button id="markAngle2">2 Angle Arcs</button>
-                <button id="markAngle3">3 Angle Arcs</button>
+                <button id="angleMarkArc1" data-angle-mark="arc-1">1 Arc</button>
+                <button id="angleMarkTick1" data-angle-mark="arctick-1">1 Tick</button>
+                <button id="angleMarkArc2" data-angle-mark="arc-2">2 Arcs</button>
+                <button id="angleMarkTick2" data-angle-mark="arctick-2">2 Ticks</button>
+                <button id="angleMarkArc3" data-angle-mark="arc-3">3 Arcs</button>
+                <button id="angleMarkTick3" data-angle-mark="arctick-3">3 Ticks</button>
               </div>
             </details>
             <details class="annotate-group">
@@ -91,7 +94,8 @@
           <h2>Style</h2>
           <div class="form-row">
             <label for="strokeColor">Color</label>
-            <input id="strokeColor" type="color" value="#111111" />
+            <input id="strokeColor" type="color" value="#000000" />
+            <button id="resetStrokeColor" type="button" class="mini-btn">Default</button>
           </div>
           <div class="form-row">
             <label for="strokeWidth">Width</label>

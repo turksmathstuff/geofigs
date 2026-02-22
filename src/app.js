@@ -29,11 +29,13 @@ const modeButtons = [...document.querySelectorAll("button[data-mode]")];
 const triangleMenuBtn = document.getElementById("triangleMenuBtn");
 const triangleMenuPanel = document.getElementById("triangleMenuPanel");
 const triangleModeButtons = [...document.querySelectorAll("button[data-triangle-mode]")];
+const angleMarkPresetButtons = [...document.querySelectorAll("button[data-angle-mark]")];
 
 let currentMode = ToolMode.SELECT;
 let pendingPointIds = [];
 let pendingAngleIsRight = false;
 let pendingAngleArcCount = 1;
+let pendingAngleDecorator = "arc";
 let triangleVariant = "three-point";
 let pendingRightTriangleForceIso = false;
 let marqueeState = null;
@@ -174,6 +176,7 @@ function setMode(mode) {
   if (mode !== ToolMode.ANGLE) {
     pendingAngleIsRight = false;
     pendingAngleArcCount = 1;
+    pendingAngleDecorator = "arc";
   }
   boardController.clearPreview();
   updateModeUi();
@@ -547,29 +550,58 @@ function conventionalSegmentLabel(segmentObj) {
   return pointText.toLowerCase();
 }
 
-function autoLabelAnchorForObject(obj) {
+function labelBaseAnchorForObject(obj) {
   if (obj.type === "point") {
-    return { x: obj.x + 0.45, y: obj.y + 0.45 };
+    return { x: obj.x, y: obj.y };
   }
   if (Array.isArray(obj.pointIds) && obj.pointIds.length >= 2) {
     const p1 = getPointById(obj.pointIds[0]);
     const p2 = getPointById(obj.pointIds[1]);
     if (p1 && p2) {
-      return { x: (p1.x + p2.x) / 2 + 0.4, y: (p1.y + p2.y) / 2 + 0.4 };
+      return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
     }
   }
   if (obj.throughPointId) {
     const p = getPointById(obj.throughPointId);
     if (p) {
-      return { x: p.x + 0.4, y: p.y + 0.4 };
+      return { x: p.x, y: p.y };
     }
   }
   return { x: 0, y: 0 };
 }
 
+function defaultLabelOffsetForObject(obj) {
+  return obj?.type === "point" ? { x: 0.45, y: 0.45 } : { x: 0.4, y: 0.4 };
+}
+
+function autoLabelAnchorForObject(obj) {
+  const base = labelBaseAnchorForObject(obj);
+  const offset = defaultLabelOffsetForObject(obj);
+  return { x: base.x + offset.x, y: base.y + offset.y };
+}
+
+function followLabelForTargetObject(obj, offset = defaultLabelOffsetForObject(obj)) {
+  if (!obj?.id) {
+    return null;
+  }
+  return {
+    kind: "targetObject",
+    targetId: obj.id,
+    offsetX: Number(offset.x ?? 0),
+    offsetY: Number(offset.y ?? 0),
+  };
+}
+
 function labelFollowBaseAnchor(labelObj) {
   if (!labelObj?.follow || typeof labelObj.follow !== "object") {
     return null;
+  }
+  if (labelObj.follow.kind === "targetObject") {
+    const target = getObjectById(labelObj.follow.targetId || labelObj.targetId);
+    if (!target) {
+      return null;
+    }
+    return labelBaseAnchorForObject(target);
   }
   if (labelObj.follow.kind === "sideMeasure") {
     const segment = getObjectById(labelObj.follow.segmentId || labelObj.targetId);
@@ -598,6 +630,18 @@ function labelFollowBaseAnchor(labelObj) {
 }
 
 function syncFollowLabelPosition(labelObj) {
+  if ((!labelObj.follow || typeof labelObj.follow !== "object") && labelObj.targetId) {
+    const target = getObjectById(labelObj.targetId);
+    const base = target ? labelBaseAnchorForObject(target) : null;
+    if (base) {
+      labelObj.follow = {
+        kind: "targetObject",
+        targetId: labelObj.targetId,
+        offsetX: Number(labelObj.x ?? 0) - base.x,
+        offsetY: Number(labelObj.y ?? 0) - base.y,
+      };
+    }
+  }
   const base = labelFollowBaseAnchor(labelObj);
   if (!base) {
     return false;
@@ -607,6 +651,40 @@ function syncFollowLabelPosition(labelObj) {
   labelObj.x = base.x + offsetX;
   labelObj.y = base.y + offsetY;
   return true;
+}
+
+function setPointAutoLabelState(pointObj, enabled) {
+  if (!pointObj || pointObj.type !== "point") {
+    return;
+  }
+  const existingPointLabel = getPointNameLabelByTargetId(pointObj.id);
+  if (!enabled) {
+    if (existingPointLabel) {
+      store.doc.objects = store.doc.objects.filter((o) => o.id !== existingPointLabel.id);
+    } else if (pointObj.name) {
+      pointObj.name = "";
+    }
+    return;
+  }
+  if (existingPointLabel) {
+    return;
+  }
+  const anchor = autoLabelAnchorForObject(pointObj);
+  addObject({
+    id: makeId("label"),
+    type: "label",
+    x: anchor.x,
+    y: anchor.y,
+    text: pointObj.name || nextAutoLabel("point"),
+    auto: true,
+    pointName: true,
+    targetId: pointObj.id,
+    follow: followLabelForTargetObject(pointObj),
+    style: defaultStyle(),
+  });
+  if (pointObj.name) {
+    pointObj.name = "";
+  }
 }
 
 function toggleAutoLabelForObject(targetId) {
@@ -624,24 +702,26 @@ function toggleAutoLabelForObject(targetId) {
     }
 
     if (target.type === "point") {
-      const existingPointLabel = getPointNameLabelByTargetId(target.id);
-      if (existingPointLabel) {
-        store.doc.objects = store.doc.objects.filter((o) => o.id !== existingPointLabel.id);
-      } else if (target.name) {
-        target.name = "";
+      const isLabeled = !!getPointNameLabelByTargetId(target.id) || !!target.name;
+      setPointAutoLabelState(target, !isLabeled);
+      return;
+    }
+
+    if (target.type === "circle") {
+      const center = getPointById(target.pointIds?.[0]);
+      const through = getPointById(target.pointIds?.[1]);
+      if (center && through) {
+        const points = [center, through];
+        const allLabeled = points.every((pt) => !!getPointNameLabelByTargetId(pt.id) || !!pt.name);
+        for (const pt of points) {
+          setPointAutoLabelState(pt, !allLabeled);
+        }
       } else {
-        const anchor = autoLabelAnchorForObject(target);
-        addObject({
-          id: makeId("label"),
-          type: "label",
-          x: anchor.x,
-          y: anchor.y,
-          text: nextAutoLabel("point"),
-          auto: true,
-          pointName: true,
-          targetId: target.id,
-          style: defaultStyle(),
-        });
+        const existing = getAutoLabelObjectByTargetId(target.id);
+        if (existing) {
+          store.doc.objects = store.doc.objects.filter((o) => o.id !== existing.id);
+          return;
+        }
       }
       return;
     }
@@ -665,6 +745,7 @@ function toggleAutoLabelForObject(targetId) {
         nextAutoLabel(target.type === "segment" ? "segment" : "object"),
       auto: true,
       targetId: target.id,
+      follow: followLabelForTargetObject(target),
       style: defaultStyle(),
     });
   });
@@ -1324,7 +1405,12 @@ function updateAnglePreview(cursorCoords) {
     pointObjectFromCoords(p1),
     pointObjectFromCoords(vertex),
     cursorCoords,
-    { right: pendingAngleIsRight, arcCount: pendingAngleArcCount }
+    {
+      right: pendingAngleIsRight,
+      arcCount: pendingAngleArcCount,
+      decorator: pendingAngleDecorator,
+      tickCount: pendingAngleArcCount,
+    }
   );
   return true;
 }
@@ -1447,6 +1533,8 @@ function addPointInput(pointId, skipMutation = false) {
         pointIds: pointsForCreate,
         right: isRightAngle,
         arcCount: isRightAngle ? 1 : pendingAngleArcCount,
+        decorator: isRightAngle ? "right" : pendingAngleDecorator,
+        tickCount: isRightAngle ? 0 : pendingAngleDecorator === "arcTick" ? pendingAngleArcCount : 0,
         style,
       });
       store.clearSelection();
@@ -1462,6 +1550,7 @@ function addPointInput(pointId, skipMutation = false) {
   pendingPointIds = [];
   pendingAngleIsRight = false;
   pendingRightTriangleForceIso = false;
+  pendingAngleDecorator = "arc";
   boardController.clearPreview();
   updateModeUi();
   renderCurrentDoc(false);
@@ -2297,6 +2386,8 @@ function renderCurrentDoc(applySelection = true) {
       const p3 = points.get(ann.pointIds[2]);
       if (p1 && p2 && p3) {
         const arcCount = Math.max(1, Number(ann.arcCount || 1));
+        const decorator = ann.decorator === "arcTick" ? "arcTick" : "arc";
+        const tickCount = Math.max(1, Number(ann.tickCount || arcCount || 1));
         if (ann.right) {
           boardController.createAngle(ann.id, p1, p2, p3, {
             ...style,
@@ -2304,12 +2395,23 @@ function renderCurrentDoc(applySelection = true) {
             radius: 1,
           });
         } else {
-          for (let i = 0; i < arcCount; i += 1) {
-            boardController.createAngle(`${ann.id}_arc_${i + 1}`, p1, p2, p3, {
+          if (decorator === "arcTick") {
+            boardController.createAngle(ann.id, p1, p2, p3, {
               ...style,
               right: false,
-              radius: 1 + i * 0.35,
+              decorator: "arcTick",
+              tickCount,
+              radius: 1,
             });
+          } else {
+            for (let i = 0; i < arcCount; i += 1) {
+              boardController.createAngle(`${ann.id}_arc_${i + 1}`, p1, p2, p3, {
+                ...style,
+                right: false,
+                decorator: "arc",
+                radius: 1 + i * 0.35,
+              });
+            }
           }
         }
       }
@@ -2943,7 +3045,7 @@ function addParallelMarks(markCount) {
   });
 }
 
-function addAngleFromSelection(isRight, arcCount = 1) {
+function addAngleFromSelection(isRight, arcCount = 1, decorator = "arc") {
   const pts = selectedOfTypes(["point"]);
   if (pts.length === 3) {
     runMutation("add-angle", () => {
@@ -2953,12 +3055,34 @@ function addAngleFromSelection(isRight, arcCount = 1) {
         pointIds: pts,
         right: isRight,
         arcCount: isRight ? 1 : arcCount,
+        decorator: isRight ? "right" : decorator,
+        tickCount: isRight ? 0 : decorator === "arcTick" ? arcCount : 0,
         style: defaultStyle(),
       });
     });
     return true;
   }
   return false;
+}
+
+function angleMarkConfigFromSelectionValue(value) {
+  const [kind, rawCount] = String(value || "arc-1").split("-");
+  const count = Math.max(1, Number(rawCount || 1));
+  if (kind === "arctick") {
+    return { decorator: "arcTick", count };
+  }
+  return { decorator: "arc", count };
+}
+
+function setActiveAngleMarkPreset(value) {
+  const cfg = angleMarkConfigFromSelectionValue(value);
+  pendingAngleIsRight = false;
+  pendingAngleDecorator = cfg.decorator;
+  pendingAngleArcCount = cfg.count;
+  angleMarkPresetButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.angleMark === value);
+  });
+  setMode(ToolMode.ANGLE);
 }
 
 function angleDegrees(p1, vertex, p3) {
@@ -3077,16 +3201,23 @@ function promptLabel() {
     return;
   }
 
-  const selectedPoint = selectedOfTypes(["point"])[0];
+  const selectedTargetId =
+    selectedOfTypes(["point", "segment", "line", "circle", "parallel", "perpendicular"])[0] || null;
   runMutation("add-label", () => {
-    if (selectedPoint) {
-      const pt = getPointById(selectedPoint);
+    if (selectedTargetId) {
+      const target = getObjectById(selectedTargetId);
+      if (!target) {
+        return;
+      }
+      const anchor = autoLabelAnchorForObject(target);
       addObject({
         id: makeId("label"),
         type: "label",
-        x: pt.x + 0.5,
-        y: pt.y + 0.5,
+        x: anchor.x,
+        y: anchor.y,
         text,
+        targetId: target.id,
+        follow: followLabelForTargetObject(target),
         style: defaultStyle(),
       });
     } else {
@@ -3223,36 +3354,23 @@ function wireUi() {
   document.getElementById("addSideMeasure").addEventListener("click", addSideMeasure);
   document.getElementById("addAngleMeasure").addEventListener("click", addAngleMeasure);
 
-  document.getElementById("markAngle1").addEventListener("click", () => {
-    if (!addAngleFromSelection(false, 1)) {
-      pendingAngleIsRight = false;
-      pendingAngleArcCount = 1;
-      setMode(ToolMode.ANGLE);
-    }
-  });
-
-  document.getElementById("markAngle2").addEventListener("click", () => {
-    if (!addAngleFromSelection(false, 2)) {
-      pendingAngleIsRight = false;
-      pendingAngleArcCount = 2;
-      setMode(ToolMode.ANGLE);
-    }
-  });
-
-  document.getElementById("markAngle3").addEventListener("click", () => {
-    if (!addAngleFromSelection(false, 3)) {
-      pendingAngleIsRight = false;
-      pendingAngleArcCount = 3;
-      setMode(ToolMode.ANGLE);
-    }
+  angleMarkPresetButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setActiveAngleMarkPreset(btn.dataset.angleMark);
+    });
   });
 
   document.getElementById("markRightAngle").addEventListener("click", () => {
     if (!addAngleFromSelection(true, 1)) {
       pendingAngleIsRight = true;
+      pendingAngleDecorator = "arc";
       pendingAngleArcCount = 1;
       setMode(ToolMode.ANGLE);
     }
+  });
+
+  angleMarkPresetButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.angleMark === "arc-1");
   });
 
   document.getElementById("addLabel").addEventListener("click", promptLabel);
@@ -3358,6 +3476,11 @@ function wireUi() {
   });
 
   document.getElementById("strokeColor").addEventListener("input", applyStyleToSelection);
+  document.getElementById("resetStrokeColor").addEventListener("click", () => {
+    const colorInput = document.getElementById("strokeColor");
+    colorInput.value = "#000000";
+    applyStyleToSelection();
+  });
   document.getElementById("strokeWidth").addEventListener("input", applyStyleToSelection);
   document.getElementById("resetStrokeWidth").addEventListener("click", () => {
     const widthInput = document.getElementById("strokeWidth");
