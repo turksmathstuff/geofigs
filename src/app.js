@@ -1195,8 +1195,8 @@ function updateAnglePreview(cursorCoords) {
 }
 
 function addPointInput(pointId, skipMutation = false) {
-  if (currentMode === ToolMode.ANGLE && pendingPointIds.includes(pointId)) {
-    statusEl.textContent = `Mode: ${modeLabel(currentMode)} (pick 3 distinct points)`;
+  if (pointNeeds(currentMode) > 0 && pendingPointIds.includes(pointId)) {
+    statusEl.textContent = `Mode: ${modeLabel(currentMode)} (pick distinct points)`;
     return;
   }
 
