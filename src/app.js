@@ -25,8 +25,6 @@ const moveYValueEl = document.getElementById("moveYValue");
 const rotationCompassEl = document.getElementById("rotationCompass");
 const compassArmEl = document.getElementById("compassArm");
 const rotateValueEl = document.getElementById("rotateValue");
-const rayExtensionInputEl = document.getElementById("rayExtension");
-const rayExtensionValueEl = document.getElementById("rayExtensionValue");
 const modeButtons = [...document.querySelectorAll("button[data-mode]")];
 const triangleMenuBtn = document.getElementById("triangleMenuBtn");
 const triangleMenuPanel = document.getElementById("triangleMenuPanel");
@@ -1419,13 +1417,6 @@ function syncStyleInputsFromDoc() {
   if (examModeEl) {
     examModeEl.checked = !!styles.examMode;
   }
-  if (rayExtensionInputEl) {
-    const ext = normalizedRayExtension(styles.rayExtension);
-    rayExtensionInputEl.value = String(ext);
-    if (rayExtensionValueEl) {
-      rayExtensionValueEl.textContent = ext.toFixed(1);
-    }
-  }
 }
 
 function selectedOfTypes(types) {
@@ -1894,17 +1885,11 @@ function applyStyleToSelection() {
   const width = Number(document.getElementById("strokeWidth").value);
   const lineStyle = document.getElementById("lineStyle").value;
   const dash = lineStyle === "dashed" ? 2 : 0;
-  const rayExtension = normalizedRayExtension(rayExtensionInputEl?.value);
-  if (rayExtensionValueEl) {
-    rayExtensionValueEl.textContent = rayExtension.toFixed(1);
-  }
-
   const selectedIds = store.selectedIds();
   if (!selectedIds.length) {
     store.doc.styles.defaultStrokeColor = color;
     store.doc.styles.defaultStrokeWidth = width;
     store.doc.styles.defaultDash = dash;
-    store.doc.styles.rayExtension = rayExtension;
     renderCurrentDoc(false);
     return;
   }
@@ -1917,9 +1902,6 @@ function applyStyleToSelection() {
         obj.style.strokeColor = color;
         obj.style.strokeWidth = width;
         obj.style.dash = dash;
-        if (obj.type === "line" && obj.lineType === "ray") {
-          obj.style.rayExtension = rayExtension;
-        }
       }
       const ann = store.doc.annotations.find((a) => a.id === id);
       if (ann) {
@@ -2398,10 +2380,6 @@ function wireUi() {
     applyStyleToSelection();
   });
   document.getElementById("lineStyle").addEventListener("change", applyStyleToSelection);
-  if (rayExtensionInputEl) {
-    rayExtensionInputEl.addEventListener("input", applyStyleToSelection);
-  }
-
   document.getElementById("examMode").addEventListener("change", (evt) => {
     runMutation("toggle-exam-mode", () => {
       store.doc.styles.examMode = evt.target.checked;
