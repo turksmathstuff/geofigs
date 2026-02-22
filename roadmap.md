@@ -87,5 +87,18 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 3. Complete deployment configuration and README usage guide.
 
 ## TODO (Label Follow Edge Cases)
+- [ ] Add a `Midpoint` construction tool (select two points or a segment; create midpoint and preserve dependency).
 - [ ] Make labels attached to `parallel` / `perpendicular` objects follow line orientation changes (not just the through-point anchor).
 - [ ] Preserve/rotate attached label `follow.offsetX/offsetY` during triangle rotate/slide transforms so labels move as a rigid transform with the figure.
+
+## Teacher Priority Features (Next)
+1. `Midpoint` tool (two points or segment -> dependent midpoint).
+2. `Angle Bisector` tool (from 3 points / angle mark).
+3. `Perpendicular Bisector` tool (from segment).
+4. `Text Box` annotation (free text not attached to geometry).
+5. `Point Rename` / point naming controls (manual point labels and renaming).
+6. `Hide Point Markers` export/presentation toggle (keep geometry, suppress dots).
+7. `Coordinate Plane` / axes-grid preset for analytic geometry and trig diagrams.
+8. `Center + Radius` circle tool (numeric radius entry).
+9. `Polygon / Polyline` tool for quadrilaterals and composite worksheet figures.
+10. Angle/measure display options (degree symbol toggle, radians support later).
