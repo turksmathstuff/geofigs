@@ -38,13 +38,14 @@ let triangleVariant = "three-point";
 let marqueeState = null;
 let transformSession = null;
 let compassDragging = false;
+const transientDragSnapshots = new Map();
 
 const boardController = new BoardController(
   "jxgbox",
   (coords, evt) => handleBoardClick(coords, evt),
   (id, type, evt) => handleObjectClick(id, type, evt),
   (coords, evt) => handleBoardMove(coords, evt),
-  (id, type, pos) => handleObjectMove(id, type, pos)
+  (id, type, pos, options) => handleObjectMove(id, type, pos, options)
 );
 boardController.init();
 
@@ -59,6 +60,10 @@ function defaultStyle() {
     lineExtensionEnd: styles.lineExtensionEnd,
     fontSize: styles.fontSize,
   };
+}
+
+function defaultIntersectionPointColor() {
+  return store.doc.styles.examMode ? "#000000" : "#ff0033";
 }
 
 function normalizedRayExtension(value) {
@@ -235,6 +240,26 @@ function runMutation(label, mutator) {
   renderCurrentDoc();
 }
 
+function ensureTransientSnapshot(id) {
+  if (!id || transientDragSnapshots.has(id)) {
+    return;
+  }
+  transientDragSnapshots.set(id, store.snapshot());
+}
+
+function commitTransientSnapshotIfPresent(id, label) {
+  if (!id || !transientDragSnapshots.has(id)) {
+    return false;
+  }
+  const before = transientDragSnapshots.get(id);
+  transientDragSnapshots.delete(id);
+  store.doc.metadata.updatedAt = new Date().toISOString();
+  const after = store.snapshot();
+  store.commitSnapshot(label, before, after, applyDoc);
+  renderCurrentDoc();
+  return true;
+}
+
 function maybeCreatePoint(coords) {
   const id = makeId("pt");
   addObject({
@@ -244,6 +269,26 @@ function maybeCreatePoint(coords) {
     y: coords.y,
     name: "",
     style: defaultStyle(),
+  });
+  return id;
+}
+
+function maybeCreateIntersectionPoint(snap) {
+  if (!snap || !Array.isArray(snap.sourceObjectIds) || snap.sourceObjectIds.length !== 2) {
+    return maybeCreatePoint(snap);
+  }
+  const id = makeId("pt");
+  addObject({
+    id,
+    type: "point",
+    x: snap.x,
+    y: snap.y,
+    name: "",
+    constraint: {
+      kind: "intersection",
+      sourceObjectIds: [...snap.sourceObjectIds],
+    },
+    style: { ...defaultStyle(), strokeColor: defaultIntersectionPointColor(), fixed: true },
   });
   return id;
 }
@@ -498,16 +543,42 @@ function getLinearDefinition(obj) {
   }
   if (obj.type === "line" && obj.lineType === "ray") {
     return {
+      id: obj.id,
       kind: "segment",
       a,
       b: rayEndpoint(a, b, getRayExtensionForObject(obj)),
     };
   }
   if (obj.type === "line" && obj.lineType === "line") {
-    return { kind: "line", a, b };
+    return { id: obj.id, kind: "line", a, b };
   }
   const kind = obj.type === "segment" ? "segment" : "line";
-  return { kind, a, b };
+  return { id: obj.id, kind, a, b };
+}
+
+function getCircleDefinition(obj) {
+  if (!obj || obj.type !== "circle" || !Array.isArray(obj.pointIds) || obj.pointIds.length < 2) {
+    return null;
+  }
+  const center = getPointById(obj.pointIds[0]);
+  const through = getPointById(obj.pointIds[1]);
+  if (!center || !through) {
+    return null;
+  }
+  const radius = distance(center, through);
+  if (!Number.isFinite(radius) || radius < 1e-9) {
+    return null;
+  }
+  return {
+    id: obj.id,
+    kind: "circle",
+    center,
+    radius,
+  };
+}
+
+function getIntersectionDefinition(obj) {
+  return getLinearDefinition(obj) || getCircleDefinition(obj);
 }
 
 function intersectInfiniteLines(l1, l2) {
@@ -553,32 +624,166 @@ function pointFitsLinearDef(pt, def) {
   return true;
 }
 
+function pointFitsIntersectionDef(pt, def) {
+  if (!def) {
+    return false;
+  }
+  if (def.kind === "circle") {
+    const d = distance(pt, def.center);
+    return Math.abs(d - def.radius) <= 1e-4;
+  }
+  return pointFitsLinearDef(pt, def);
+}
+
+function intersectLineAndCircle(lineDef, circleDef) {
+  const x1 = lineDef.a.x;
+  const y1 = lineDef.a.y;
+  const x2 = lineDef.b.x;
+  const y2 = lineDef.b.y;
+  const cx = circleDef.center.x;
+  const cy = circleDef.center.y;
+  const r = circleDef.radius;
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const A = dx * dx + dy * dy;
+  if (A < 1e-12) {
+    return [];
+  }
+  const fx = x1 - cx;
+  const fy = y1 - cy;
+  const B = 2 * (fx * dx + fy * dy);
+  const C = fx * fx + fy * fy - r * r;
+  const disc = B * B - 4 * A * C;
+  if (disc < -1e-9) {
+    return [];
+  }
+  if (Math.abs(disc) <= 1e-9) {
+    const t = -B / (2 * A);
+    return [{ x: x1 + t * dx, y: y1 + t * dy }];
+  }
+  const sqrtDisc = Math.sqrt(Math.max(0, disc));
+  const t1 = (-B - sqrtDisc) / (2 * A);
+  const t2 = (-B + sqrtDisc) / (2 * A);
+  return [
+    { x: x1 + t1 * dx, y: y1 + t1 * dy },
+    { x: x1 + t2 * dx, y: y1 + t2 * dy },
+  ];
+}
+
+function intersectDefinitions(def1, def2) {
+  if (!def1 || !def2) {
+    return [];
+  }
+  if (def1.kind !== "circle" && def2.kind !== "circle") {
+    const pt = intersectInfiniteLines(def1, def2);
+    if (!pt) {
+      return [];
+    }
+    if (!pointFitsLinearDef(pt, def1) || !pointFitsLinearDef(pt, def2)) {
+      return [];
+    }
+    return [pt];
+  }
+  if (def1.kind === "circle" && def2.kind === "circle") {
+    return [];
+  }
+  const lineDef = def1.kind === "circle" ? def2 : def1;
+  const circleDef = def1.kind === "circle" ? def1 : def2;
+  return intersectLineAndCircle(lineDef, circleDef).filter(
+    (pt) => pointFitsLinearDef(pt, lineDef) && pointFitsIntersectionDef(pt, circleDef)
+  );
+}
+
+function nearestPointTo(referencePoint, candidates) {
+  if (!referencePoint || !candidates?.length) {
+    return null;
+  }
+  let best = null;
+  let bestDist = Infinity;
+  for (const candidate of candidates) {
+    const d = distance(referencePoint, candidate);
+    if (d < bestDist) {
+      best = candidate;
+      bestDist = d;
+    }
+  }
+  return best ? { point: best, distance: bestDist } : null;
+}
+
 function findIntersectionSnapPoint(rawPoint) {
-  const linearDefs = store.doc.objects.map(getLinearDefinition).filter(Boolean);
-  if (linearDefs.length < 2) {
+  const defs = store.doc.objects.map(getIntersectionDefinition).filter(Boolean);
+  if (defs.length < 2) {
     return null;
   }
 
   let best = null;
   let bestDist = Infinity;
   const threshold = 0.9;
-  for (let i = 0; i < linearDefs.length; i += 1) {
-    for (let j = i + 1; j < linearDefs.length; j += 1) {
-      const candidate = intersectInfiniteLines(linearDefs[i], linearDefs[j]);
-      if (!candidate) {
+  for (let i = 0; i < defs.length; i += 1) {
+    for (let j = i + 1; j < defs.length; j += 1) {
+      const candidates = intersectDefinitions(defs[i], defs[j]);
+      const nearest = nearestPointTo(rawPoint, candidates);
+      if (!nearest) {
         continue;
       }
-      if (!pointFitsLinearDef(candidate, linearDefs[i]) || !pointFitsLinearDef(candidate, linearDefs[j])) {
-        continue;
-      }
-      const dist = distance(rawPoint, candidate);
-      if (dist < threshold && dist < bestDist) {
-        best = candidate;
-        bestDist = dist;
+      if (nearest.distance < threshold && nearest.distance < bestDist) {
+        best = {
+          ...nearest.point,
+          sourceObjectIds: [defs[i].id, defs[j].id],
+        };
+        bestDist = nearest.distance;
       }
     }
   }
   return best;
+}
+
+function recomputeConstrainedPoints() {
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "point" || obj.constraint?.kind !== "intersection") {
+      continue;
+    }
+    const [id1, id2] = obj.constraint.sourceObjectIds || [];
+    if (!id1 || !id2) {
+      continue;
+    }
+    const def1 = getIntersectionDefinition(getObjectById(id1));
+    const def2 = getIntersectionDefinition(getObjectById(id2));
+    if (!def1 || !def2) {
+      continue;
+    }
+    const candidates = intersectDefinitions(def1, def2);
+    const nearest = nearestPointTo({ x: obj.x, y: obj.y }, candidates);
+    if (!nearest) {
+      continue;
+    }
+    obj.x = nearest.point.x;
+    obj.y = nearest.point.y;
+  }
+}
+
+function syncConstrainedPointsToBoard() {
+  let changed = false;
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "point" || obj.constraint?.kind !== "intersection") {
+      continue;
+    }
+    const el = boardController.getElement(obj.id);
+    if (!el?.setPosition) {
+      continue;
+    }
+    el.setPosition(JXG.COORDS_BY_USER, [obj.x, obj.y]);
+    changed = true;
+  }
+  if (changed) {
+    boardController.update();
+  }
+}
+
+function updateConstrainedPointsLive() {
+  recomputeConstrainedPoints();
+  syncConstrainedPointsToBoard();
 }
 
 function updateLinearPreview(cursorCoords) {
@@ -828,9 +1033,12 @@ function handleBoardClick(coords, evt) {
 
   if (currentMode === ToolMode.POINT) {
     const intersectionSnap = findIntersectionSnapPoint(snappedCoords);
-    const pointCoords = intersectionSnap || snappedCoords;
     runMutation("create-point", () => {
-      maybeCreatePoint(pointCoords);
+      if (intersectionSnap) {
+        maybeCreateIntersectionPoint(intersectionSnap);
+      } else {
+        maybeCreatePoint(snappedCoords);
+      }
     });
     return;
   }
@@ -1029,7 +1237,8 @@ function handleBoardMove(coords, evt) {
   updateTrianglePreview(adjusted);
 }
 
-function handleObjectMove(id, type, pos) {
+function handleObjectMove(id, type, pos, options = {}) {
+  const transient = !!options?.transient;
   if (type === "ray") {
     const rayObj = getObjectById(id);
     if (!rayObj || rayObj.type !== "line" || rayObj.lineType !== "ray") {
@@ -1039,12 +1248,28 @@ function handleObjectMove(id, type, pos) {
       const nextExt = normalizedRayExtension(pos.rayExtension);
       const prevExt = getRayExtensionForObject(rayObj);
       if (Math.abs(nextExt - prevExt) < 0.0001) {
+        if (!transient) {
+          commitTransientSnapshotIfPresent(id, "resize-ray-visible");
+        }
         return;
       }
-      runMutation("resize-ray-visible", () => {
+      if (transient) {
+        ensureTransientSnapshot(id);
         rayObj.style = rayObj.style || {};
         rayObj.style.rayExtension = nextExt;
-      });
+        updateConstrainedPointsLive();
+      } else {
+        if (transientDragSnapshots.has(id)) {
+          rayObj.style = rayObj.style || {};
+          rayObj.style.rayExtension = nextExt;
+          commitTransientSnapshotIfPresent(id, "resize-ray-visible");
+          return;
+        }
+        runMutation("resize-ray-visible", () => {
+          rayObj.style = rayObj.style || {};
+          rayObj.style.rayExtension = nextExt;
+        });
+      }
       return;
     }
     if (!pos?.p1 || !pos?.p2) {
@@ -1061,14 +1286,34 @@ function handleObjectMove(id, type, pos) {
       Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
       Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
     if (unchanged) {
+      if (!transient) {
+        commitTransientSnapshotIfPresent(id, "move-ray");
+      }
       return;
     }
-    runMutation("move-ray", () => {
+    if (transient) {
+      ensureTransientSnapshot(id);
       p1Obj.x = pos.p1.x;
       p1Obj.y = pos.p1.y;
       p2Obj.x = pos.p2.x;
       p2Obj.y = pos.p2.y;
-    });
+      updateConstrainedPointsLive();
+    } else {
+      if (transientDragSnapshots.has(id)) {
+        p1Obj.x = pos.p1.x;
+        p1Obj.y = pos.p1.y;
+        p2Obj.x = pos.p2.x;
+        p2Obj.y = pos.p2.y;
+        commitTransientSnapshotIfPresent(id, "move-ray");
+        return;
+      }
+      runMutation("move-ray", () => {
+        p1Obj.x = pos.p1.x;
+        p1Obj.y = pos.p1.y;
+        p2Obj.x = pos.p2.x;
+        p2Obj.y = pos.p2.y;
+      });
+    }
     return;
   }
 
@@ -1089,14 +1334,34 @@ function handleObjectMove(id, type, pos) {
         Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
         Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
       if (unchanged) {
+        if (!transient) {
+          commitTransientSnapshotIfPresent(id, "move-line");
+        }
         return;
       }
-      runMutation("move-line", () => {
+      if (transient) {
+        ensureTransientSnapshot(id);
         p1Obj.x = pos.p1.x;
         p1Obj.y = pos.p1.y;
         p2Obj.x = pos.p2.x;
         p2Obj.y = pos.p2.y;
-      });
+        updateConstrainedPointsLive();
+      } else {
+        if (transientDragSnapshots.has(id)) {
+          p1Obj.x = pos.p1.x;
+          p1Obj.y = pos.p1.y;
+          p2Obj.x = pos.p2.x;
+          p2Obj.y = pos.p2.y;
+          commitTransientSnapshotIfPresent(id, "move-line");
+          return;
+        }
+        runMutation("move-line", () => {
+          p1Obj.x = pos.p1.x;
+          p1Obj.y = pos.p1.y;
+          p2Obj.x = pos.p2.x;
+          p2Obj.y = pos.p2.y;
+        });
+      }
       return;
     }
     if (pos && ("lineExtensionStart" in pos || "lineExtensionEnd" in pos)) {
@@ -1105,13 +1370,31 @@ function handleObjectMove(id, type, pos) {
       const prevStart = normalizedLineExtension(lineObj.style?.lineExtensionStart ?? store.doc.styles.lineExtensionStart);
       const prevEnd = normalizedLineExtension(lineObj.style?.lineExtensionEnd ?? store.doc.styles.lineExtensionEnd);
       if (Math.abs(nextStart - prevStart) < 0.0001 && Math.abs(nextEnd - prevEnd) < 0.0001) {
+        if (!transient) {
+          commitTransientSnapshotIfPresent(id, "resize-line-visible");
+        }
         return;
       }
-      runMutation("resize-line-visible", () => {
+      if (transient) {
+        ensureTransientSnapshot(id);
         lineObj.style = lineObj.style || {};
         lineObj.style.lineExtensionStart = nextStart;
         lineObj.style.lineExtensionEnd = nextEnd;
-      });
+        updateConstrainedPointsLive();
+      } else {
+        if (transientDragSnapshots.has(id)) {
+          lineObj.style = lineObj.style || {};
+          lineObj.style.lineExtensionStart = nextStart;
+          lineObj.style.lineExtensionEnd = nextEnd;
+          commitTransientSnapshotIfPresent(id, "resize-line-visible");
+          return;
+        }
+        runMutation("resize-line-visible", () => {
+          lineObj.style = lineObj.style || {};
+          lineObj.style.lineExtensionStart = nextStart;
+          lineObj.style.lineExtensionEnd = nextEnd;
+        });
+      }
     }
     return;
   }
@@ -1127,13 +1410,29 @@ function handleObjectMove(id, type, pos) {
     return;
   }
   if (Math.abs((obj.x ?? 0) - pos.x) < 0.0001 && Math.abs((obj.y ?? 0) - pos.y) < 0.0001) {
+    if (!transient) {
+      commitTransientSnapshotIfPresent(id, `move-${type}`);
+    }
     return;
   }
 
-  runMutation(`move-${type}`, () => {
+  if (transient) {
+    ensureTransientSnapshot(id);
     obj.x = pos.x;
     obj.y = pos.y;
-  });
+    updateConstrainedPointsLive();
+  } else {
+    if (transientDragSnapshots.has(id)) {
+      obj.x = pos.x;
+      obj.y = pos.y;
+      commitTransientSnapshotIfPresent(id, `move-${type}`);
+      return;
+    }
+    runMutation(`move-${type}`, () => {
+      obj.x = pos.x;
+      obj.y = pos.y;
+    });
+  }
 }
 
 function removeWithDependencies(selectedSet) {
@@ -1157,6 +1456,10 @@ function removeWithDependencies(selectedSet) {
         changed = true;
       }
       if (obj.targetId && selectedSet.has(obj.targetId)) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
+      if (obj.constraint?.kind === "intersection" && obj.constraint.sourceObjectIds?.some((srcId) => selectedSet.has(srcId))) {
         selectedSet.add(obj.id);
         changed = true;
       }
@@ -1244,7 +1547,10 @@ function buildPointMap() {
     }
     const pt = obj.hidden
       ? boardController.createSupportPoint(obj.x, obj.y)
-      : boardController.createPoint(obj.id, obj.x, obj.y, { ...obj.style });
+      : boardController.createPoint(obj.id, obj.x, obj.y, {
+          ...obj.style,
+          fixed: obj.constraint?.kind === "intersection" || obj.style?.fixed,
+        });
     map.set(obj.id, pt);
   }
   return map;
@@ -1284,6 +1590,7 @@ function migratePointNamesToDraggableLabels() {
 }
 
 function renderCurrentDoc(applySelection = true) {
+  recomputeConstrainedPoints();
   boardController.resetBoard();
   const points = buildPointMap();
 
@@ -2166,7 +2473,7 @@ function clearBoard() {
 async function downloadSvg() {
   const background = document.getElementById("bgMode").value;
   const tight = document.getElementById("tightSvg").checked;
-  const raw = boardController.exportBoardSvg();
+  const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
   const svg = exportSVG(raw, { background, tight });
   const name = `figure-${timestampForFile()}.svg`;
   triggerDownload(name, svg, "image/svg+xml");
@@ -2175,11 +2482,41 @@ async function downloadSvg() {
 async function downloadPng() {
   const background = document.getElementById("bgMode").value;
   const scale = Number(document.getElementById("pngScale").value);
-  const raw = boardController.exportBoardSvg();
+  const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
   const svg = exportSVG(raw, { background, tight: true });
   const blob = await exportPNG(svg, { background, scale });
   const name = `figure-${timestampForFile()}.png`;
   downloadBlob(name, blob);
+}
+
+function withExportIntersectionPointBlack(fn) {
+  const changedPoints = [];
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "point" || obj.constraint?.kind !== "intersection") {
+      continue;
+    }
+    const style = obj.style || (obj.style = {});
+    changedPoints.push({ obj, prev: style.strokeColor });
+    style.strokeColor = "#000000";
+  }
+  if (changedPoints.length) {
+    renderCurrentDoc(false);
+  }
+  try {
+    return fn();
+  } finally {
+    for (const { obj, prev } of changedPoints) {
+      obj.style = obj.style || {};
+      if (prev === undefined) {
+        delete obj.style.strokeColor;
+      } else {
+        obj.style.strokeColor = prev;
+      }
+    }
+    if (changedPoints.length) {
+      renderCurrentDoc(false);
+    }
+  }
 }
 
 function saveDoc() {
@@ -2419,6 +2756,11 @@ function wireUi() {
       }
       evt.preventDefault();
       deleteSelected();
+    }
+    if (key === "h" && !mod && !isEditable) {
+      evt.preventDefault();
+      hideSelected();
+      return;
     }
     if (evt.key === "Escape") {
       store.clearSelection();

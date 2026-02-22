@@ -16,6 +16,7 @@ It is intended as a practical reference for using and testing the UI.
 ### Dragging behavior (general)
 - In `Select` mode, dragging should show live motion for draggable objects.
 - Click-vs-drag is deferred: a drag does not immediately re-render selection and interrupt motion.
+- Constrained intersection points update live while related source geometry is dragged/resized.
 - Draggable items include:
   - Points
   - Labels
@@ -27,6 +28,7 @@ It is intended as a practical reference for using and testing the UI.
 - `Cmd/Ctrl + Z`: Undo
 - `Cmd/Ctrl + Shift + Z` or `Ctrl + Y`: Redo
 - `Delete` / `Backspace`: Delete selected (unless typing in an input)
+- `H`: Hide selected (when not typing in an input)
 - `Escape`:
   - Clears selection
   - Clears pending construction clicks
@@ -46,7 +48,17 @@ It is intended as a practical reference for using and testing the UI.
 
 ### Point
 - Click on canvas to create a point.
-- If clicking near the intersection of two existing linear objects, the point tool may snap to the intersection.
+- If clicking near an intersection, the point tool may snap to and create a constrained intersection point.
+- Supported snap intersections:
+  - line/segment/ray with line/segment/ray
+  - circle with line/segment/ray
+- For circle intersections with two valid points, the app uses the valid intersection closest to your click.
+- Constrained intersection points:
+  - stay attached to their source objects
+  - move when the source geometry moves
+  - are non-draggable
+  - are deleted automatically if one of their source objects is deleted
+- Constrained intersection points are shown in bright red on screen by default (black in Exam Mode).
 - Clicking an existing object while in `Point` mode does not select it (passes through).
 
 ### Segment
@@ -245,10 +257,12 @@ General:
 ### Download SVG
 - Exports current rendered board as SVG.
 - Hidden items are excluded because they are not rendered.
+- Constrained intersection points export in black by default (temporary export override), even if shown in red on screen.
 
 ### Download PNG
 - Exports current rendered board to PNG using the selected scale and background.
 - Hidden items are excluded because they are not rendered.
+- Constrained intersection points export in black by default (same behavior as SVG export).
 
 ### Save `.geojson`
 - Saves editable document state (objects, annotations, styles, metadata) as JSON.
@@ -302,5 +316,6 @@ General:
 - `Line` and `Ray` are visually finite for practicality, but geometry logic still treats:
   - `Line` as infinite for snapping/intersections
   - `Ray` as a ray-like subset (using current visible endpoint logic in intersection checks)
+- Circle intersection snapping currently supports circle + line/segment/ray, but not circle + circle.
 - Arrow-tip resize uses invisible hit targets near the visible arrowheads.
 - Some internal modes (`Congruency`, `Delete`) exist in code but are not exposed as direct toolbar mode buttons in the current UI.
