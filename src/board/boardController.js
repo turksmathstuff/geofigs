@@ -371,8 +371,15 @@ export class BoardController {
         return;
       }
       const current = this.getUserCoords(evt);
-      const dx = current.x - pointerDownUserPos.x;
-      const dy = current.y - pointerDownUserPos.y;
+      let dx = current.x - pointerDownUserPos.x;
+      let dy = current.y - pointerDownUserPos.y;
+      if (evt?.shiftKey) {
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          dy = 0;
+        } else {
+          dx = 0;
+        }
+      }
       meta.basePoint1.setPosition(JXG.COORDS_BY_USER, [dragStartLinearPoints.p1.x + dx, dragStartLinearPoints.p1.y + dy]);
       meta.basePoint2.setPosition(JXG.COORDS_BY_USER, [dragStartLinearPoints.p2.x + dx, dragStartLinearPoints.p2.y + dy]);
       this.syncLinearExtentHandles(type, meta.basePoint1, meta.basePoint2, meta);
@@ -385,11 +392,11 @@ export class BoardController {
       this.board.update();
     });
     if (type === "point" || type === "label") {
-      el.on("drag", () => {
+      el.on("drag", (evt) => {
         if (!this.onObjectMove) {
           return;
         }
-        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: true });
+        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: true, shiftKey: !!evt?.shiftKey });
       });
     }
     el.on("up", (evt) => {
@@ -415,7 +422,7 @@ export class BoardController {
         return;
       }
       if (type === "point" || type === "label") {
-        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: false });
+        this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() }, { transient: false, shiftKey: !!evt?.shiftKey });
       } else if ((type === "ray" || type === "line") && meta.basePoint1 && meta.basePoint2) {
         this.onObjectMove(logicalId, type, {
           p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
@@ -566,24 +573,174 @@ export class BoardController {
     return sourceLine;
   }
 
+  defaultCanvasSpanningLineExtension() {
+    const bbox = this.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+    const minX = Math.min(bbox[0], bbox[2]);
+    const maxX = Math.max(bbox[0], bbox[2]);
+    const minY = Math.min(bbox[1], bbox[3]);
+    const maxY = Math.max(bbox[1], bbox[3]);
+    const diag = Math.hypot(maxX - minX, maxY - minY) || 20;
+    return diag * 0.4;
+  }
+
+  rayDistanceToInsetBounds(origin, dir, bounds) {
+    const eps = 1e-9;
+    let best = Infinity;
+    const { x, y } = origin;
+    const { dx, dy } = dir;
+    const { minX, maxX, minY, maxY } = bounds;
+
+    if (Math.abs(dx) > eps) {
+      const tx1 = (minX - x) / dx;
+      const y1 = y + tx1 * dy;
+      if (tx1 > 0 && y1 >= minY - 1e-6 && y1 <= maxY + 1e-6) {
+        best = Math.min(best, tx1);
+      }
+      const tx2 = (maxX - x) / dx;
+      const y2 = y + tx2 * dy;
+      if (tx2 > 0 && y2 >= minY - 1e-6 && y2 <= maxY + 1e-6) {
+        best = Math.min(best, tx2);
+      }
+    }
+
+    if (Math.abs(dy) > eps) {
+      const ty1 = (minY - y) / dy;
+      const x1 = x + ty1 * dx;
+      if (ty1 > 0 && x1 >= minX - 1e-6 && x1 <= maxX + 1e-6) {
+        best = Math.min(best, ty1);
+      }
+      const ty2 = (maxY - y) / dy;
+      const x2 = x + ty2 * dx;
+      if (ty2 > 0 && x2 >= minX - 1e-6 && x2 <= maxX + 1e-6) {
+        best = Math.min(best, ty2);
+      }
+    }
+
+    return Number.isFinite(best) ? best : null;
+  }
+
+  canvasInsetLineExtents(throughPoint, baseA, baseB) {
+    const bbox = this.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+    const rawMinX = Math.min(bbox[0], bbox[2]);
+    const rawMaxX = Math.max(bbox[0], bbox[2]);
+    const rawMinY = Math.min(bbox[1], bbox[3]);
+    const rawMaxY = Math.max(bbox[1], bbox[3]);
+    const width = Math.max(1e-6, rawMaxX - rawMinX);
+    const height = Math.max(1e-6, rawMaxY - rawMinY);
+    const insetX = width * 0.03;
+    const insetY = height * 0.03;
+    const bounds = {
+      minX: rawMinX + insetX,
+      maxX: rawMaxX - insetX,
+      minY: rawMinY + insetY,
+      maxY: rawMaxY - insetY,
+    };
+
+    const dx0 = baseB.X() - baseA.X();
+    const dy0 = baseB.Y() - baseA.Y();
+    const len = Math.hypot(dx0, dy0) || 1;
+    const ux = dx0 / len;
+    const uy = dy0 / len;
+    const origin = { x: throughPoint.X(), y: throughPoint.Y() };
+    const dPlus = this.rayDistanceToInsetBounds(origin, { dx: ux, dy: uy }, bounds);
+    const dMinus = this.rayDistanceToInsetBounds(origin, { dx: -ux, dy: -uy }, bounds);
+    if (dPlus == null || dMinus == null) {
+      const fallback = this.defaultCanvasSpanningLineExtension();
+      return { start: fallback, end: fallback };
+    }
+    // baseA/baseB are offset 0.5 units on either side of throughPoint in the line direction
+    return {
+      start: Math.max(0, dMinus - 0.5),
+      end: Math.max(0, dPlus - 0.5),
+    };
+  }
+
+  createDirectedBasePointsThroughPoint(throughPoint, refLine, perpendicular = false) {
+    const baseA = this.board.create("point", [
+      () => {
+        const dx0 = refLine.point2.X() - refLine.point1.X();
+        const dy0 = refLine.point2.Y() - refLine.point1.Y();
+        const len = Math.hypot(dx0, dy0) || 1;
+        const ux = perpendicular ? -dy0 / len : dx0 / len;
+        return throughPoint.X() - ux * 0.5;
+      },
+      () => {
+        const dx0 = refLine.point2.X() - refLine.point1.X();
+        const dy0 = refLine.point2.Y() - refLine.point1.Y();
+        const len = Math.hypot(dx0, dy0) || 1;
+        const uy = perpendicular ? dx0 / len : dy0 / len;
+        return throughPoint.Y() - uy * 0.5;
+      },
+    ], {
+      visible: false,
+      fixed: true,
+      name: "",
+    });
+    const baseB = this.board.create("point", [
+      () => {
+        const dx0 = refLine.point2.X() - refLine.point1.X();
+        const dy0 = refLine.point2.Y() - refLine.point1.Y();
+        const len = Math.hypot(dx0, dy0) || 1;
+        const ux = perpendicular ? -dy0 / len : dx0 / len;
+        return throughPoint.X() + ux * 0.5;
+      },
+      () => {
+        const dx0 = refLine.point2.X() - refLine.point1.X();
+        const dy0 = refLine.point2.Y() - refLine.point1.Y();
+        const len = Math.hypot(dx0, dy0) || 1;
+        const uy = perpendicular ? dx0 / len : dy0 / len;
+        return throughPoint.Y() + uy * 0.5;
+      },
+    ], {
+      visible: false,
+      fixed: true,
+      name: "",
+    });
+    return { baseA, baseB };
+  }
+
   createParallelLine(id, sourceLine, throughPoint, style = {}) {
     const refLine = this.normalizeReferenceLine(sourceLine);
-    const el = this.board.create("parallel", [refLine, throughPoint], {
+    const { baseA, baseB } = this.createDirectedBasePointsThroughPoint(throughPoint, refLine, false);
+    const canvasExtents = this.canvasInsetLineExtents(throughPoint, baseA, baseB);
+    const meta = {
+      lineExtensionStart: Math.max(0, Number(style.lineExtensionStart ?? canvasExtents.start)),
+      lineExtensionEnd: Math.max(0, Number(style.lineExtensionEnd ?? canvasExtents.end)),
+    };
+    const lineStart = this.createLineEndpointPoint(baseA, baseB, () => meta.lineExtensionStart, "start");
+    const lineEnd = this.createLineEndpointPoint(baseA, baseB, () => meta.lineExtensionEnd, "end");
+    const el = this.board.create("segment", [lineStart, lineEnd], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash ?? 0,
+      firstArrow: true,
+      lastArrow: true,
     });
-    return this.registerElement(id, "line", el);
+    const primary = this.registerElement(id, "line", el, meta);
+    this.attachLinearExtentHandles(id, "line", baseA, baseB, meta);
+    return primary;
   }
 
   createPerpendicularLine(id, sourceLine, throughPoint, style = {}) {
     const refLine = this.normalizeReferenceLine(sourceLine);
-    const el = this.board.create("perpendicular", [refLine, throughPoint], {
+    const { baseA, baseB } = this.createDirectedBasePointsThroughPoint(throughPoint, refLine, true);
+    const canvasExtents = this.canvasInsetLineExtents(throughPoint, baseA, baseB);
+    const meta = {
+      lineExtensionStart: Math.max(0, Number(style.lineExtensionStart ?? canvasExtents.start)),
+      lineExtensionEnd: Math.max(0, Number(style.lineExtensionEnd ?? canvasExtents.end)),
+    };
+    const lineStart = this.createLineEndpointPoint(baseA, baseB, () => meta.lineExtensionStart, "start");
+    const lineEnd = this.createLineEndpointPoint(baseA, baseB, () => meta.lineExtensionEnd, "end");
+    const el = this.board.create("segment", [lineStart, lineEnd], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash ?? 0,
+      firstArrow: true,
+      lastArrow: true,
     });
-    return this.registerElement(id, "line", el);
+    const primary = this.registerElement(id, "line", el, meta);
+    this.attachLinearExtentHandles(id, "line", baseA, baseB, meta);
+    return primary;
   }
 
   createAngle(id, p1, vertex, p3, style = {}) {
