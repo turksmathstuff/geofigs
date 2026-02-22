@@ -560,30 +560,61 @@ function isoscelesApexFromCursor(pointA, pointB, cursor) {
 }
 
 function getLinearDefinition(obj) {
-  if (!obj || !Array.isArray(obj.pointIds) || obj.pointIds.length < 2) {
+  if (!obj) {
     return null;
   }
-  if (obj.type !== "segment" && obj.type !== "line") {
-    return null;
+  if (obj.type === "segment" || obj.type === "line") {
+    if (!Array.isArray(obj.pointIds) || obj.pointIds.length < 2) {
+      return null;
+    }
+    const a = getPointById(obj.pointIds[0]);
+    const b = getPointById(obj.pointIds[1]);
+    if (!a || !b) {
+      return null;
+    }
+    if (obj.type === "line" && obj.lineType === "ray") {
+      return {
+        id: obj.id,
+        kind: "segment",
+        a,
+        b: rayEndpoint(a, b, getRayExtensionForObject(obj)),
+      };
+    }
+    if (obj.type === "line" && obj.lineType === "line") {
+      return { id: obj.id, kind: "line", a, b };
+    }
+    const kind = obj.type === "segment" ? "segment" : "line";
+    return { id: obj.id, kind, a, b };
   }
-  const a = getPointById(obj.pointIds[0]);
-  const b = getPointById(obj.pointIds[1]);
-  if (!a || !b) {
-    return null;
-  }
-  if (obj.type === "line" && obj.lineType === "ray") {
+
+  if (obj.type === "parallel" || obj.type === "perpendicular") {
+    const through = getPointById(obj.throughPointId);
+    const source = getObjectById(obj.sourceLineId);
+    const sourceDef = getLinearDefinition(source);
+    if (!through || !sourceDef) {
+      return null;
+    }
+    const vx = sourceDef.b.x - sourceDef.a.x;
+    const vy = sourceDef.b.y - sourceDef.a.y;
+    const len = Math.hypot(vx, vy);
+    if (len < 1e-9) {
+      return null;
+    }
+    const ux = vx / len;
+    const uy = vy / len;
+    const dir =
+      obj.type === "perpendicular"
+        ? { x: -uy, y: ux }
+        : { x: ux, y: uy };
     return {
       id: obj.id,
-      kind: "segment",
-      a,
-      b: rayEndpoint(a, b, getRayExtensionForObject(obj)),
+      kind: "line",
+      a: { x: through.x, y: through.y },
+      b: { x: through.x + dir.x, y: through.y + dir.y },
     };
   }
-  if (obj.type === "line" && obj.lineType === "line") {
-    return { id: obj.id, kind: "line", a, b };
-  }
-  const kind = obj.type === "segment" ? "segment" : "line";
-  return { id: obj.id, kind, a, b };
+
+  return null;
 }
 
 function getCircleDefinition(obj) {
@@ -2276,11 +2307,6 @@ function applyStyleToSelection() {
 
 function createParallelOrPerpendicular(kind) {
   const selected = store.selectedIds();
-  if (selected.length !== 2) {
-    alert("Select one line/segment and one point.");
-    setMode(ToolMode.SELECT);
-    return;
-  }
 
   let sourceLineId = null;
   let throughPointId = null;
@@ -2289,7 +2315,7 @@ function createParallelOrPerpendicular(kind) {
     if (!obj) {
       continue;
     }
-    if (["line", "segment"].includes(obj.type)) {
+    if (["line", "segment", "parallel", "perpendicular"].includes(obj.type)) {
       sourceLineId = id;
     }
     if (obj.type === "point") {
@@ -2298,7 +2324,7 @@ function createParallelOrPerpendicular(kind) {
   }
 
   if (!sourceLineId || !throughPointId) {
-    alert("Select one line/segment and one point.");
+    alert("Select a point and one line/segment/parallel/perpendicular.");
     setMode(ToolMode.SELECT);
     return;
   }
@@ -2833,3 +2859,14 @@ startMarqueeSelection();
 updateModeUi();
 syncStyleInputsFromDoc();
 renderCurrentDoc();
+
+if (drawingHintEl) {
+  drawingHintEl.addEventListener("mouseenter", () => {
+    drawingHintEl.hidden = true;
+  });
+  drawingHintEl.addEventListener("mouseleave", () => {
+    const text = canvasHintText();
+    drawingHintEl.textContent = text;
+    drawingHintEl.hidden = !text;
+  });
+}
