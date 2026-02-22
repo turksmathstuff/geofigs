@@ -66,6 +66,10 @@ function defaultIntersectionPointColor() {
   return store.doc.styles.examMode ? "#000000" : "#ff0033";
 }
 
+function defaultAttachedPointColor() {
+  return store.doc.styles.examMode ? "#000000" : "#00c7b7";
+}
+
 function normalizedRayExtension(value) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : 4;
@@ -169,6 +173,7 @@ function setMode(mode) {
   }
   boardController.clearPreview();
   updateModeUi();
+  renderCurrentDoc();
 }
 
 function setTriangleMode(variant) {
@@ -208,6 +213,25 @@ function getPointById(id) {
   return o && o.type === "point" ? o : null;
 }
 
+function findNearbyVisiblePoint(coords, threshold = 0.55) {
+  if (!coords) {
+    return null;
+  }
+  let best = null;
+  let bestDist = Infinity;
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "point" || obj.hidden) {
+      continue;
+    }
+    const d = distance(coords, obj);
+    if (d < threshold && d < bestDist) {
+      best = obj;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
 function axisLockAnchorForDraggedPoint(pointId) {
   for (const obj of store.doc.objects) {
     if (!Array.isArray(obj.pointIds) || obj.pointIds.length < 2) {
@@ -236,6 +260,32 @@ function maybeAxisLockDraggedPoint(pointId, pos, options = {}) {
     return pos;
   }
   return snapToAxis(anchor, pos);
+}
+
+function applyPointConstraintToDraggedPosition(pointObj, pos) {
+  if (!pointObj?.constraint || !pos) {
+    return { pos, changedConstraint: false };
+  }
+  if (pointObj.constraint.kind === "intersection") {
+    return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
+  }
+  if (pointObj.constraint.kind !== "onObject") {
+    return { pos, changedConstraint: false };
+  }
+  const source = getObjectById(pointObj.constraint.sourceObjectId);
+  const def = getIntersectionDefinition(source);
+  if (!def) {
+    return { pos, changedConstraint: false };
+  }
+  const projected = nearestPointOnDef(pos, def);
+  if (!projected) {
+    return { pos, changedConstraint: false };
+  }
+  pointObj.constraint.attach = { ...projected.attach };
+  return {
+    pos: { x: projected.x, y: projected.y },
+    changedConstraint: true,
+  };
 }
 
 function getAutoLabelObjectByTargetId(targetId) {
@@ -319,6 +369,27 @@ function maybeCreateIntersectionPoint(snap) {
       sourceObjectIds: [...snap.sourceObjectIds],
     },
     style: { ...defaultStyle(), strokeColor: defaultIntersectionPointColor(), fixed: true },
+  });
+  return id;
+}
+
+function maybeCreateAttachedPoint(snap) {
+  if (!snap || !snap.sourceObjectId || !snap.attach) {
+    return maybeCreatePoint(snap);
+  }
+  const id = makeId("pt");
+  addObject({
+    id,
+    type: "point",
+    x: snap.x,
+    y: snap.y,
+    name: "",
+    constraint: {
+      kind: "onObject",
+      sourceObjectId: snap.sourceObjectId,
+      attach: { ...snap.attach },
+    },
+    style: { ...defaultStyle(), strokeColor: defaultAttachedPointColor() },
   });
   return id;
 }
@@ -696,6 +767,94 @@ function pointFitsIntersectionDef(pt, def) {
   return pointFitsLinearDef(pt, def);
 }
 
+function nearestPointOnLinearDef(rawPoint, def) {
+  if (!rawPoint || !def || !def.a || !def.b) {
+    return null;
+  }
+  const ax = def.a.x;
+  const ay = def.a.y;
+  const bx = def.b.x;
+  const by = def.b.y;
+  const vx = bx - ax;
+  const vy = by - ay;
+  const len2 = vx * vx + vy * vy;
+  if (len2 < 1e-12) {
+    return null;
+  }
+  const wx = rawPoint.x - ax;
+  const wy = rawPoint.y - ay;
+  let t = (wx * vx + wy * vy) / len2;
+  if (def.kind === "segment") {
+    t = Math.max(0, Math.min(1, t));
+  } else if (def.kind === "ray") {
+    t = Math.max(0, t);
+  }
+  return {
+    x: ax + t * vx,
+    y: ay + t * vy,
+    attach: { type: "linear", t },
+  };
+}
+
+function nearestPointOnCircleDef(rawPoint, def) {
+  if (!rawPoint || !def || def.kind !== "circle") {
+    return null;
+  }
+  const dx = rawPoint.x - def.center.x;
+  const dy = rawPoint.y - def.center.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) {
+    return {
+      x: def.center.x + def.radius,
+      y: def.center.y,
+      attach: { type: "circle", angle: 0 },
+    };
+  }
+  const angle = Math.atan2(dy, dx);
+  return {
+    x: def.center.x + Math.cos(angle) * def.radius,
+    y: def.center.y + Math.sin(angle) * def.radius,
+    attach: { type: "circle", angle },
+  };
+}
+
+function nearestPointOnDef(rawPoint, def) {
+  if (!def) {
+    return null;
+  }
+  if (def.kind === "circle") {
+    return nearestPointOnCircleDef(rawPoint, def);
+  }
+  return nearestPointOnLinearDef(rawPoint, def);
+}
+
+function pointFromConstraintOnObject(def, attach) {
+  if (!def || !attach) {
+    return null;
+  }
+  if (attach.type === "circle") {
+    if (def.kind !== "circle") {
+      return null;
+    }
+    const angle = Number(attach.angle || 0);
+    return {
+      x: def.center.x + Math.cos(angle) * def.radius,
+      y: def.center.y + Math.sin(angle) * def.radius,
+    };
+  }
+  if (attach.type === "linear") {
+    if (def.kind === "circle") {
+      return null;
+    }
+    const t = Number(attach.t || 0);
+    return {
+      x: def.a.x + (def.b.x - def.a.x) * t,
+      y: def.a.y + (def.b.y - def.a.y) * t,
+    };
+  }
+  return null;
+}
+
 function intersectLineAndCircle(lineDef, circleDef) {
   const x1 = lineDef.a.x;
   const y1 = lineDef.a.y;
@@ -800,34 +959,78 @@ function findIntersectionSnapPoint(rawPoint) {
   return best;
 }
 
+function findObjectSnapPoint(rawPoint) {
+  const defs = store.doc.objects.map(getIntersectionDefinition).filter(Boolean);
+  if (!defs.length) {
+    return null;
+  }
+  let best = null;
+  let bestDist = Infinity;
+  const threshold = 0.7;
+  for (const def of defs) {
+    const projected = nearestPointOnDef(rawPoint, def);
+    if (!projected) {
+      continue;
+    }
+    const d = distance(rawPoint, projected);
+    if (d < threshold && d < bestDist) {
+      best = {
+        x: projected.x,
+        y: projected.y,
+        sourceObjectId: def.id,
+        attach: projected.attach,
+      };
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+function findPreferredPointSnap(rawPoint) {
+  return findIntersectionSnapPoint(rawPoint) || findObjectSnapPoint(rawPoint);
+}
+
 function recomputeConstrainedPoints() {
   for (const obj of store.doc.objects) {
-    if (obj.type !== "point" || obj.constraint?.kind !== "intersection") {
+    if (obj.type !== "point" || !obj.constraint) {
       continue;
     }
-    const [id1, id2] = obj.constraint.sourceObjectIds || [];
-    if (!id1 || !id2) {
+    if (obj.constraint.kind === "intersection") {
+      const [id1, id2] = obj.constraint.sourceObjectIds || [];
+      if (!id1 || !id2) {
+        continue;
+      }
+      const def1 = getIntersectionDefinition(getObjectById(id1));
+      const def2 = getIntersectionDefinition(getObjectById(id2));
+      if (!def1 || !def2) {
+        continue;
+      }
+      const candidates = intersectDefinitions(def1, def2);
+      const nearest = nearestPointTo({ x: obj.x, y: obj.y }, candidates);
+      if (!nearest) {
+        continue;
+      }
+      obj.x = nearest.point.x;
+      obj.y = nearest.point.y;
       continue;
     }
-    const def1 = getIntersectionDefinition(getObjectById(id1));
-    const def2 = getIntersectionDefinition(getObjectById(id2));
-    if (!def1 || !def2) {
-      continue;
+    if (obj.constraint.kind === "onObject") {
+      const source = getObjectById(obj.constraint.sourceObjectId);
+      const def = getIntersectionDefinition(source);
+      const point = pointFromConstraintOnObject(def, obj.constraint.attach);
+      if (!point) {
+        continue;
+      }
+      obj.x = point.x;
+      obj.y = point.y;
     }
-    const candidates = intersectDefinitions(def1, def2);
-    const nearest = nearestPointTo({ x: obj.x, y: obj.y }, candidates);
-    if (!nearest) {
-      continue;
-    }
-    obj.x = nearest.point.x;
-    obj.y = nearest.point.y;
   }
 }
 
 function syncConstrainedPointsToBoard() {
   let changed = false;
   for (const obj of store.doc.objects) {
-    if (obj.type !== "point" || obj.constraint?.kind !== "intersection") {
+    if (obj.type !== "point" || !obj.constraint) {
       continue;
     }
     const el = boardController.getElement(obj.id);
@@ -966,11 +1169,42 @@ function updateCirclePreview(cursorCoords) {
   return true;
 }
 
+function updateAnglePreview(cursorCoords) {
+  if (currentMode !== ToolMode.ANGLE) {
+    return false;
+  }
+  if (pendingPointIds.length < 2) {
+    if (pendingPointIds.length < 1) {
+      boardController.clearPreview();
+    }
+    return true;
+  }
+  const p1 = getPointById(pendingPointIds[0]);
+  const vertex = getPointById(pendingPointIds[1]);
+  if (!p1 || !vertex) {
+    boardController.clearPreview();
+    return true;
+  }
+  boardController.showPreviewAngle(
+    pointObjectFromCoords(p1),
+    pointObjectFromCoords(vertex),
+    cursorCoords,
+    { right: pendingAngleIsRight, arcCount: pendingAngleArcCount }
+  );
+  return true;
+}
+
 function addPointInput(pointId, skipMutation = false) {
+  if (currentMode === ToolMode.ANGLE && pendingPointIds.includes(pointId)) {
+    statusEl.textContent = `Mode: ${modeLabel(currentMode)} (pick 3 distinct points)`;
+    return;
+  }
+
   pendingPointIds.push(pointId);
   const need = pointNeeds(currentMode);
   if (pendingPointIds.length < need) {
     statusEl.textContent = `Mode: ${modeLabel(currentMode)} (${pendingPointIds.length}/${need})`;
+    renderCurrentDoc(false);
     return;
   }
 
@@ -1060,6 +1294,7 @@ function addPointInput(pointId, skipMutation = false) {
         arcCount: isRightAngle ? 1 : pendingAngleArcCount,
         style,
       });
+      store.clearSelection();
     }
   };
 
@@ -1073,6 +1308,7 @@ function addPointInput(pointId, skipMutation = false) {
   pendingAngleIsRight = false;
   boardController.clearPreview();
   updateModeUi();
+  renderCurrentDoc(false);
 }
 
 function handleBoardClick(coords, evt) {
@@ -1093,10 +1329,12 @@ function handleBoardClick(coords, evt) {
   const snappedCoords = getPointInputCoords(coords, evt);
 
   if (currentMode === ToolMode.POINT) {
-    const intersectionSnap = findIntersectionSnapPoint(snappedCoords);
+    const pointSnap = findPreferredPointSnap(snappedCoords);
     runMutation("create-point", () => {
-      if (intersectionSnap) {
-        maybeCreateIntersectionPoint(intersectionSnap);
+      if (pointSnap?.sourceObjectIds) {
+        maybeCreateIntersectionPoint(pointSnap);
+      } else if (pointSnap?.sourceObjectId) {
+        maybeCreateAttachedPoint(pointSnap);
       } else {
         maybeCreatePoint(snappedCoords);
       }
@@ -1104,9 +1342,27 @@ function handleBoardClick(coords, evt) {
     return;
   }
 
+  if (currentMode === ToolMode.ANGLE) {
+    statusEl.textContent = `Mode: ${modeLabel(currentMode)} (select existing points only)`;
+    return;
+  }
+
   if (pointNeeds(currentMode) > 0) {
+    const nearbyPoint = findNearbyVisiblePoint(snappedCoords);
+    if (nearbyPoint) {
+      addPointInput(nearbyPoint.id);
+      return;
+    }
     runMutation("create-inline-point", () => {
-      const ptId = maybeCreatePoint(snappedCoords);
+      const pointSnap = findPreferredPointSnap(snappedCoords);
+      let ptId;
+      if (pointSnap?.sourceObjectIds) {
+        ptId = maybeCreateIntersectionPoint(pointSnap);
+      } else if (pointSnap?.sourceObjectId) {
+        ptId = maybeCreateAttachedPoint(pointSnap);
+      } else {
+        ptId = maybeCreatePoint(snappedCoords);
+      }
       addPointInput(ptId, true);
     });
   }
@@ -1295,6 +1551,9 @@ function handleBoardMove(coords, evt) {
   if (updateCirclePreview(adjusted)) {
     return;
   }
+  if (updateAnglePreview(adjusted)) {
+    return;
+  }
   updateTrianglePreview(adjusted);
 }
 
@@ -1469,10 +1728,13 @@ function handleObjectMove(id, type, pos, options = {}) {
   if (type !== "point" && type !== "label") {
     return;
   }
-  const adjustedPos = type === "point" ? maybeAxisLockDraggedPoint(id, pos, options) : pos;
   const obj = getObjectById(id);
   if (!obj) {
     return;
+  }
+  let adjustedPos = type === "point" ? maybeAxisLockDraggedPoint(id, pos, options) : pos;
+  if (type === "point") {
+    adjustedPos = applyPointConstraintToDraggedPosition(obj, adjustedPos).pos;
   }
   if (Math.abs((obj.x ?? 0) - adjustedPos.x) < 0.0001 && Math.abs((obj.y ?? 0) - adjustedPos.y) < 0.0001) {
     if (!transient) {
@@ -1531,6 +1793,10 @@ function removeWithDependencies(selectedSet) {
         changed = true;
       }
       if (obj.constraint?.kind === "intersection" && obj.constraint.sourceObjectIds?.some((srcId) => selectedSet.has(srcId))) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
+      if (obj.constraint?.kind === "onObject" && selectedSet.has(obj.constraint.sourceObjectId)) {
         selectedSet.add(obj.id);
         changed = true;
       }
@@ -1620,7 +1886,12 @@ function buildPointMap() {
       ? boardController.createSupportPoint(obj.x, obj.y)
       : boardController.createPoint(obj.id, obj.x, obj.y, {
           ...obj.style,
-          fixed: obj.constraint?.kind === "intersection" || obj.style?.fixed,
+          size: obj.constraint ? 4 : obj.style?.size,
+          layer: obj.constraint ? 10 : obj.style?.layer,
+          fixed:
+            currentMode !== ToolMode.SELECT ||
+            obj.constraint?.kind === "intersection" ||
+            obj.style?.fixed,
         });
     map.set(obj.id, pt);
   }
@@ -1769,6 +2040,11 @@ function renderCurrentDoc(applySelection = true) {
 
   if (applySelection) {
     for (const id of store.selectedIds()) {
+      boardController.applyVisualState(id, true);
+    }
+  }
+  if (pointNeeds(currentMode) > 0 && pendingPointIds.length) {
+    for (const id of pendingPointIds) {
       boardController.applyVisualState(id, true);
     }
   }
@@ -2575,7 +2851,7 @@ async function downloadPng() {
 function withExportIntersectionPointBlack(fn) {
   const changedPoints = [];
   for (const obj of store.doc.objects) {
-    if (obj.type !== "point" || obj.constraint?.kind !== "intersection") {
+    if (obj.type !== "point" || !obj.constraint) {
       continue;
     }
     const style = obj.style || (obj.style = {});

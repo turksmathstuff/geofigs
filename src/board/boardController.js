@@ -72,6 +72,26 @@ export class BoardController {
     this.board.update();
   }
 
+  disablePreviewHitTesting(elements) {
+    for (const el of elements) {
+      if (!el) {
+        continue;
+      }
+      const nodes = [
+        el.rendNode,
+        el.rendNodeStroke,
+        el.rendNodeFill,
+        el.rendNodeTriangleStart,
+        el.rendNodeTriangleEnd,
+      ];
+      for (const node of nodes) {
+        if (node?.style) {
+          node.style.pointerEvents = "none";
+        }
+      }
+    }
+  }
+
   showPreviewTriangle(p1, p2, p3) {
     this.clearPreview();
     const attrs = {
@@ -88,6 +108,7 @@ export class BoardController {
     const s2 = this.board.create("segment", [b, c], attrs);
     const s3 = this.board.create("segment", [c, a], attrs);
     this.previewElements = [s1, s2, s3, a, b, c];
+    this.disablePreviewHitTesting(this.previewElements);
     this.board.update();
   }
 
@@ -109,6 +130,7 @@ export class BoardController {
       const rayEnd = this.createRayEndpointPoint(a, b, p2.rayExtension);
       line = this.board.create("segment", [a, rayEnd], { ...attrs, lastArrow: true });
       this.previewElements = [line, a, b, rayEnd];
+      this.disablePreviewHitTesting(this.previewElements);
       this.board.update();
       return;
     } else {
@@ -116,10 +138,12 @@ export class BoardController {
       const lineEnd = this.createLineEndpointPoint(a, b, p2.lineExtensionEnd, "end");
       line = this.board.create("segment", [lineStart, lineEnd], { ...attrs, firstArrow: true, lastArrow: true });
       this.previewElements = [line, a, b, lineStart, lineEnd];
+      this.disablePreviewHitTesting(this.previewElements);
       this.board.update();
       return;
     }
     this.previewElements = [line, a, b];
+    this.disablePreviewHitTesting(this.previewElements);
     this.board.update();
   }
 
@@ -137,6 +161,50 @@ export class BoardController {
     const t = this.board.create("point", [through.x, through.y], { visible: false, fixed: true, name: "" });
     const circle = this.board.create("circle", [c, t], attrs);
     this.previewElements = [circle, c, t];
+    this.disablePreviewHitTesting(this.previewElements);
+    this.board.update();
+  }
+
+  showPreviewAngle(p1, vertex, p3, options = {}) {
+    this.clearPreview();
+    const right = !!options.right;
+    const arcCount = Math.max(1, Number(options.arcCount || 1));
+    const pointA = this.board.create("point", [p1.x, p1.y], { visible: false, fixed: true, name: "" });
+    const pointV = this.board.create("point", [vertex.x, vertex.y], { visible: false, fixed: true, name: "" });
+    const pointB = this.board.create("point", [p3.x, p3.y], { visible: false, fixed: true, name: "" });
+    const preview = [pointA, pointV, pointB];
+    if (right) {
+      const ang = this.board.create("angle", [pointA, pointV, pointB], {
+        radius: 1,
+        strokeColor: "#9ca3af",
+        strokeWidth: 2,
+        dash: 2,
+        fillOpacity: 0,
+        orthoType: "square",
+        withLabel: false,
+        name: "",
+        fixed: true,
+        highlight: false,
+      });
+      preview.push(ang);
+    } else {
+      for (let i = 0; i < arcCount; i += 1) {
+        const ang = this.board.create("nonreflexangle", [pointA, pointV, pointB], {
+          radius: 1 + i * 0.35,
+          strokeColor: "#9ca3af",
+          strokeWidth: 2,
+          dash: 2,
+          fillOpacity: 0,
+          withLabel: false,
+          name: "",
+          fixed: true,
+          highlight: false,
+        });
+        preview.push(ang);
+      }
+    }
+    this.previewElements = preview;
+    this.disablePreviewHitTesting(this.previewElements);
     this.board.update();
   }
 
@@ -459,21 +527,33 @@ export class BoardController {
     if (!hit) {
       return;
     }
-    const attrs = selected
-      ? { strokeColor: "#0f766e", strokeWidth: 3, fillColor: "#0f766e", fillOpacity: 0.2 }
-      : { strokeColor: undefined, strokeWidth: undefined, fillColor: undefined, fillOpacity: undefined };
+    let attrs;
+    if (selected && hit.type === "point") {
+      attrs = {
+        strokeColor: "#0f766e",
+        fillColor: "#0f766e",
+        fillOpacity: 0.18,
+        strokeWidth: 3,
+        size: 7,
+      };
+    } else if (selected) {
+      attrs = { strokeColor: "#0f766e", strokeWidth: 3, fillColor: "#0f766e", fillOpacity: 0.2 };
+    } else {
+      attrs = { strokeColor: undefined, strokeWidth: undefined, fillColor: undefined, fillOpacity: undefined, size: undefined };
+    }
     hit.el.setAttribute(attrs);
     this.board.update();
   }
 
   createPoint(id, x, y, style = {}) {
     const el = this.board.create("point", [x, y], {
-      size: 3,
+      size: style.size || 3,
       strokeColor: style.strokeColor || "#111",
       fillColor: style.strokeColor || "#111",
       name: "",
       withLabel: false,
       fixed: !!style.fixed,
+      layer: style.layer ?? 9,
     });
     return this.registerElement(id, "point", el);
   }
