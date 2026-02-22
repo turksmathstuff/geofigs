@@ -3118,7 +3118,6 @@ function wireUi() {
   document.getElementById("makeCongruentTriangle").addEventListener("click", createCongruentTriangleCopy);
   document.getElementById("makeSimilarTriangle").addEventListener("click", createSimilarTriangleCopy);
   document.getElementById("transformSelectedTriangle").addEventListener("click", transformSelectedTriangle);
-  document.getElementById("closeTransformPanel").addEventListener("click", cancelTransformSession);
   document.getElementById("cancelTransformTriangle").addEventListener("click", cancelTransformSession);
   document.getElementById("applyTransformTriangle").addEventListener("click", () => commitTransformSession("transform-selected-triangle"));
   document.getElementById("reflectHorizontalTriangle").addEventListener("click", () => {
