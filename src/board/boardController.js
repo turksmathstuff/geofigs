@@ -399,6 +399,7 @@ export class BoardController {
     let pointerDownScreenPos = null;
     let pointerDownUserPos = null;
     let dragStartLinearPoints = null;
+    let dragStartCirclePoints = null;
     el.on("down", (evt) => {
       let consume = true;
       deferredClick = false;
@@ -417,6 +418,14 @@ export class BoardController {
         };
       } else {
         dragStartLinearPoints = null;
+      }
+      if (type === "circle" && meta.centerPoint && meta.throughPoint) {
+        dragStartCirclePoints = {
+          p1: { x: meta.centerPoint.X(), y: meta.centerPoint.Y() },
+          p2: { x: meta.throughPoint.X(), y: meta.throughPoint.Y() },
+        };
+      } else {
+        dragStartCirclePoints = null;
       }
       if (this.onObjectClick) {
         const result = this.onObjectClick(logicalId, type, evt);
@@ -459,6 +468,30 @@ export class BoardController {
       }
       this.board.update();
     });
+    el.on("drag", (evt) => {
+      if (type !== "circle" || !meta.centerPoint || !meta.throughPoint || !pointerDownUserPos || !dragStartCirclePoints) {
+        return;
+      }
+      const current = this.getUserCoords(evt);
+      let dx = current.x - pointerDownUserPos.x;
+      let dy = current.y - pointerDownUserPos.y;
+      if (evt?.shiftKey) {
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          dy = 0;
+        } else {
+          dx = 0;
+        }
+      }
+      meta.centerPoint.setPosition(JXG.COORDS_BY_USER, [dragStartCirclePoints.p1.x + dx, dragStartCirclePoints.p1.y + dy]);
+      meta.throughPoint.setPosition(JXG.COORDS_BY_USER, [dragStartCirclePoints.p2.x + dx, dragStartCirclePoints.p2.y + dy]);
+      if (this.onObjectMove) {
+        this.onObjectMove(logicalId, type, {
+          p1: { x: meta.centerPoint.X(), y: meta.centerPoint.Y() },
+          p2: { x: meta.throughPoint.X(), y: meta.throughPoint.Y() },
+        }, { transient: true, shiftKey: !!evt?.shiftKey });
+      }
+      this.board.update();
+    });
     if (type === "point" || type === "label") {
       el.on("drag", (evt) => {
         if (!this.onObjectMove) {
@@ -496,12 +529,18 @@ export class BoardController {
           p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
           p2: { x: meta.basePoint2.X(), y: meta.basePoint2.Y() },
         }, { transient: false });
+      } else if (type === "circle" && meta.centerPoint && meta.throughPoint) {
+        this.onObjectMove(logicalId, type, {
+          p1: { x: meta.centerPoint.X(), y: meta.centerPoint.Y() },
+          p2: { x: meta.throughPoint.X(), y: meta.throughPoint.Y() },
+        }, { transient: false, shiftKey: !!evt?.shiftKey });
       }
       deferredClick = false;
       pointerDownObjPos = null;
       pointerDownScreenPos = null;
       pointerDownUserPos = null;
       dragStartLinearPoints = null;
+      dragStartCirclePoints = null;
     });
     return el;
   }
@@ -632,7 +671,7 @@ export class BoardController {
       dash: style.dash || 0,
       fillOpacity: 0,
     });
-    return this.registerElement(id, "circle", el);
+    return this.registerElement(id, "circle", el, { centerPoint: center, throughPoint: through });
   }
 
   normalizeReferenceLine(sourceLine) {
