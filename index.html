@@ -30,6 +30,9 @@
             <button data-mode="segment">Segment</button>
             <button data-mode="line">Line</button>
             <button data-mode="ray">Ray</button>
+            <button id="makeParallel">Parallel</button>
+            <button id="makePerpendicular">Perpendicular</button>
+            <button data-mode="circle">Circle</button>
             <div class="triangle-menu">
               <button id="triangleMenuBtn" type="button">Triangle ▾</button>
               <div id="triangleMenuPanel" class="triangle-menu-panel" hidden>
@@ -38,13 +41,14 @@
                 <button type="button" data-triangle-mode="isosceles">Isosceles Triangle</button>
               </div>
             </div>
-            <button data-mode="circle">Circle</button>
-            <button id="makeParallel">Parallel</button>
-            <button id="makePerpendicular">Perpendicular</button>
-            <button id="makeCongruentTriangle">Congruent △</button>
-            <button id="makeSimilarTriangle">Similar △</button>
-            <button id="moveSelectedTriangle">Move △</button>
-            <button id="rotateSelectedTriangle">Rotate △</button>
+            <details class="annotate-group">
+              <summary>Congruent/Similar Triangles</summary>
+              <div class="annotate-subgrid">
+                <button id="makeCongruentTriangle">Congruent △</button>
+                <button id="makeSimilarTriangle">Similar △</button>
+                <button id="transformSelectedTriangle">Rotate/Slide Triangle</button>
+              </div>
+            </details>
           </div>
         </section>
 
@@ -154,38 +158,34 @@
         <div id="drawingHint" class="drawing-hint" hidden>Select points counterclockwise.</div>
         <div id="transformPanel" class="transform-panel" hidden>
           <div class="transform-header">
-            <strong id="transformTitle">Transform Triangle</strong>
+            <strong id="transformTitle">Rotate/Slide Triangle</strong>
             <button id="closeTransformPanel" type="button" class="mini-btn">Close</button>
           </div>
 
-          <div id="movePanel" hidden>
-            <div class="transform-grid">
-              <label for="moveXSlider">Move X</label>
-              <input id="moveXSlider" type="range" min="-8" max="8" step="0.1" value="0" />
-              <span id="moveXValue">0.0</span>
-
-              <label for="moveYSlider">Move Y</label>
-              <input id="moveYSlider" type="range" min="-8" max="8" step="0.1" value="0" />
-              <span id="moveYValue">0.0</span>
+          <div class="compass-wrap">
+            <div id="rotationCompass" class="rotation-compass">
+              <div id="compassArm" class="compass-arm"></div>
+              <div class="compass-center"></div>
             </div>
-            <div class="transform-actions">
-              <button id="applyMoveTriangle" type="button">Apply Move</button>
-              <button id="cancelMoveTriangle" type="button">Cancel</button>
-            </div>
+            <div class="rotation-readout"><span id="rotateValue">0°</span></div>
           </div>
 
-          <div id="rotatePanel" hidden>
-            <div class="compass-wrap">
-              <div id="rotationCompass" class="rotation-compass">
-                <div id="compassArm" class="compass-arm"></div>
-                <div class="compass-center"></div>
-              </div>
-              <div class="rotation-readout"><span id="rotateValue">0°</span></div>
-            </div>
-            <div class="transform-actions">
-              <button id="applyRotateTriangle" type="button">Apply Rotation</button>
-              <button id="cancelRotateTriangle" type="button">Cancel</button>
-            </div>
+          <div class="transform-grid">
+            <label for="moveXSlider">Move X</label>
+            <input id="moveXSlider" type="range" min="-8" max="8" step="0.1" value="0" />
+            <span id="moveXValue">0.0</span>
+
+            <label for="moveYSlider">Move Y</label>
+            <input id="moveYSlider" type="range" min="-8" max="8" step="0.1" value="0" />
+            <span id="moveYValue">0.0</span>
+          </div>
+          <div class="transform-actions">
+            <button id="reflectHorizontalTriangle" type="button">Reflect Horizontal</button>
+            <button id="reflectVerticalTriangle" type="button">Reflect Vertical</button>
+          </div>
+          <div class="transform-actions">
+            <button id="applyTransformTriangle" type="button">Apply Transform</button>
+            <button id="cancelTransformTriangle" type="button">Cancel</button>
           </div>
         </div>
         <div id="jxgbox" class="jxgbox" aria-label="Geometry board"></div>

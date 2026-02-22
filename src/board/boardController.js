@@ -173,9 +173,8 @@ export class BoardController {
       size: 3,
       strokeColor: style.strokeColor || "#111",
       fillColor: style.strokeColor || "#111",
-      name: style.name || "",
-      withLabel: !!style.name,
-      label: { offset: [6, -6], fontSize: style.fontSize || 16 },
+      name: "",
+      withLabel: false,
       fixed: false,
     });
     return this.registerElement(id, "point", el);
@@ -336,10 +335,11 @@ export class BoardController {
 
   createText(id, x, y, text, style = {}) {
     const el = this.board.create("text", [x, y, text], {
-      fontSize: style.fontSize || 16,
+      fontSize: style.fontSize || 20,
       color: style.strokeColor || "#111",
       fixed: false,
       draggable: true,
+      display: "internal",
     });
     return this.registerElement(id, "label", el);
   }

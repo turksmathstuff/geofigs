@@ -14,7 +14,7 @@ export function createEmptyFigureDoc() {
       defaultStrokeColor: "#111111",
       defaultStrokeWidth: 2,
       defaultDash: 0,
-      fontSize: 16,
+      fontSize: 20,
       fontFamily: "Segoe UI, Arial, sans-serif",
       examMode: false,
     },
