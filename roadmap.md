@@ -90,6 +90,7 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 - [ ] Add a `Midpoint` construction tool (select two points or a segment; create midpoint and preserve dependency).
 - [ ] Make labels attached to `parallel` / `perpendicular` objects follow line orientation changes (not just the through-point anchor).
 - [ ] Preserve/rotate attached label `follow.offsetX/offsetY` during triangle rotate/slide transforms so labels move as a rigid transform with the figure.
+- [ ] Incrementally refactor `src/app.js` into feature/domain modules (labels, angles, export actions, UI wiring, triangle transform) without changing behavior.
 
 ## Teacher Priority Features (Next)
 1. `Midpoint` tool (two points or segment -> dependent midpoint).
