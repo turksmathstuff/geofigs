@@ -85,3 +85,7 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 1. Add figure preset buttons and generation logic.
 2. Add lightweight in-app export validation checklist hints.
 3. Complete deployment configuration and README usage guide.
+
+## TODO (Label Follow Edge Cases)
+- [ ] Make labels attached to `parallel` / `perpendicular` objects follow line orientation changes (not just the through-point anchor).
+- [ ] Preserve/rotate attached label `follow.offsetX/offsetY` during triangle rotate/slide transforms so labels move as a rigid transform with the figure.
