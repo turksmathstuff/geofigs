@@ -80,14 +80,28 @@ function computeTightBounds(svgMarkup, fallback) {
   return { x: minX, y: minY, width, height };
 }
 
+function padBounds(bounds, padding = 0) {
+  const pad = Math.max(0, Number(padding) || 0);
+  if (!pad) {
+    return bounds;
+  }
+  return {
+    x: bounds.x - pad,
+    y: bounds.y - pad,
+    width: Math.max(1, bounds.width + pad * 2),
+    height: Math.max(1, bounds.height + pad * 2),
+  };
+}
+
 export function exportSVG(svgString, options = {}) {
   const parser = new DOMParser();
   const xml = parser.parseFromString(svgString, "image/svg+xml");
   const svg = xml.documentElement;
   const fallbackBounds = getFallbackBounds(svg, options);
-  const bounds = options.tight
+  const baseBounds = options.tight
     ? computeTightBounds(new XMLSerializer().serializeToString(svg), fallbackBounds)
     : fallbackBounds;
+  const bounds = options.tight ? padBounds(baseBounds, options.tightPadding ?? 8) : baseBounds;
 
   svg.setAttribute("viewBox", `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
   svg.setAttribute("width", String(Math.ceil(bounds.width)));
