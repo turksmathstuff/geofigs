@@ -44,6 +44,7 @@ Do not open `index.html` directly with `file://`.
 - Stroke color
 - Stroke width (with Default reset)
 - Solid / dashed
+- Ray extension length control (`Ray Ext.` slider)
 - Exam mode toggle
 
 ### Export / persistence
@@ -51,13 +52,20 @@ Do not open `index.html` directly with `file://`.
 - Open `.geojson`
 - Download SVG (tight export supported)
 - Download PNG (scale 1x/2x/3x)
+- Hide Selected / Show All (useful for export cleanup)
 
 ## Interaction notes
 - Select mode supports Shift multi-select.
 - Drag on blank canvas in Select mode for marquee box selection.
+- Grab-and-drag shows live motion for draggable objects (points, labels, lines/rays, etc.).
 - Hold Shift while placing segment/line/ray/triangle points to constrain horizontal/vertical movement.
 - Point tool can snap to intersections of existing linear objects when clicking near the intersection.
 - Labels are draggable (including point-name labels).
+- Circle tool shows a dashed preview circle after selecting the center point.
+- Ray tool renders as a finite visible ray with an arrowhead; drag the ray itself to move both defining points.
+- Line tool renders with arrowheads on both ends and a finite visible span (geometry behavior remains line-like).
+- Drag arrow tips on rays/lines to resize how much of the object is visible.
+- Parallel/perpendicular lines are solid by default (can be changed with the Solid/Dashed style control).
 - Triangle transform panel includes:
   - Compass-style rotation drag
   - X/Y slide sliders

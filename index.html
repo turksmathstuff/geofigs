@@ -105,6 +105,11 @@
               <option value="dashed">Dashed</option>
             </select>
           </div>
+          <div class="form-row">
+            <label for="rayExtension">Ray Ext.</label>
+            <input id="rayExtension" type="range" min="1" max="16" step="0.5" value="4" />
+            <span id="rayExtensionValue">4.0</span>
+          </div>
           <div class="form-row checkbox-row">
             <label for="examMode">Exam Mode</label>
             <input id="examMode" type="checkbox" />
@@ -148,6 +153,8 @@
           <div class="grid-buttons">
             <button id="undoBtn">Undo</button>
             <button id="redoBtn">Redo</button>
+            <button id="hideSelected">Hide Selected</button>
+            <button id="showAll">Show All</button>
             <button id="deleteSelected">Delete Selected</button>
             <button id="clearBoard">Clear Board</button>
           </div>

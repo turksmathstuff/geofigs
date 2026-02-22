@@ -106,21 +106,248 @@ export class BoardController {
     if (kind === "segment") {
       line = this.board.create("segment", [a, b], attrs);
     } else if (kind === "ray") {
-      line = this.board.create("line", [a, b], { ...attrs, straightFirst: false, straightLast: true });
+      const rayEnd = this.createRayEndpointPoint(a, b, p2.rayExtension);
+      line = this.board.create("segment", [a, rayEnd], { ...attrs, lastArrow: true });
+      this.previewElements = [line, a, b, rayEnd];
+      this.board.update();
+      return;
     } else {
-      line = this.board.create("line", [a, b], { ...attrs, straightFirst: true, straightLast: true });
+      const lineStart = this.createLineEndpointPoint(a, b, p2.lineExtensionStart, "start");
+      const lineEnd = this.createLineEndpointPoint(a, b, p2.lineExtensionEnd, "end");
+      line = this.board.create("segment", [lineStart, lineEnd], { ...attrs, firstArrow: true, lastArrow: true });
+      this.previewElements = [line, a, b, lineStart, lineEnd];
+      this.board.update();
+      return;
     }
     this.previewElements = [line, a, b];
     this.board.update();
   }
 
-  registerElement(logicalId, type, el) {
+  showPreviewCircle(center, through) {
+    this.clearPreview();
+    const attrs = {
+      strokeColor: "#9ca3af",
+      strokeWidth: 2,
+      dash: 2,
+      fixed: true,
+      highlight: false,
+      fillOpacity: 0,
+    };
+    const c = this.board.create("point", [center.x, center.y], { visible: false, fixed: true, name: "" });
+    const t = this.board.create("point", [through.x, through.y], { visible: false, fixed: true, name: "" });
+    const circle = this.board.create("circle", [c, t], attrs);
+    this.previewElements = [circle, c, t];
+    this.board.update();
+  }
+
+  createRayEndpointPoint(p1, p2, extension = 4) {
+    const getExt = () => Math.max(0, Number(typeof extension === "function" ? extension() : extension ?? 4));
+    return this.board.create("point", [
+      () => {
+        const dx = p2.X() - p1.X();
+        const dy = p2.Y() - p1.Y();
+        const len = Math.hypot(dx, dy);
+        const ext = getExt();
+        if (len < 1e-9) {
+          return p2.X();
+        }
+        return p2.X() + (dx / len) * ext;
+      },
+      () => {
+        const dx = p2.X() - p1.X();
+        const dy = p2.Y() - p1.Y();
+        const len = Math.hypot(dx, dy);
+        const ext = getExt();
+        if (len < 1e-9) {
+          return p2.Y();
+        }
+        return p2.Y() + (dy / len) * ext;
+      },
+    ], {
+      visible: false,
+      fixed: true,
+      name: "",
+    });
+  }
+
+  createLineEndpointPoint(p1, p2, extension = 4, side = "end") {
+    const getExt = () => Math.max(0, Number(typeof extension === "function" ? extension() : extension ?? 4));
+    const sign = side === "start" ? -1 : 1;
+    const anchor = side === "start" ? p1 : p2;
+    return this.board.create("point", [
+      () => {
+        const dx = p2.X() - p1.X();
+        const dy = p2.Y() - p1.Y();
+        const len = Math.hypot(dx, dy);
+        const ext = getExt();
+        if (len < 1e-9) {
+          return anchor.X();
+        }
+        return anchor.X() + sign * (dx / len) * ext;
+      },
+      () => {
+        const dx = p2.X() - p1.X();
+        const dy = p2.Y() - p1.Y();
+        const len = Math.hypot(dx, dy);
+        const ext = getExt();
+        if (len < 1e-9) {
+          return anchor.Y();
+        }
+        return anchor.Y() + sign * (dy / len) * ext;
+      },
+    ], {
+      visible: false,
+      fixed: true,
+      name: "",
+    });
+  }
+
+  createResizeHandlePoint(x, y) {
+    return this.board.create("point", [x, y], {
+      size: 5,
+      visible: true,
+      strokeOpacity: 0,
+      fillOpacity: 0,
+      highlightStrokeOpacity: 0,
+      highlightFillOpacity: 0,
+      name: "",
+      withLabel: false,
+      fixed: false,
+    });
+  }
+
+  linearEndpointCoords(baseP1, baseP2, extension, side = "end") {
+    const ax = side === "start" ? baseP1.X() : baseP2.X();
+    const ay = side === "start" ? baseP1.Y() : baseP2.Y();
+    const dx = baseP2.X() - baseP1.X();
+    const dy = baseP2.Y() - baseP1.Y();
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) {
+      return { x: ax, y: ay };
+    }
+    const sign = side === "start" ? -1 : 1;
+    return {
+      x: ax + sign * (dx / len) * extension,
+      y: ay + sign * (dy / len) * extension,
+    };
+  }
+
+  syncLinearExtentHandles(type, baseP1, baseP2, meta) {
+    if (!meta?.resizeHandles?.length) {
+      return;
+    }
+    const [startHandle, endHandle] = meta.resizeHandles;
+    if (type === "line" && startHandle) {
+      const c = this.linearEndpointCoords(baseP1, baseP2, meta.lineExtensionStart, "start");
+      startHandle.setPosition(JXG.COORDS_BY_USER, [c.x, c.y]);
+    }
+    if (endHandle) {
+      const c = this.linearEndpointCoords(baseP1, baseP2, type === "ray" ? meta.rayExtension : meta.lineExtensionEnd, "end");
+      endHandle.setPosition(JXG.COORDS_BY_USER, [c.x, c.y]);
+    }
+  }
+
+  attachLinearExtentHandles(logicalId, type, baseP1, baseP2, meta) {
+    const startHandle =
+      type === "line"
+        ? (() => {
+            const c = this.linearEndpointCoords(baseP1, baseP2, meta.lineExtensionStart, "start");
+            return this.createResizeHandlePoint(c.x, c.y);
+          })()
+        : null;
+    const endCoords = this.linearEndpointCoords(baseP1, baseP2, type === "ray" ? meta.rayExtension : meta.lineExtensionEnd, "end");
+    const endHandle = this.createResizeHandlePoint(endCoords.x, endCoords.y);
+
+    const addHandleBehavior = (handle, side) => {
+      if (!handle) return;
+      handle.visProp.highlight = false;
+      handle.on("down", (evt) => {
+        this.suppressNextBoardDown = true;
+        evt.stopPropagation();
+      });
+      handle.on("drag", (evt) => {
+        const current = this.getUserCoords(evt);
+        const ax = side === "start" ? baseP1.X() : baseP2.X();
+        const ay = side === "start" ? baseP1.Y() : baseP2.Y();
+        const vx = baseP2.X() - baseP1.X();
+        const vy = baseP2.Y() - baseP1.Y();
+        const len = Math.hypot(vx, vy);
+        if (len < 1e-9) {
+          return;
+        }
+        const ux = vx / len;
+        const uy = vy / len;
+        const wx = current.x - ax;
+        const wy = current.y - ay;
+        const signed = wx * ux + wy * uy;
+        const next = Math.max(0, side === "start" ? -signed : signed);
+        if (type === "ray") {
+          meta.rayExtension = next;
+        } else if (side === "start") {
+          meta.lineExtensionStart = next;
+        } else {
+          meta.lineExtensionEnd = next;
+        }
+        this.syncLinearExtentHandles(type, baseP1, baseP2, meta);
+        this.board.update();
+      });
+      handle.on("up", (evt) => {
+        this.suppressNextBoardDown = true;
+        evt.stopPropagation();
+        if (!this.onObjectMove) {
+          return;
+        }
+        if (type === "ray") {
+          this.onObjectMove(logicalId, "ray", { rayExtension: meta.rayExtension });
+        } else {
+          this.onObjectMove(logicalId, "line", {
+            lineExtensionStart: meta.lineExtensionStart,
+            lineExtensionEnd: meta.lineExtensionEnd,
+          });
+        }
+      });
+    };
+
+    addHandleBehavior(startHandle, "start");
+    addHandleBehavior(endHandle, "end");
+    meta.resizeHandles = [startHandle, endHandle].filter(Boolean);
+  }
+
+  registerElement(logicalId, type, el, meta = {}) {
     el.visProp.highlight = false;
-    this.elements.set(logicalId, { type, el });
+    this.elements.set(logicalId, { type, el, meta });
+    let deferredClick = false;
+    let pointerDownObjPos = null;
+    let pointerDownScreenPos = null;
+    let pointerDownUserPos = null;
+    let dragStartLinearPoints = null;
     el.on("down", (evt) => {
       let consume = true;
+      deferredClick = false;
+      pointerDownObjPos =
+        type === "point" || type === "label"
+          ? { x: Number(el.X?.()), y: Number(el.Y?.()) }
+          : null;
+      pointerDownScreenPos = Array.isArray(JXG.getPosition?.(evt, 0))
+        ? JXG.getPosition(evt, 0)
+        : null;
+      pointerDownUserPos = this.getUserCoords(evt);
+      if ((type === "ray" || type === "line") && meta.basePoint1 && meta.basePoint2) {
+        dragStartLinearPoints = {
+          p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
+          p2: { x: meta.basePoint2.X(), y: meta.basePoint2.Y() },
+        };
+      } else {
+        dragStartLinearPoints = null;
+      }
       if (this.onObjectClick) {
-        consume = this.onObjectClick(logicalId, type, evt) !== false;
+        const result = this.onObjectClick(logicalId, type, evt);
+        if (result && typeof result === "object" && result.deferUntilUp) {
+          deferredClick = true;
+          consume = true;
+        } else {
+          consume = result !== false;
+        }
       }
       if (consume) {
         this.suppressNextBoardDown = true;
@@ -129,13 +356,53 @@ export class BoardController {
         this.suppressNextBoardDown = false;
       }
     });
-    el.on("up", () => {
+    el.on("drag", (evt) => {
+      if (!["ray", "line"].includes(type) || !meta.basePoint1 || !meta.basePoint2 || !pointerDownUserPos || !dragStartLinearPoints) {
+        return;
+      }
+      const current = this.getUserCoords(evt);
+      const dx = current.x - pointerDownUserPos.x;
+      const dy = current.y - pointerDownUserPos.y;
+      meta.basePoint1.setPosition(JXG.COORDS_BY_USER, [dragStartLinearPoints.p1.x + dx, dragStartLinearPoints.p1.y + dy]);
+      meta.basePoint2.setPosition(JXG.COORDS_BY_USER, [dragStartLinearPoints.p2.x + dx, dragStartLinearPoints.p2.y + dy]);
+      this.syncLinearExtentHandles(type, meta.basePoint1, meta.basePoint2, meta);
+      this.board.update();
+    });
+    el.on("up", (evt) => {
+      if (deferredClick && this.onObjectClick) {
+        let moved = false;
+        const pointerUpScreenPos = Array.isArray(JXG.getPosition?.(evt, 0))
+          ? JXG.getPosition(evt, 0)
+          : null;
+        if (pointerDownScreenPos && pointerUpScreenPos) {
+          const dx = pointerUpScreenPos[0] - pointerDownScreenPos[0];
+          const dy = pointerUpScreenPos[1] - pointerDownScreenPos[1];
+          moved = Math.hypot(dx, dy) > 4;
+        } else if (pointerDownObjPos && (type === "point" || type === "label")) {
+          moved =
+            Math.abs(pointerDownObjPos.x - Number(el.X?.())) > 1e-4 ||
+            Math.abs(pointerDownObjPos.y - Number(el.Y?.())) > 1e-4;
+        }
+        if (!moved) {
+          this.onObjectClick(logicalId, type, evt);
+        }
+      }
       if (!this.onObjectMove) {
         return;
       }
       if (type === "point" || type === "label") {
         this.onObjectMove(logicalId, type, { x: el.X(), y: el.Y() });
+      } else if ((type === "ray" || type === "line") && meta.basePoint1 && meta.basePoint2) {
+        this.onObjectMove(logicalId, type, {
+          p1: { x: meta.basePoint1.X(), y: meta.basePoint1.Y() },
+          p2: { x: meta.basePoint2.X(), y: meta.basePoint2.Y() },
+        });
       }
+      deferredClick = false;
+      pointerDownObjPos = null;
+      pointerDownScreenPos = null;
+      pointerDownUserPos = null;
+      dragStartLinearPoints = null;
     });
     return el;
   }
@@ -180,6 +447,16 @@ export class BoardController {
     return this.registerElement(id, "point", el);
   }
 
+  createSupportPoint(x, y) {
+    return this.board.create("point", [x, y], {
+      visible: false,
+      fixed: true,
+      name: "",
+      withLabel: false,
+      highlight: false,
+    });
+  }
+
   createSegment(id, p1, p2, style = {}) {
     const el = this.board.create("segment", [p1, p2], {
       strokeColor: style.strokeColor || "#111",
@@ -190,6 +467,43 @@ export class BoardController {
   }
 
   createLine(id, p1, p2, style = {}) {
+    if (style.lineType === "ray") {
+      const meta = {
+        basePoint1: p1,
+        basePoint2: p2,
+        rayExtension: Math.max(0, Number(style.rayExtension ?? 4)),
+      };
+      const rayEnd = this.createRayEndpointPoint(p1, p2, () => meta.rayExtension);
+      const el = this.board.create("segment", [p1, rayEnd], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: style.dash || 0,
+        lastArrow: true,
+      });
+      const primary = this.registerElement(id, "ray", el, meta);
+      this.attachLinearExtentHandles(id, "ray", p1, p2, meta);
+      return primary;
+    }
+    if (style.lineType === "line") {
+      const meta = {
+        basePoint1: p1,
+        basePoint2: p2,
+        lineExtensionStart: Math.max(0, Number(style.lineExtensionStart ?? 4)),
+        lineExtensionEnd: Math.max(0, Number(style.lineExtensionEnd ?? 4)),
+      };
+      const lineStart = this.createLineEndpointPoint(p1, p2, () => meta.lineExtensionStart, "start");
+      const lineEnd = this.createLineEndpointPoint(p1, p2, () => meta.lineExtensionEnd, "end");
+      const el = this.board.create("segment", [lineStart, lineEnd], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: style.dash || 0,
+        firstArrow: true,
+        lastArrow: true,
+      });
+      const primary = this.registerElement(id, "line", el, meta);
+      this.attachLinearExtentHandles(id, "line", p1, p2, meta);
+      return primary;
+    }
     const el = this.board.create("line", [p1, p2], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
@@ -233,7 +547,7 @@ export class BoardController {
     const el = this.board.create("parallel", [refLine, throughPoint], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
-      dash: style.dash || 2,
+      dash: style.dash ?? 0,
     });
     return this.registerElement(id, "line", el);
   }
@@ -243,7 +557,7 @@ export class BoardController {
     const el = this.board.create("perpendicular", [refLine, throughPoint], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
-      dash: style.dash || 2,
+      dash: style.dash ?? 0,
     });
     return this.registerElement(id, "line", el);
   }
