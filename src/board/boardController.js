@@ -202,9 +202,10 @@ export class BoardController {
           preview.push(...mark.all);
         }
       } else {
-        for (let i = 0; i < arcCount; i += 1) {
+        const radii = this.nestedAngleArcRadii(1, arcCount);
+        for (let i = 0; i < radii.length; i += 1) {
           const mark = this.createArcAngleMarkParts(pointA, pointV, pointB, {
-            radius: 1 + i * 0.35,
+            radius: radii[i],
             strokeColor: "#9ca3af",
             strokeWidth: 2,
             dash: 2,
@@ -220,6 +221,17 @@ export class BoardController {
     this.previewElements = preview;
     this.disablePreviewHitTesting(this.previewElements);
     this.board.update();
+  }
+
+  nestedAngleArcRadii(baseRadius, arcCount) {
+    const count = Math.max(1, Number(arcCount || 1));
+    const outer = Math.max(0.15, Number(baseRadius || 1));
+    if (count === 1) {
+      return [outer];
+    }
+    const maxStepThatFits = Math.max(0.06, (outer - 0.18) / (count - 1));
+    const step = Math.min(0.28, maxStepThatFits);
+    return Array.from({ length: count }, (_, i) => Math.max(0.15, outer - i * step));
   }
 
   createFunctionalSupportPoint(xFn, yFn) {
@@ -1164,6 +1176,59 @@ export class BoardController {
         });
         lineSegments.push(tick);
       }
+    }
+
+    if (!lineSegments.length) {
+      return null;
+    }
+    const primary = this.registerElement(id, "congruency", lineSegments[0]);
+    for (let i = 1; i < lineSegments.length; i += 1) {
+      if (lineSegments[i]?.visProp) {
+        lineSegments[i].visProp.highlight = false;
+      }
+    }
+    this.board.update();
+    return primary;
+  }
+
+  createPointPairTickMarks(id, pointA, pointB, tickCount, style = {}) {
+    const count = Math.max(1, Number(tickCount || 1));
+    const strokeColor = style.strokeColor || "#111";
+    const strokeWidth = style.strokeWidth || 2;
+    const spacing = 0.16;
+    const halfLen = 0.22;
+    const lineSegments = [];
+
+    const dx = () => pointB.X() - pointA.X();
+    const dy = () => pointB.Y() - pointA.Y();
+    const len = () => Math.hypot(dx(), dy()) || 1;
+    const ux = () => dx() / len();
+    const uy = () => dy() / len();
+    const nx = () => -uy();
+    const ny = () => ux();
+    const cx = () => (pointA.X() + pointB.X()) / 2;
+    const cy = () => (pointA.Y() + pointB.Y()) / 2;
+
+    for (let i = 0; i < count; i += 1) {
+      const offset = (i - (count - 1) / 2) * spacing;
+      const mx = () => cx() + ux() * offset;
+      const my = () => cy() + uy() * offset;
+      const p1 = this.board.create("point", [() => mx() - nx() * halfLen, () => my() - ny() * halfLen], {
+        visible: false,
+        fixed: true,
+        name: "",
+      });
+      const p2 = this.board.create("point", [() => mx() + nx() * halfLen, () => my() + ny() * halfLen], {
+        visible: false,
+        fixed: true,
+        name: "",
+      });
+      const tick = this.board.create("segment", [p1, p2], {
+        strokeColor,
+        strokeWidth,
+        dash: 0,
+      });
+      lineSegments.push(tick);
     }
 
     if (!lineSegments.length) {

@@ -90,6 +90,8 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 - [ ] Add a `Midpoint` construction tool (select two points or a segment; create midpoint and preserve dependency).
 - [ ] Make labels attached to `parallel` / `perpendicular` objects follow line orientation changes (not just the through-point anchor).
 - [ ] Preserve/rotate attached label `follow.offsetX/offsetY` during triangle rotate/slide transforms so labels move as a rigid transform with the figure.
+- [ ] Fix point-on-line click prioritization edge case: after creating a segment using endpoints that lie on an existing line, `Segment` tool can require an extra canvas click before starting the next segment (interaction dedupe / hit-target routing cleanup).
+- [ ] Consider making side-length / angle-measure labels optionally live-track actual values, support double-click edit overrides, and restore tracking after geometry moves (or provide explicit toggle between auto/manual measure labels).
 - [ ] Incrementally refactor `src/app.js` into feature/domain modules (labels, angles, export actions, UI wiring, triangle transform) without changing behavior.
 - [ ] Consider vendoring JSXGraph locally (instead of CDN-only) to avoid school-network CDN blocking issues on GitHub Pages.
 
