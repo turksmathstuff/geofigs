@@ -41,6 +41,7 @@ let pendingRightTriangleForceIso = false;
 let marqueeState = null;
 let transformSession = null;
 let compassDragging = false;
+let perpendicularBisectorPlacement = null;
 const transientDragSnapshots = new Map();
 
 const boardController = new BoardController(
@@ -171,6 +172,7 @@ function setMode(mode) {
   if (transformSession) {
     cancelTransformSession();
   }
+  perpendicularBisectorPlacement = null;
   currentMode = mode;
   pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
@@ -276,6 +278,35 @@ function applyPointConstraintToDraggedPosition(pointObj, pos) {
     pointObj.constraint.kind === "angleBisectorRay"
   ) {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
+  }
+  if (pointObj.constraint.kind === "perpendicularBisectorEndpoint") {
+    const [id1, id2] = pointObj.constraint.sourcePointIds || [];
+    const p1 = getPointById(id1);
+    const p2 = getPointById(id2);
+    if (!p1 || !p2) {
+      return { pos, changedConstraint: false };
+    }
+    const mx = (p1.x + p2.x) / 2;
+    const my = (p1.y + p2.y) / 2;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) {
+      return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
+    }
+    const px = -dy / len;
+    const py = dx / len;
+    const vx = pos.x - mx;
+    const vy = pos.y - my;
+    const signed = vx * px + vy * py;
+    const side = signed >= 0 ? 1 : -1;
+    const halfLength = Math.max(0.2, Math.abs(signed));
+    pointObj.constraint.side = side;
+    pointObj.constraint.halfLength = halfLength;
+    return {
+      pos: { x: mx + px * halfLength * side, y: my + py * halfLength * side },
+      changedConstraint: true,
+    };
   }
   if (pointObj.constraint.kind === "rightTriangleApex") {
     const rightVertex = getPointById(pointObj.constraint.rightVertexId);
@@ -435,7 +466,7 @@ function maybeCreateMidpointPoint(pointAId, pointBId) {
       kind: "midpoint",
       sourcePointIds: [pointAId, pointBId],
     },
-    style: { ...defaultStyle(), fixed: true },
+    style: { ...defaultStyle() },
   });
   return id;
 }
@@ -486,6 +517,50 @@ function maybeCreateAngleBisectorDirectionPoint(pointAId, vertexId, pointBId) {
       kind: "angleBisectorRay",
       sourcePointIds: [pointAId, vertexId, pointBId],
       distance: 1,
+    },
+    style: { ...defaultStyle(), fixed: true },
+  });
+  return id;
+}
+
+function perpendicularBisectorEndpointPoint(pointA, pointB, side, halfLength) {
+  if (!pointA || !pointB) {
+    return null;
+  }
+  const mx = (pointA.x + pointB.x) / 2;
+  const my = (pointA.y + pointB.y) / 2;
+  const dx = pointB.x - pointA.x;
+  const dy = pointB.y - pointA.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) {
+    return null;
+  }
+  const px = -dy / len;
+  const py = dx / len;
+  const s = side >= 0 ? 1 : -1;
+  const h = Math.max(0.2, Number(halfLength) || 1);
+  return { x: mx + px * h * s, y: my + py * h * s };
+}
+
+function maybeCreatePerpendicularBisectorEndpointPoint(pointAId, pointBId, side, halfLength) {
+  const p1 = getPointById(pointAId);
+  const p2 = getPointById(pointBId);
+  const coords = perpendicularBisectorEndpointPoint(p1, p2, side, halfLength);
+  if (!coords) {
+    return null;
+  }
+  const id = makeId("pt");
+  addObject({
+    id,
+    type: "point",
+    x: coords.x,
+    y: coords.y,
+    name: "",
+    constraint: {
+      kind: "perpendicularBisectorEndpoint",
+      sourcePointIds: [pointAId, pointBId],
+      side: side >= 0 ? 1 : -1,
+      halfLength: Math.max(0.2, Number(halfLength) || 1),
     },
     style: { ...defaultStyle(), fixed: true },
   });
@@ -1300,6 +1375,23 @@ function recomputeConstrainedPoints() {
       obj.y = next.y;
       continue;
     }
+    if (obj.constraint.kind === "perpendicularBisectorEndpoint") {
+      const [id1, id2] = obj.constraint.sourcePointIds || [];
+      const p1 = getPointById(id1);
+      const p2 = getPointById(id2);
+      const next = perpendicularBisectorEndpointPoint(
+        p1,
+        p2,
+        obj.constraint.side,
+        obj.constraint.halfLength
+      );
+      if (!next) {
+        continue;
+      }
+      obj.x = next.x;
+      obj.y = next.y;
+      continue;
+    }
     if (obj.constraint.kind === "rightTriangleApex") {
       const rightVertex = getPointById(obj.constraint.rightVertexId);
       const baseVertex = getPointById(obj.constraint.baseVertexId);
@@ -1517,6 +1609,44 @@ function updateAnglePreview(cursorCoords) {
   return true;
 }
 
+function updatePerpendicularBisectorPreview(cursorCoords) {
+  if (!perpendicularBisectorPlacement) {
+    return false;
+  }
+  const p1 = getPointById(perpendicularBisectorPlacement.pointAId);
+  const p2 = getPointById(perpendicularBisectorPlacement.pointBId);
+  if (!p1 || !p2) {
+    boardController.clearPreview();
+    return true;
+  }
+  const mx = (p1.x + p2.x) / 2;
+  const my = (p1.y + p2.y) / 2;
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) {
+    boardController.clearPreview();
+    return true;
+  }
+  const px = -dy / len;
+  const py = dx / len;
+  const vx = cursorCoords.x - mx;
+  const vy = cursorCoords.y - my;
+  const signed = vx * px + vy * py;
+  const halfLength = Math.max(0.2, Math.abs(signed));
+  perpendicularBisectorPlacement.side = signed >= 0 ? 1 : -1;
+  perpendicularBisectorPlacement.halfLength = halfLength;
+  boardController.showPreviewLinear(
+    { x: mx, y: my },
+    {
+      x: mx + px * halfLength * perpendicularBisectorPlacement.side,
+      y: my + py * halfLength * perpendicularBisectorPlacement.side,
+    },
+    "segment"
+  );
+  return true;
+}
+
 function addPointInput(pointId, skipMutation = false) {
   if (pointNeeds(currentMode) > 0 && pendingPointIds.includes(pointId)) {
     statusEl.textContent = `Mode: ${modeLabel(currentMode)} (pick distinct points)`;
@@ -1659,6 +1789,65 @@ function addPointInput(pointId, skipMutation = false) {
 }
 
 function handleBoardClick(coords, evt) {
+  if (perpendicularBisectorPlacement) {
+    const tag = String(evt?.target?.tagName || "").toLowerCase();
+    const isBoardBackground = tag === "svg" || evt?.target === boardEl;
+    if (!isBoardBackground) {
+      return;
+    }
+    const adjusted = getPointInputCoords(coords, evt);
+    updatePerpendicularBisectorPreview(adjusted);
+    const session = perpendicularBisectorPlacement;
+    perpendicularBisectorPlacement = null;
+    boardController.clearPreview();
+    const halfLength = Math.max(0.2, Number(session.halfLength) || 1);
+    runMutation(`perp-bisector${session.variantLabel}`, () => {
+      const midpointId = maybeCreateMidpointPoint(session.pointAId, session.pointBId);
+      if (!midpointId) {
+        return;
+      }
+      const endId = maybeCreatePerpendicularBisectorEndpointPoint(
+        session.pointAId,
+        session.pointBId,
+        session.side || 1,
+        halfLength
+      );
+      if (!endId) {
+        return;
+      }
+      const segId = makeId("pb");
+      addObject({
+        id: segId,
+        type: "segment",
+        pointIds: [midpointId, endId],
+        construction: "perpendicularBisector",
+        style: { ...defaultStyle(), dash: 0, fixed: true },
+      });
+      if (session.withMidpointTicks) {
+        addAnnotation({
+          id: makeId("mdtk"),
+          type: "midpointTick",
+          pointIds: [session.pointAId, midpointId, session.pointBId],
+          tickCount: 1,
+          style: defaultStyle(),
+        });
+      }
+      if (session.withRightAngle) {
+        addAnnotation({
+          id: makeId("ang"),
+          type: "angle",
+          pointIds: [session.pointAId, midpointId, endId],
+          right: true,
+          arcCount: 1,
+          style: defaultStyle(),
+        });
+      }
+      store.clearSelection();
+      store.selection.add(segId);
+    });
+    updateModeUi();
+    return;
+  }
   if (currentMode === ToolMode.SELECT) {
     const tag = String(evt?.target?.tagName || "").toLowerCase();
     const isBoardBackground = tag === "svg" || evt?.target === boardEl;
@@ -1898,6 +2087,9 @@ function startMarqueeSelection() {
 
 function handleBoardMove(coords, evt) {
   const adjusted = getPointInputCoords(coords, evt);
+  if (updatePerpendicularBisectorPreview(adjusted)) {
+    return;
+  }
   if (updateLinearPreview(adjusted)) {
     return;
   }
@@ -2133,6 +2325,9 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (!segObj || segObj.type !== "segment" || !pos?.p1 || !pos?.p2) {
       return;
     }
+    if (segObj.construction === "perpendicularBisector") {
+      return;
+    }
     const p1Obj = getPointById(segObj.pointIds?.[0]);
     const p2Obj = getPointById(segObj.pointIds?.[1]);
     if (!p1Obj || !p2Obj) {
@@ -2335,6 +2530,13 @@ function removeWithDependencies(selectedSet) {
         selectedSet.add(obj.id);
         changed = true;
       }
+      if (
+        obj.constraint?.kind === "perpendicularBisectorEndpoint" &&
+        obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))
+      ) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
     }
     for (const ann of [...store.doc.annotations]) {
       if (selectedSet.has(ann.id)) {
@@ -2417,6 +2619,7 @@ function buildPointMap() {
     if (obj.type !== "point") {
       continue;
     }
+    const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint";
     const pt = obj.hidden
       ? boardController.createSupportPoint(obj.x, obj.y)
       : boardController.createPoint(obj.id, obj.x, obj.y, {
@@ -2424,11 +2627,13 @@ function buildPointMap() {
           size: obj.constraint ? 4 : obj.style?.size,
           layer: obj.constraint ? 10 : obj.style?.layer,
           fixed:
-            currentMode !== ToolMode.SELECT ||
-            obj.constraint?.kind === "intersection" ||
-            obj.constraint?.kind === "midpoint" ||
-            obj.constraint?.kind === "angleBisectorRay" ||
-            obj.style?.fixed,
+            isPerpBisectorEndpoint
+              ? currentMode !== ToolMode.SELECT
+              : currentMode !== ToolMode.SELECT ||
+                obj.constraint?.kind === "intersection" ||
+                obj.constraint?.kind === "midpoint" ||
+                obj.constraint?.kind === "angleBisectorRay" ||
+                obj.style?.fixed,
         });
     map.set(obj.id, pt);
   }
@@ -3357,6 +3562,34 @@ function addAngleBisector(tickCount = 0) {
   });
 }
 
+function createPerpendicularBisectorVariant(options = {}) {
+  const endpoints = midpointSelectionEndpoints();
+  if (!endpoints) {
+    alert("Select exactly one segment or exactly two points.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const [pointAId, pointBId] = endpoints;
+  const pointA = getPointById(pointAId);
+  const pointB = getPointById(pointBId);
+  if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
+    alert("Selected endpoints must be distinct points.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  perpendicularBisectorPlacement = {
+    pointAId,
+    pointBId,
+    withRightAngle: !!options.withRightAngle,
+    withMidpointTicks: !!options.withMidpointTicks,
+    halfLength: Math.max(0.6, distance(pointA, pointB) * 0.45),
+    side: 1,
+    variantLabel: options.variantLabel || "",
+  };
+  statusEl.textContent = "Mode: Perpendicular Bisector (move cursor, click to place segment)";
+  renderCurrentDoc(false);
+}
+
 function addAngleFromSelection(isRight, arcCount = 1, decorator = "arc") {
   const pts = selectedOfTypes(["point"]);
   if (pts.length === 3) {
@@ -3664,6 +3897,18 @@ function wireUi() {
   document.getElementById("makeMidpointTick1").addEventListener("click", () => addMidpoint(1));
   document.getElementById("makeMidpointTick2").addEventListener("click", () => addMidpoint(2));
   document.getElementById("makeMidpointTick3").addEventListener("click", () => addMidpoint(3));
+  document.getElementById("makePerpBisector").addEventListener("click", () =>
+    createPerpendicularBisectorVariant({ variantLabel: "" })
+  );
+  document.getElementById("makePerpBisectorRA").addEventListener("click", () =>
+    createPerpendicularBisectorVariant({ withRightAngle: true, variantLabel: "-right" })
+  );
+  document.getElementById("makePerpBisectorTicks").addEventListener("click", () =>
+    createPerpendicularBisectorVariant({ withMidpointTicks: true, variantLabel: "-ticks" })
+  );
+  document.getElementById("makePerpBisectorBoth").addEventListener("click", () =>
+    createPerpendicularBisectorVariant({ withRightAngle: true, withMidpointTicks: true, variantLabel: "-both" })
+  );
   document.getElementById("makeAngleBisector").addEventListener("click", () => addAngleBisector(0));
   document.getElementById("makeAngleBisectorTick1").addEventListener("click", () => addAngleBisector(1));
   document.getElementById("makeAngleBisectorTick2").addEventListener("click", () => addAngleBisector(2));
