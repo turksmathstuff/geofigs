@@ -244,6 +244,10 @@ export class BoardController {
       if (Math.abs(d) < 1e-6) {
         d = Math.PI / 12;
       }
+      // Avoid exact straight-angle endpoints which can cause JSXGraph arc ambiguity/full-circle renders.
+      if (Math.abs(Math.abs(d) - Math.PI) < 1e-4) {
+        d = Math.sign(d || 1) * (Math.PI - 1e-4);
+      }
       return d;
     };
     return { vx, vy, a1, delta };
@@ -260,7 +264,7 @@ export class BoardController {
       () => frame.vx() + Math.cos(frame.a1() + frame.delta()) * radius,
       () => frame.vy() + Math.sin(frame.a1() + frame.delta()) * radius
     );
-    const arc = this.board.create("arc", [vertex, pStart, pEnd], {
+    const arc = this.board.create("minorarc", [vertex, pStart, pEnd], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash ?? 0,
@@ -310,6 +314,44 @@ export class BoardController {
       extra.push(tick, center, pInner, pOuter);
     }
     return { primary: base.primary, all: [...base.all, ...extra] };
+  }
+
+  createTickOnlyAngleMarkParts(p1, vertex, p3, style = {}) {
+    const tickCount = Math.max(1, Number(style.tickCount || 1));
+    const radius = Math.max(0.15, Number(style.radius || 1));
+    const frame = this.angleMarkFrame(p1, vertex, p3);
+    const tickLen = Math.max(0.2, radius * 0.42);
+    const absDelta = () => Math.abs(frame.delta());
+    const spread = () => Math.min(Math.PI / 10, Math.max(Math.PI / 36, absDelta() / 6));
+    const tickOffsets = tickCount === 1
+      ? [0]
+      : tickCount === 2
+        ? [-spread() * 0.75, spread() * 0.75]
+        : [-spread(), 0, spread()];
+    const parts = [];
+    let primary = null;
+    for (const offset of tickOffsets) {
+      const pInner = this.createFunctionalSupportPoint(
+        () => frame.vx() + Math.cos(frame.a1() + frame.delta() / 2 + offset) * (radius - tickLen / 2),
+        () => frame.vy() + Math.sin(frame.a1() + frame.delta() / 2 + offset) * (radius - tickLen / 2)
+      );
+      const pOuter = this.createFunctionalSupportPoint(
+        () => frame.vx() + Math.cos(frame.a1() + frame.delta() / 2 + offset) * (radius + tickLen / 2),
+        () => frame.vy() + Math.sin(frame.a1() + frame.delta() / 2 + offset) * (radius + tickLen / 2)
+      );
+      const tick = this.board.create("segment", [pInner, pOuter], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: 0,
+        fixed: !!style.fixed,
+        highlight: !!style.highlight,
+      });
+      if (!primary) {
+        primary = tick;
+      }
+      parts.push(tick, pInner, pOuter);
+    }
+    return { primary, all: parts };
   }
 
   createRightAngleMarkParts(p1, vertex, p3, style = {}) {
@@ -1037,6 +1079,8 @@ export class BoardController {
   createAngle(id, p1, vertex, p3, style = {}) {
     const parts = style.right
       ? this.createRightAngleMarkParts(p1, vertex, p3, style)
+      : style.decorator === "tickOnly"
+        ? this.createTickOnlyAngleMarkParts(p1, vertex, p3, style)
       : style.decorator === "arcTick"
         ? this.createArcTickAngleMarkParts(p1, vertex, p3, style)
         : this.createArcAngleMarkParts(p1, vertex, p3, style);
