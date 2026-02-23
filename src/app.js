@@ -45,6 +45,9 @@ const constructionSelectionButtonIds = [
   "makeAngleBisectorTick1",
   "makeAngleBisectorTick2",
   "makeAngleBisectorTick3",
+  "makeCongruentTriangle",
+  "makeSimilarTriangle",
+  "transformSelectedTriangle",
 ];
 
 let currentMode = ToolMode.SELECT;
@@ -3158,12 +3161,15 @@ function chooseCopyOffset(sourcePoints, span, offsetFactorX, offsetFactorY) {
   };
 }
 
-function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offsetFactorY, label }) {
+function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offsetFactorY, label }, options = {}) {
+  const quiet = !!options.quiet;
   const sourcePointIds = findTriangleFromSelection();
   if (!sourcePointIds) {
-    alert("Select one triangle first (3 points or its 3 sides).");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Select one triangle first (3 points or its 3 sides).");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
 
   runMutation(label, () => {
@@ -3202,26 +3208,27 @@ function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offs
     addTriangleEdges(newPointIds, segStyle);
     store.clearSelection();
   });
+  return true;
 }
 
-function createCongruentTriangleCopy() {
-  createTriangleCopyFromSelection({
+function createCongruentTriangleCopy(options = {}) {
+  return createTriangleCopyFromSelection({
     scale: 1,
     rotateDeg: 0,
     offsetFactorX: 0.95,
     offsetFactorY: 0.03,
     label: "create-congruent-triangle",
-  });
+  }, options);
 }
 
-function createSimilarTriangleCopy() {
-  createTriangleCopyFromSelection({
+function createSimilarTriangleCopy(options = {}) {
+  return createTriangleCopyFromSelection({
     scale: 1.45,
     rotateDeg: 0,
     offsetFactorX: 1.1,
     offsetFactorY: 0.03,
     label: "create-similar-triangle",
-  });
+  }, options);
 }
 
 function triangleCentroid(pointIds) {
@@ -3235,11 +3242,14 @@ function triangleCentroid(pointIds) {
   };
 }
 
-function startTriangleTransformSession(kind) {
+function startTriangleTransformSession(kind, options = {}) {
+  const quiet = !!options.quiet;
   const pointIds = findTriangleFromSelection();
   if (!pointIds) {
-    alert("Select one triangle first (3 points or its 3 sides).");
-    setMode(ToolMode.SELECT);
+    if (!quiet) {
+      alert("Select one triangle first (3 points or its 3 sides).");
+      setMode(ToolMode.SELECT);
+    }
     return false;
   }
 
@@ -3414,6 +3424,68 @@ function transformSelectedTriangle() {
   updateMoveReadouts();
   updateCompassReadout();
   applyTransformPreview();
+}
+
+function launchTriangleCopy(kind, buttonId) {
+  const createFn = kind === "congruent" ? createCongruentTriangleCopy : createSimilarTriangleCopy;
+  if (createFn({ quiet: true })) {
+    return;
+  }
+  startConstructionSelectionSession({
+    kind: `triangle-${kind}`,
+    label: kind === "congruent" ? "Congruent Triangle" : "Similar Triangle",
+    buttonId,
+    instructions: "Select one triangle (3 points or its 3 sides).",
+    tryCreate: () => createFn({ quiet: true }),
+  });
+}
+
+function launchTriangleTransform(buttonId) {
+  if (startTriangleTransformSession("transform", { quiet: true })) {
+    transformSession.dx = 0;
+    transformSession.dy = 0;
+    transformSession.angleDeg = 0;
+    transformSession.mirrorX = 1;
+    transformSession.mirrorY = 1;
+    showTransformPanel();
+    if (moveXSliderEl) {
+      moveXSliderEl.value = "0";
+    }
+    if (moveYSliderEl) {
+      moveYSliderEl.value = "0";
+    }
+    updateMoveReadouts();
+    updateCompassReadout();
+    applyTransformPreview();
+    return;
+  }
+  startConstructionSelectionSession({
+    kind: "triangle-transform",
+    label: "Rotate/Slide Triangle",
+    buttonId,
+    instructions: "Select one triangle (3 points or its 3 sides).",
+    tryCreate: () => {
+      if (!startTriangleTransformSession("transform", { quiet: true })) {
+        return false;
+      }
+      transformSession.dx = 0;
+      transformSession.dy = 0;
+      transformSession.angleDeg = 0;
+      transformSession.mirrorX = 1;
+      transformSession.mirrorY = 1;
+      showTransformPanel();
+      if (moveXSliderEl) {
+        moveXSliderEl.value = "0";
+      }
+      if (moveYSliderEl) {
+        moveYSliderEl.value = "0";
+      }
+      updateMoveReadouts();
+      updateCompassReadout();
+      applyTransformPreview();
+      return true;
+    },
+  });
 }
 
 function applyStyleToSelection() {
@@ -4135,9 +4207,15 @@ function wireUi() {
 
   document.getElementById("makeParallel").addEventListener("click", () => launchParallelOrPerpendicular("parallel", "makeParallel"));
   document.getElementById("makePerpendicular").addEventListener("click", () => launchParallelOrPerpendicular("perpendicular", "makePerpendicular"));
-  document.getElementById("makeCongruentTriangle").addEventListener("click", createCongruentTriangleCopy);
-  document.getElementById("makeSimilarTriangle").addEventListener("click", createSimilarTriangleCopy);
-  document.getElementById("transformSelectedTriangle").addEventListener("click", transformSelectedTriangle);
+  document.getElementById("makeCongruentTriangle").addEventListener("click", () =>
+    launchTriangleCopy("congruent", "makeCongruentTriangle")
+  );
+  document.getElementById("makeSimilarTriangle").addEventListener("click", () =>
+    launchTriangleCopy("similar", "makeSimilarTriangle")
+  );
+  document.getElementById("transformSelectedTriangle").addEventListener("click", () =>
+    launchTriangleTransform("transformSelectedTriangle")
+  );
   document.getElementById("cancelTransformTriangle").addEventListener("click", cancelTransformSession);
   document.getElementById("applyTransformTriangle").addEventListener("click", () => commitTransformSession("transform-selected-triangle"));
   document.getElementById("reflectHorizontalTriangle").addEventListener("click", () => {
