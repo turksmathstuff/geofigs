@@ -1060,6 +1060,66 @@ export class BoardController {
     return this.registerElement(id, "congruency", el);
   }
 
+  createMidpointTickMarks(id, pointA, midpoint, pointB, tickCount, style = {}) {
+    const count = Math.max(1, Number(tickCount || 1));
+    const strokeColor = style.strokeColor || "#111";
+    const strokeWidth = style.strokeWidth || 2;
+    const spacing = 0.16;
+    const halfLen = 0.22;
+    const lineSegments = [];
+
+    const halves = [
+      [pointA, midpoint],
+      [midpoint, pointB],
+    ];
+
+    for (const [start, end] of halves) {
+      const dx = () => end.X() - start.X();
+      const dy = () => end.Y() - start.Y();
+      const len = () => Math.hypot(dx(), dy()) || 1;
+      const ux = () => dx() / len();
+      const uy = () => dy() / len();
+      const nx = () => -uy();
+      const ny = () => ux();
+      const cx = () => (start.X() + end.X()) / 2;
+      const cy = () => (start.Y() + end.Y()) / 2;
+
+      for (let i = 0; i < count; i += 1) {
+        const offset = (i - (count - 1) / 2) * spacing;
+        const mx = () => cx() + ux() * offset;
+        const my = () => cy() + uy() * offset;
+        const p1 = this.board.create("point", [() => mx() - nx() * halfLen, () => my() - ny() * halfLen], {
+          visible: false,
+          fixed: true,
+          name: "",
+        });
+        const p2 = this.board.create("point", [() => mx() + nx() * halfLen, () => my() + ny() * halfLen], {
+          visible: false,
+          fixed: true,
+          name: "",
+        });
+        const tick = this.board.create("segment", [p1, p2], {
+          strokeColor,
+          strokeWidth,
+          dash: 0,
+        });
+        lineSegments.push(tick);
+      }
+    }
+
+    if (!lineSegments.length) {
+      return null;
+    }
+    const primary = this.registerElement(id, "congruency", lineSegments[0]);
+    for (let i = 1; i < lineSegments.length; i += 1) {
+      if (lineSegments[i]?.visProp) {
+        lineSegments[i].visProp.highlight = false;
+      }
+    }
+    this.board.update();
+    return primary;
+  }
+
   createParallelChevronMarks(id, target, markCount, style = {}) {
     if (!target?.point1 || !target?.point2) {
       return this.createTickMark(id, target, markCount, style);
