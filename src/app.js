@@ -29,6 +29,7 @@ import {
   centroid,
   minVertexDistance,
 } from "./app/geometry/transforms.js";
+import { normalizedRayExtension, normalizedLineExtension, rayEndpoint } from "./app/geometry/linear.js";
 
 const store = new AppStore();
 const statusEl = document.getElementById("statusText");
@@ -122,38 +123,14 @@ function defaultAttachedPointColor() {
   return store.doc.styles.examMode ? "#000000" : "#00c7b7";
 }
 
-function normalizedRayExtension(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : 4;
-}
-
 function getRayExtensionForObject(obj) {
   return normalizedRayExtension(obj?.style?.rayExtension ?? store.doc.styles.rayExtension);
-}
-
-function normalizedLineExtension(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? n : 4;
 }
 
 function getLineExtentsForObject(obj) {
   return {
     start: normalizedLineExtension(obj?.style?.lineExtensionStart ?? store.doc.styles.lineExtensionStart),
     end: normalizedLineExtension(obj?.style?.lineExtensionEnd ?? store.doc.styles.lineExtensionEnd),
-  };
-}
-
-function rayEndpoint(a, b, extension) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 1e-9) {
-    return { x: b.x, y: b.y };
-  }
-  const ext = normalizedRayExtension(extension);
-  return {
-    x: b.x + (dx / len) * ext,
-    y: b.y + (dy / len) * ext,
   };
 }
 
