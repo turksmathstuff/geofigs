@@ -30,8 +30,11 @@ import {
   minVertexDistance,
 } from "./app/geometry/transforms.js";
 import { normalizedRayExtension, normalizedLineExtension, rayEndpoint } from "./app/geometry/linear.js";
+import { createEditorSession } from "./app/session/editorSession.js";
 
 const store = new AppStore();
+// Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
+const session = createEditorSession();
 const statusEl = document.getElementById("statusText");
 const drawingHintEl = document.getElementById("drawingHint");
 const autoLabelBtn = document.getElementById("autoLabel");
@@ -80,12 +83,6 @@ const constructionSelectionButtonIds = [
 
 let currentMode = ToolMode.SELECT;
 let pendingPointIds = [];
-let pendingAngleIsRight = false;
-let pendingAngleArcCount = 1;
-let pendingAngleDecorator = "arc";
-let activeAngleMarkPresetValue = null;
-let triangleVariant = "three-point";
-let pendingRightTriangleForceIso = false;
 let marqueeState = null;
 let transformSession = null;
 let compassDragging = false;
@@ -136,10 +133,10 @@ function getLineExtentsForObject(obj) {
 
 function modeLabel(mode) {
   if (mode === ToolMode.TRIANGLE) {
-    if (triangleVariant === "right") {
+    if (session.triangleVariant === "right") {
       return "Right Triangle";
     }
-    if (triangleVariant === "isosceles") {
+    if (session.triangleVariant === "isosceles") {
       return "Isosceles Triangle";
     }
     return "3-Point Triangle";
@@ -157,7 +154,7 @@ function canvasHintText() {
   if (currentMode === ToolMode.ANGLE) {
     return "Select point, vertex, point.";
   }
-  if (currentMode === ToolMode.TRIANGLE && triangleVariant === "right") {
+  if (currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right") {
     return "Right angle first, then base vertex, then height.";
   }
   if (currentMode === ToolMode.LABEL) {
@@ -184,7 +181,7 @@ function updateModeUi() {
     triangleMenuBtn.classList.toggle("active", currentMode === ToolMode.TRIANGLE);
   }
   triangleModeButtons.forEach((btn) => {
-    btn.classList.toggle("active", currentMode === ToolMode.TRIANGLE && btn.dataset.triangleMode === triangleVariant);
+    btn.classList.toggle("active", currentMode === ToolMode.TRIANGLE && btn.dataset.triangleMode === session.triangleVariant);
   });
   if (autoLabelBtn) {
     autoLabelBtn.classList.toggle("active", currentMode === ToolMode.LABEL);
@@ -192,14 +189,14 @@ function updateModeUi() {
   angleMarkPresetButtons.forEach((btn) => {
     const isActivePreset =
       currentMode === ToolMode.ANGLE &&
-      !pendingAngleIsRight &&
-      !!activeAngleMarkPresetValue &&
-      btn.dataset.angleMark === activeAngleMarkPresetValue;
+      !session.pendingAngleIsRight &&
+      !!session.activeAngleMarkPresetValue &&
+      btn.dataset.angleMark === session.activeAngleMarkPresetValue;
     btn.classList.toggle("active", isActivePreset);
   });
   const rightAngleBtn = document.getElementById("markRightAngle");
   if (rightAngleBtn) {
-    rightAngleBtn.classList.toggle("active", currentMode === ToolMode.ANGLE && pendingAngleIsRight);
+    rightAngleBtn.classList.toggle("active", currentMode === ToolMode.ANGLE && session.pendingAngleIsRight);
   }
   for (const id of constructionSelectionButtonIds) {
     const btn = document.getElementById(id);
@@ -231,10 +228,10 @@ function setMode(mode) {
   currentMode = mode;
   pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
-    pendingAngleIsRight = false;
-    pendingAngleArcCount = 1;
-    pendingAngleDecorator = "arc";
-    activeAngleMarkPresetValue = null;
+    session.pendingAngleIsRight = false;
+    session.pendingAngleArcCount = 1;
+    session.pendingAngleDecorator = "arc";
+    session.activeAngleMarkPresetValue = null;
   }
   boardController.clearPreview();
   updateModeUi();
@@ -300,7 +297,7 @@ function setTriangleMode(variant) {
   if (!valid.includes(variant)) {
     return;
   }
-  triangleVariant = variant;
+  session.triangleVariant = variant;
   setMode(ToolMode.TRIANGLE);
 }
 
@@ -690,7 +687,7 @@ function triangleVerticesFromVariant(pointA, pointB) {
   const perpX = -uy;
   const perpY = ux;
 
-  if (triangleVariant === "isosceles") {
+  if (session.triangleVariant === "isosceles") {
     const midX = (pointA.x + pointB.x) / 2;
     const midY = (pointA.y + pointB.y) / 2;
     const apexHeight = baseLen * 0.6;
@@ -1445,7 +1442,7 @@ function updateTrianglePreview(cursorCoords, evt) {
     return;
   }
 
-  if (triangleVariant === "three-point") {
+  if (session.triangleVariant === "three-point") {
     if (pendingPointIds.length < 2) {
       boardController.clearPreview();
       return;
@@ -1460,7 +1457,7 @@ function updateTrianglePreview(cursorCoords, evt) {
     return;
   }
 
-  if (triangleVariant === "right") {
+  if (session.triangleVariant === "right") {
     if (pendingPointIds.length < 2) {
       boardController.clearPreview();
       return;
@@ -1482,7 +1479,7 @@ function updateTrianglePreview(cursorCoords, evt) {
     return;
   }
 
-  if (triangleVariant === "isosceles") {
+  if (session.triangleVariant === "isosceles") {
     if (pendingPointIds.length < 2) {
       boardController.clearPreview();
       return;
@@ -1553,10 +1550,10 @@ function updateAnglePreview(cursorCoords) {
     pointObjectFromCoords(vertex),
     cursorCoords,
     {
-      right: pendingAngleIsRight,
-      arcCount: pendingAngleArcCount,
-      decorator: pendingAngleDecorator,
-      tickCount: pendingAngleArcCount,
+      right: session.pendingAngleIsRight,
+      arcCount: session.pendingAngleArcCount,
+      decorator: session.pendingAngleDecorator,
+      tickCount: session.pendingAngleArcCount,
     }
   );
   return true;
@@ -1616,7 +1613,7 @@ function addPointInput(pointId, skipMutation = false) {
 
   const modeForCreate = currentMode;
   const pointsForCreate = pendingPointIds.slice();
-  const isRightAngle = pendingAngleIsRight;
+  const isRightAngle = session.pendingAngleIsRight;
   const createFromPoints = () => {
     const style = defaultStyle();
     if (modeForCreate === ToolMode.SEGMENT) {
@@ -1644,9 +1641,9 @@ function addPointInput(pointId, skipMutation = false) {
     } else if (modeForCreate === ToolMode.CIRCLE) {
       addObject({ id: makeId("circle"), type: "circle", pointIds: pointsForCreate, style });
     } else if (modeForCreate === ToolMode.TRIANGLE) {
-      if (triangleVariant === "three-point") {
+      if (session.triangleVariant === "three-point") {
         addTriangleEdges(pointsForCreate, style);
-      } else if (triangleVariant === "right") {
+      } else if (session.triangleVariant === "right") {
         const pointRight = getPointById(pointsForCreate[0]);
         const pointBase = getPointById(pointsForCreate[1]);
         const cursorPoint = getPointById(pointsForCreate[2]);
@@ -1654,7 +1651,7 @@ function addPointInput(pointId, skipMutation = false) {
           return;
         }
         const apex = rightTriangleApexFromCursor(pointRight, pointBase, cursorPoint, {
-          forceIsosceles: pendingRightTriangleForceIso,
+          forceIsosceles: session.pendingRightTriangleForceIso,
         });
         if (!apex) {
           return;
@@ -1676,7 +1673,7 @@ function addPointInput(pointId, skipMutation = false) {
           arcCount: 1,
           style,
         });
-      } else if (triangleVariant === "isosceles") {
+      } else if (session.triangleVariant === "isosceles") {
         const pointA = getPointById(pointsForCreate[0]);
         const pointB = getPointById(pointsForCreate[1]);
         const cursorPoint = getPointById(pointsForCreate[2]);
@@ -1717,9 +1714,9 @@ function addPointInput(pointId, skipMutation = false) {
         type: "angle",
         pointIds: pointsForCreate,
         right: isRightAngle,
-        arcCount: isRightAngle ? 1 : pendingAngleArcCount,
-        decorator: isRightAngle ? "right" : pendingAngleDecorator,
-        tickCount: isRightAngle ? 0 : pendingAngleDecorator === "arcTick" ? pendingAngleArcCount : 0,
+        arcCount: isRightAngle ? 1 : session.pendingAngleArcCount,
+        decorator: isRightAngle ? "right" : session.pendingAngleDecorator,
+        tickCount: isRightAngle ? 0 : session.pendingAngleDecorator === "arcTick" ? session.pendingAngleArcCount : 0,
         style,
       });
       store.clearSelection();
@@ -1733,12 +1730,12 @@ function addPointInput(pointId, skipMutation = false) {
   }
 
   pendingPointIds = [];
-  pendingRightTriangleForceIso = false;
+  session.pendingRightTriangleForceIso = false;
   if (modeForCreate !== ToolMode.ANGLE) {
-    pendingAngleIsRight = false;
-    pendingAngleArcCount = 1;
-    pendingAngleDecorator = "arc";
-    activeAngleMarkPresetValue = null;
+    session.pendingAngleIsRight = false;
+    session.pendingAngleArcCount = 1;
+    session.pendingAngleDecorator = "arc";
+    session.activeAngleMarkPresetValue = null;
   }
   boardController.clearPreview();
   updateModeUi();
@@ -1843,8 +1840,8 @@ function handleBoardClick(coords, evt) {
   }
 
   if (pointNeeds(currentMode) > 0) {
-    if (currentMode === ToolMode.TRIANGLE && triangleVariant === "right" && pendingPointIds.length === 2) {
-      pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
+    if (currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && pendingPointIds.length === 2) {
+      session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
     }
     const nearbyPoint = findNearbyVisiblePoint(snappedCoords);
     if (nearbyPoint) {
@@ -1918,8 +1915,8 @@ function handleObjectClick(id, type, evt) {
   }
 
   if (pointNeeds(currentMode) > 0 && type === "point") {
-    if (currentMode === ToolMode.TRIANGLE && triangleVariant === "right" && pendingPointIds.length === 2) {
-      pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
+    if (currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && pendingPointIds.length === 2) {
+      session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
     }
     addPointInput(id);
     return;
@@ -3756,10 +3753,10 @@ function angleMarkConfigFromSelectionValue(value) {
 
 function setActiveAngleMarkPreset(value) {
   const cfg = angleMarkConfigFromSelectionValue(value);
-  pendingAngleIsRight = false;
-  pendingAngleDecorator = cfg.decorator;
-  pendingAngleArcCount = cfg.count;
-  activeAngleMarkPresetValue = value || null;
+  session.pendingAngleIsRight = false;
+  session.pendingAngleDecorator = cfg.decorator;
+  session.pendingAngleArcCount = cfg.count;
+  session.activeAngleMarkPresetValue = value || null;
   setMode(ToolMode.ANGLE);
 }
 
@@ -4087,10 +4084,10 @@ function wireUi() {
 
   document.getElementById("markRightAngle").addEventListener("click", () => {
     if (!addAngleFromSelection(true, 1)) {
-      pendingAngleIsRight = true;
-      pendingAngleDecorator = "arc";
-      pendingAngleArcCount = 1;
-      activeAngleMarkPresetValue = null;
+      session.pendingAngleIsRight = true;
+      session.pendingAngleDecorator = "arc";
+      session.pendingAngleArcCount = 1;
+      session.activeAngleMarkPresetValue = null;
       setMode(ToolMode.ANGLE);
     }
   });
