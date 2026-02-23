@@ -30,6 +30,22 @@ const triangleMenuBtn = document.getElementById("triangleMenuBtn");
 const triangleMenuPanel = document.getElementById("triangleMenuPanel");
 const triangleModeButtons = [...document.querySelectorAll("button[data-triangle-mode]")];
 const angleMarkPresetButtons = [...document.querySelectorAll("button[data-angle-mark]")];
+const constructionSelectionButtonIds = [
+  "makeMidpoint",
+  "makeMidpointTick1",
+  "makeMidpointTick2",
+  "makeMidpointTick3",
+  "makeParallel",
+  "makePerpendicular",
+  "makePerpBisector",
+  "makePerpBisectorRA",
+  "makePerpBisectorTicks",
+  "makePerpBisectorBoth",
+  "makeAngleBisector",
+  "makeAngleBisectorTick1",
+  "makeAngleBisectorTick2",
+  "makeAngleBisectorTick3",
+];
 
 let currentMode = ToolMode.SELECT;
 let pendingPointIds = [];
@@ -42,6 +58,7 @@ let marqueeState = null;
 let transformSession = null;
 let compassDragging = false;
 let perpendicularBisectorPlacement = null;
+let constructionSelectionSession = null;
 const transientDragSnapshots = new Map();
 
 const boardController = new BoardController(
@@ -126,6 +143,9 @@ function modeLabel(mode) {
 }
 
 function canvasHintText() {
+  if (constructionSelectionSession) {
+    return `${constructionSelectionSession.instructions} Press Esc to cancel.`;
+  }
   if (currentMode === ToolMode.ANGLE) {
     return "Select points counterclockwise.";
   }
@@ -145,8 +165,12 @@ function canvasHintText() {
 }
 
 function updateModeUi() {
+  const activeConstructionButtonId =
+    constructionSelectionSession?.buttonId || perpendicularBisectorPlacement?.buttonId || null;
   modeButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.mode === currentMode);
+    const isSelectButton = btn.dataset.mode === ToolMode.SELECT;
+    const isModeActive = btn.dataset.mode === currentMode;
+    btn.classList.toggle("active", isModeActive && !(isSelectButton && activeConstructionButtonId));
   });
   if (triangleMenuBtn) {
     triangleMenuBtn.classList.toggle("active", currentMode === ToolMode.TRIANGLE);
@@ -157,7 +181,17 @@ function updateModeUi() {
   if (autoLabelBtn) {
     autoLabelBtn.classList.toggle("active", currentMode === ToolMode.LABEL);
   }
-  statusEl.textContent = `Mode: ${modeLabel(currentMode)}`;
+  for (const id of constructionSelectionButtonIds) {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.classList.toggle("active", id === activeConstructionButtonId);
+    }
+  }
+  if (constructionSelectionSession) {
+    statusEl.textContent = constructionSelectionStatusText();
+  } else {
+    statusEl.textContent = `Mode: ${modeLabel(currentMode)}`;
+  }
   if (drawingHintEl) {
     const text = canvasHintText();
     drawingHintEl.textContent = text;
@@ -173,6 +207,7 @@ function setMode(mode) {
     cancelTransformSession();
   }
   perpendicularBisectorPlacement = null;
+  constructionSelectionSession = null;
   currentMode = mode;
   pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
@@ -183,6 +218,52 @@ function setMode(mode) {
   boardController.clearPreview();
   updateModeUi();
   renderCurrentDoc();
+}
+
+function constructionSelectionStatusText() {
+  if (!constructionSelectionSession) {
+    return `Mode: ${modeLabel(currentMode)}`;
+  }
+  const count = store.selectedIds().length;
+  return `Mode: ${constructionSelectionSession.label} (${count} selected, Esc = Select)`;
+}
+
+function startConstructionSelectionSession(session) {
+  if (!session) {
+    return;
+  }
+  if (currentMode !== ToolMode.SELECT) {
+    setMode(ToolMode.SELECT);
+  } else {
+    perpendicularBisectorPlacement = null;
+    pendingPointIds = [];
+    boardController.clearPreview();
+  }
+  constructionSelectionSession = session;
+  store.clearSelection();
+  updateModeUi();
+  renderCurrentDoc(false);
+}
+
+function finishConstructionSelectionSession() {
+  constructionSelectionSession = null;
+  if (!perpendicularBisectorPlacement) {
+    updateModeUi();
+    renderCurrentDoc(false);
+  }
+}
+
+function maybeCompleteConstructionSelectionSession() {
+  if (!constructionSelectionSession) {
+    return false;
+  }
+  const ok = constructionSelectionSession.tryCreate?.();
+  if (!ok) {
+    updateModeUi();
+    return false;
+  }
+  finishConstructionSelectionSession();
+  return true;
 }
 
 function setTriangleMode(variant) {
@@ -1843,7 +1924,6 @@ function handleBoardClick(coords, evt) {
         });
       }
       store.clearSelection();
-      store.selection.add(segId);
     });
     updateModeUi();
     return;
@@ -1859,6 +1939,9 @@ function handleBoardClick(coords, evt) {
     }
     store.clearSelection();
     renderCurrentDoc();
+    if (constructionSelectionSession) {
+      updateModeUi();
+    }
     return;
   }
 
@@ -1911,6 +1994,12 @@ function handleObjectClick(id, type, evt) {
   const multi = evt.shiftKey || evt.metaKey || evt.ctrlKey;
   const eventType = String(evt?.type || "").toLowerCase();
   const isReleaseEvent = eventType.includes("up") || eventType.includes("end");
+  if (["segment", "line", "ray", "parallel", "perpendicular", "circle"].includes(type)) {
+    const nearPoint = findNearbyVisiblePoint(boardController.getUserCoords(evt), 0.4);
+    if (nearPoint && nearPoint.id !== id) {
+      return handleObjectClick(nearPoint.id, "point", evt);
+    }
+  }
 
   if (currentMode === ToolMode.POINT) {
     return false;
@@ -1920,6 +2009,20 @@ function handleObjectClick(id, type, evt) {
     store.clearSelection();
     store.selection.add(id);
     deleteSelected();
+    return;
+  }
+
+  if (constructionSelectionSession) {
+    if (!multi && !isReleaseEvent) {
+      return { deferUntilUp: true };
+    }
+    if (multi) {
+      store.toggleSelection(id, true);
+    } else {
+      store.selection.add(id);
+    }
+    renderCurrentDoc();
+    maybeCompleteConstructionSelectionSession();
     return;
   }
 
@@ -3346,7 +3449,8 @@ function applyStyleToSelection() {
   });
 }
 
-function createParallelOrPerpendicular(kind) {
+function createParallelOrPerpendicular(kind, options = {}) {
+  const quiet = !!options.quiet;
   const selected = store.selectedIds();
 
   let sourceLineId = null;
@@ -3365,9 +3469,11 @@ function createParallelOrPerpendicular(kind) {
   }
 
   if (!sourceLineId || !throughPointId) {
-    alert("Select a point and one line/segment/parallel/perpendicular.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Select a point and one line/segment/parallel/perpendicular.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
 
   runMutation(`create-${kind}`, () => {
@@ -3383,6 +3489,7 @@ function createParallelOrPerpendicular(kind) {
     });
     store.clearSelection();
   });
+  return true;
 }
 
 function addTicks(tickCount) {
@@ -3460,25 +3567,32 @@ function angleBisectorSelectionPointIds() {
   return null;
 }
 
-function addMidpoint(tickCount = 0) {
+function addMidpoint(tickCount = 0, options = {}) {
+  const quiet = !!options.quiet;
   const endpoints = midpointSelectionEndpoints();
   if (!endpoints) {
-    alert("Select exactly one segment or exactly two points.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Select exactly one segment or exactly two points.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
   const [pointAId, pointBId] = endpoints;
   if (!pointAId || !pointBId || pointAId === pointBId) {
-    alert("Select two distinct endpoints.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Select two distinct endpoints.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
   const pointA = getPointById(pointAId);
   const pointB = getPointById(pointBId);
   if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
-    alert("Selected endpoints must be distinct points.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Selected endpoints must be distinct points.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
 
   runMutation(`midpoint${tickCount ? `-${tickCount}-tick` : ""}`, () => {
@@ -3496,16 +3610,19 @@ function addMidpoint(tickCount = 0) {
       });
     }
     store.clearSelection();
-    store.selection.add(midpointId);
   });
+  return true;
 }
 
-function addAngleBisector(tickCount = 0) {
+function addAngleBisector(tickCount = 0, options = {}) {
+  const quiet = !!options.quiet;
   const pointIds = angleBisectorSelectionPointIds();
   if (!pointIds) {
-    alert("Select exactly 3 points (with the vertex second) or one angle mark.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Select exactly 3 points (with the vertex second) or one angle mark.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
   const [pointAId, vertexId, pointBId] = pointIds;
   const pointA = getPointById(pointAId);
@@ -3513,9 +3630,11 @@ function addAngleBisector(tickCount = 0) {
   const pointB = getPointById(pointBId);
   const probe = angleBisectorDirectionPoint(pointA, vertex, pointB, 1);
   if (!probe) {
-    alert("Cannot bisect a degenerate or straight angle selection.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Cannot bisect a degenerate or straight angle selection.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
 
   runMutation(`angle-bisector${tickCount ? `-${tickCount}-tick` : ""}`, () => {
@@ -3558,24 +3677,29 @@ function addAngleBisector(tickCount = 0) {
       });
     }
     store.clearSelection();
-    store.selection.add(rayId);
   });
+  return true;
 }
 
-function createPerpendicularBisectorVariant(options = {}) {
+function createPerpendicularBisectorVariant(options = {}, runtime = {}) {
+  const quiet = !!runtime.quiet;
   const endpoints = midpointSelectionEndpoints();
   if (!endpoints) {
-    alert("Select exactly one segment or exactly two points.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Select exactly one segment or exactly two points.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
   const [pointAId, pointBId] = endpoints;
   const pointA = getPointById(pointAId);
   const pointB = getPointById(pointBId);
   if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
-    alert("Selected endpoints must be distinct points.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Selected endpoints must be distinct points.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
   perpendicularBisectorPlacement = {
     pointAId,
@@ -3585,9 +3709,72 @@ function createPerpendicularBisectorVariant(options = {}) {
     halfLength: Math.max(0.6, distance(pointA, pointB) * 0.45),
     side: 1,
     variantLabel: options.variantLabel || "",
+    buttonId: options.buttonId || null,
   };
   statusEl.textContent = "Mode: Perpendicular Bisector (move cursor, click to place segment)";
   renderCurrentDoc(false);
+  return true;
+}
+
+function launchParallelOrPerpendicular(kind, buttonId = null) {
+  if (createParallelOrPerpendicular(kind, { quiet: true })) {
+    return;
+  }
+  startConstructionSelectionSession({
+    kind: `construct-${kind}`,
+    label: kind === "parallel" ? "Parallel" : "Perpendicular",
+    buttonId,
+    instructions: "Select a point and a line/segment/parallel/perpendicular source.",
+    tryCreate: () => createParallelOrPerpendicular(kind, { quiet: true }),
+  });
+}
+
+function launchMidpoint(tickCount = 0, buttonId = null) {
+  if (addMidpoint(tickCount, { quiet: true })) {
+    return;
+  }
+  const suffix = tickCount > 0 ? ` ${tickCount} Tick${tickCount > 1 ? "s" : ""}` : "";
+  startConstructionSelectionSession({
+    kind: `midpoint-${tickCount}`,
+    label: `Midpoint${suffix}`,
+    buttonId,
+    instructions: "Select exactly one segment or exactly two points.",
+    tryCreate: () => addMidpoint(tickCount, { quiet: true }),
+  });
+}
+
+function launchAngleBisector(tickCount = 0, buttonId = null) {
+  if (addAngleBisector(tickCount, { quiet: true })) {
+    return;
+  }
+  const suffix = tickCount > 0 ? ` ${tickCount} Tick${tickCount > 1 ? "s" : ""}` : "";
+  startConstructionSelectionSession({
+    kind: `angle-bisector-${tickCount}`,
+    label: `Angle Bisector${suffix}`,
+    buttonId,
+    instructions: "Select exactly 3 points (vertex second) or one angle mark.",
+    tryCreate: () => addAngleBisector(tickCount, { quiet: true }),
+  });
+}
+
+function launchPerpendicularBisectorVariant(options = {}) {
+  if (createPerpendicularBisectorVariant(options, { quiet: true })) {
+    return;
+  }
+  const labelSuffix = options.withRightAngle && options.withMidpointTicks
+    ? " + Rt ∠ + MP"
+    : options.withRightAngle
+      ? " + Rt ∠"
+      : options.withMidpointTicks
+        ? " + MP"
+        : "";
+  startConstructionSelectionSession({
+    kind: `perp-bisector${options.variantLabel || ""}`,
+    label: `Perp Bisector${labelSuffix}`,
+    buttonId: options.buttonId || null,
+    instructions: "Select exactly one segment or exactly two points.",
+    tryCreate: () => createPerpendicularBisectorVariant(options, { quiet: true }),
+  });
 }
 
 function addAngleFromSelection(isRight, arcCount = 1, decorator = "arc") {
@@ -3893,26 +4080,31 @@ function wireUi() {
   document.getElementById("markTick1").addEventListener("click", () => addTicks(1));
   document.getElementById("markTick2").addEventListener("click", () => addTicks(2));
   document.getElementById("markTick3").addEventListener("click", () => addTicks(3));
-  document.getElementById("makeMidpoint").addEventListener("click", () => addMidpoint(0));
-  document.getElementById("makeMidpointTick1").addEventListener("click", () => addMidpoint(1));
-  document.getElementById("makeMidpointTick2").addEventListener("click", () => addMidpoint(2));
-  document.getElementById("makeMidpointTick3").addEventListener("click", () => addMidpoint(3));
+  document.getElementById("makeMidpoint").addEventListener("click", () => launchMidpoint(0, "makeMidpoint"));
+  document.getElementById("makeMidpointTick1").addEventListener("click", () => launchMidpoint(1, "makeMidpointTick1"));
+  document.getElementById("makeMidpointTick2").addEventListener("click", () => launchMidpoint(2, "makeMidpointTick2"));
+  document.getElementById("makeMidpointTick3").addEventListener("click", () => launchMidpoint(3, "makeMidpointTick3"));
   document.getElementById("makePerpBisector").addEventListener("click", () =>
-    createPerpendicularBisectorVariant({ variantLabel: "" })
+    launchPerpendicularBisectorVariant({ variantLabel: "", buttonId: "makePerpBisector" })
   );
   document.getElementById("makePerpBisectorRA").addEventListener("click", () =>
-    createPerpendicularBisectorVariant({ withRightAngle: true, variantLabel: "-right" })
+    launchPerpendicularBisectorVariant({ withRightAngle: true, variantLabel: "-right", buttonId: "makePerpBisectorRA" })
   );
   document.getElementById("makePerpBisectorTicks").addEventListener("click", () =>
-    createPerpendicularBisectorVariant({ withMidpointTicks: true, variantLabel: "-ticks" })
+    launchPerpendicularBisectorVariant({ withMidpointTicks: true, variantLabel: "-ticks", buttonId: "makePerpBisectorTicks" })
   );
   document.getElementById("makePerpBisectorBoth").addEventListener("click", () =>
-    createPerpendicularBisectorVariant({ withRightAngle: true, withMidpointTicks: true, variantLabel: "-both" })
+    launchPerpendicularBisectorVariant({
+      withRightAngle: true,
+      withMidpointTicks: true,
+      variantLabel: "-both",
+      buttonId: "makePerpBisectorBoth",
+    })
   );
-  document.getElementById("makeAngleBisector").addEventListener("click", () => addAngleBisector(0));
-  document.getElementById("makeAngleBisectorTick1").addEventListener("click", () => addAngleBisector(1));
-  document.getElementById("makeAngleBisectorTick2").addEventListener("click", () => addAngleBisector(2));
-  document.getElementById("makeAngleBisectorTick3").addEventListener("click", () => addAngleBisector(3));
+  document.getElementById("makeAngleBisector").addEventListener("click", () => launchAngleBisector(0, "makeAngleBisector"));
+  document.getElementById("makeAngleBisectorTick1").addEventListener("click", () => launchAngleBisector(1, "makeAngleBisectorTick1"));
+  document.getElementById("makeAngleBisectorTick2").addEventListener("click", () => launchAngleBisector(2, "makeAngleBisectorTick2"));
+  document.getElementById("makeAngleBisectorTick3").addEventListener("click", () => launchAngleBisector(3, "makeAngleBisectorTick3"));
   document.getElementById("markParallel1").addEventListener("click", () => addParallelMarks(1));
   document.getElementById("markParallel2").addEventListener("click", () => addParallelMarks(2));
   document.getElementById("markParallel3").addEventListener("click", () => addParallelMarks(3));
@@ -3941,8 +4133,8 @@ function wireUi() {
   document.getElementById("addLabel").addEventListener("click", promptLabel);
   document.getElementById("autoLabel").addEventListener("click", autoLabelPoints);
 
-  document.getElementById("makeParallel").addEventListener("click", () => createParallelOrPerpendicular("parallel"));
-  document.getElementById("makePerpendicular").addEventListener("click", () => createParallelOrPerpendicular("perpendicular"));
+  document.getElementById("makeParallel").addEventListener("click", () => launchParallelOrPerpendicular("parallel", "makeParallel"));
+  document.getElementById("makePerpendicular").addEventListener("click", () => launchParallelOrPerpendicular("perpendicular", "makePerpendicular"));
   document.getElementById("makeCongruentTriangle").addEventListener("click", createCongruentTriangleCopy);
   document.getElementById("makeSimilarTriangle").addEventListener("click", createSimilarTriangleCopy);
   document.getElementById("transformSelectedTriangle").addEventListener("click", transformSelectedTriangle);
