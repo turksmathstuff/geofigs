@@ -61,6 +61,7 @@ let pendingPointIds = [];
 let pendingAngleIsRight = false;
 let pendingAngleArcCount = 1;
 let pendingAngleDecorator = "arc";
+let activeAngleMarkPresetValue = null;
 let triangleVariant = "three-point";
 let pendingRightTriangleForceIso = false;
 let marqueeState = null;
@@ -156,7 +157,7 @@ function canvasHintText() {
     return `${constructionSelectionSession.instructions} Press Esc to cancel.`;
   }
   if (currentMode === ToolMode.ANGLE) {
-    return "Select points counterclockwise.";
+    return "Select point, vertex, point.";
   }
   if (currentMode === ToolMode.TRIANGLE && triangleVariant === "right") {
     return "Right angle first, then base vertex, then height.";
@@ -189,6 +190,18 @@ function updateModeUi() {
   });
   if (autoLabelBtn) {
     autoLabelBtn.classList.toggle("active", currentMode === ToolMode.LABEL);
+  }
+  angleMarkPresetButtons.forEach((btn) => {
+    const isActivePreset =
+      currentMode === ToolMode.ANGLE &&
+      !pendingAngleIsRight &&
+      !!activeAngleMarkPresetValue &&
+      btn.dataset.angleMark === activeAngleMarkPresetValue;
+    btn.classList.toggle("active", isActivePreset);
+  });
+  const rightAngleBtn = document.getElementById("markRightAngle");
+  if (rightAngleBtn) {
+    rightAngleBtn.classList.toggle("active", currentMode === ToolMode.ANGLE && pendingAngleIsRight);
   }
   for (const id of constructionSelectionButtonIds) {
     const btn = document.getElementById(id);
@@ -223,6 +236,7 @@ function setMode(mode) {
     pendingAngleIsRight = false;
     pendingAngleArcCount = 1;
     pendingAngleDecorator = "arc";
+    activeAngleMarkPresetValue = null;
   }
   boardController.clearPreview();
   updateModeUi();
@@ -1870,9 +1884,13 @@ function addPointInput(pointId, skipMutation = false) {
   }
 
   pendingPointIds = [];
-  pendingAngleIsRight = false;
   pendingRightTriangleForceIso = false;
-  pendingAngleDecorator = "arc";
+  if (modeForCreate !== ToolMode.ANGLE) {
+    pendingAngleIsRight = false;
+    pendingAngleArcCount = 1;
+    pendingAngleDecorator = "arc";
+    activeAngleMarkPresetValue = null;
+  }
   boardController.clearPreview();
   updateModeUi();
   renderCurrentDoc(false);
@@ -2922,12 +2940,13 @@ function renderCurrentDoc(applySelection = true) {
               radius: baseRadius,
             });
           } else {
-            for (let i = 0; i < arcCount; i += 1) {
+            const radii = nestedAngleArcRadii(baseRadius, arcCount);
+            for (let i = 0; i < radii.length; i += 1) {
               boardController.createAngle(`${ann.id}_arc_${i + 1}`, p1, p2, p3, {
                 ...style,
                 right: false,
                 decorator: "arc",
-                radius: baseRadius + i * 0.35,
+                radius: radii[i],
               });
             }
           }
@@ -3962,9 +3981,7 @@ function setActiveAngleMarkPreset(value) {
   pendingAngleIsRight = false;
   pendingAngleDecorator = cfg.decorator;
   pendingAngleArcCount = cfg.count;
-  angleMarkPresetButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.angleMark === value);
-  });
+  activeAngleMarkPresetValue = value || null;
   setMode(ToolMode.ANGLE);
 }
 
@@ -3980,6 +3997,17 @@ function angleDegrees(p1, vertex, p3) {
     diff = 360 - diff;
   }
   return diff;
+}
+
+function nestedAngleArcRadii(baseRadius, arcCount) {
+  const count = Math.max(1, Number(arcCount || 1));
+  const outer = Math.max(0.15, Number(baseRadius || 1));
+  if (count === 1) {
+    return [outer];
+  }
+  const maxStepThatFits = Math.max(0.06, (outer - 0.18) / (count - 1));
+  const step = Math.min(0.28, maxStepThatFits);
+  return Array.from({ length: count }, (_, i) => Math.max(0.15, outer - i * step));
 }
 
 function addSideMeasure() {
@@ -4273,12 +4301,9 @@ function wireUi() {
       pendingAngleIsRight = true;
       pendingAngleDecorator = "arc";
       pendingAngleArcCount = 1;
+      activeAngleMarkPresetValue = null;
       setMode(ToolMode.ANGLE);
     }
-  });
-
-  angleMarkPresetButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.angleMark === "arc-1");
   });
 
   document.getElementById("addLabel").addEventListener("click", promptLabel);
