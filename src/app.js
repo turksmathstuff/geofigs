@@ -21,6 +21,14 @@ import {
   intersectLineAndCircle,
 } from "./app/geometry/intersections.js";
 import { angleDegrees, nestedAngleArcRadii } from "./app/geometry/angles.js";
+import {
+  transformPointAround,
+  transformPointBySession,
+  projectPolygon,
+  polygonsOverlap,
+  centroid,
+  minVertexDistance,
+} from "./app/geometry/transforms.js";
 
 const store = new AppStore();
 const statusEl = document.getElementById("statusText");
@@ -2932,80 +2940,6 @@ function triangleSegmentIds(pointIds) {
     .map((o) => o.id);
 }
 
-function transformPointAround(point, center, scale, angleRad, offset) {
-  const dx = point.x - center.x;
-  const dy = point.y - center.y;
-  const rx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
-  const ry = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
-  return {
-    x: center.x + rx * scale + offset.x,
-    y: center.y + ry * scale + offset.y,
-  };
-}
-
-function transformPointBySession(base, center, angleRad, offset, mirrorX = 1, mirrorY = 1) {
-  const dx = (base.x - center.x) * mirrorX;
-  const dy = (base.y - center.y) * mirrorY;
-  const rx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
-  const ry = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
-  return {
-    x: center.x + rx + offset.x,
-    y: center.y + ry + offset.y,
-  };
-}
-
-function projectPolygon(points, axis) {
-  let min = Infinity;
-  let max = -Infinity;
-  for (const p of points) {
-    const v = p.x * axis.x + p.y * axis.y;
-    min = Math.min(min, v);
-    max = Math.max(max, v);
-  }
-  return { min, max };
-}
-
-function polygonsOverlap(polyA, polyB) {
-  const polys = [polyA, polyB];
-  for (const poly of polys) {
-    for (let i = 0; i < poly.length; i += 1) {
-      const a = poly[i];
-      const b = poly[(i + 1) % poly.length];
-      const edge = { x: b.x - a.x, y: b.y - a.y };
-      const axis = { x: -edge.y, y: edge.x };
-      const axisLen = Math.hypot(axis.x, axis.y);
-      if (axisLen < 1e-9) {
-        continue;
-      }
-      axis.x /= axisLen;
-      axis.y /= axisLen;
-      const projA = projectPolygon(polyA, axis);
-      const projB = projectPolygon(polyB, axis);
-      if (projA.max < projB.min || projB.max < projA.min) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-function centroid(points) {
-  return {
-    x: (points[0].x + points[1].x + points[2].x) / 3,
-    y: (points[0].y + points[1].y + points[2].y) / 3,
-  };
-}
-
-function minVertexDistance(polyA, polyB) {
-  let best = Infinity;
-  for (const a of polyA) {
-    for (const b of polyB) {
-      best = Math.min(best, distance(a, b));
-    }
-  }
-  return best;
-}
-
 function resolveTriangleOffsetNoOverlap(sourcePoints, transformedPoints, baseOffset, span) {
   const srcCent = centroid(sourcePoints);
   let dir = { x: baseOffset.x, y: baseOffset.y };
@@ -3020,7 +2954,10 @@ function resolveTriangleOffsetNoOverlap(sourcePoints, transformedPoints, baseOff
   let candidate = transformedPoints;
   let safety = 0;
   const step = Math.max(0.18 * span, 0.22);
-  while ((polygonsOverlap(sourcePoints, candidate) || minVertexDistance(sourcePoints, candidate) < 0.18 * span) && safety < 40) {
+  while (
+    (polygonsOverlap(sourcePoints, candidate) || minVertexDistance(sourcePoints, candidate, distance) < 0.18 * span) &&
+    safety < 40
+  ) {
     const shift = step * (safety + 1);
     candidate = candidate.map((p) => ({ x: p.x + dir.x * shift, y: p.y + dir.y * shift }));
     safety += 1;
