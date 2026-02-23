@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 ### Added
+- Construct tools:
+  - `Midpoint` plus midpoint tick variants (`1/2/3`).
+  - `Angle Bisector` plus tick-decorated variants (`1/2/3`).
+  - `Perp Bisector` (perpendicular bisector segment) with optional `Rt ∠` and `MP` midpoint-mark variants.
 - Side and angle measure annotation actions in Annotate:
   - `Side Length` creates numeric side labels from selected segments.
   - `Angle Measure` creates numeric angle labels from selected points/angle marks and defaults to degree notation.
@@ -26,6 +30,9 @@ All notable changes to this project are documented in this file.
 - `H` keyboard shortcut to hide the current selection.
 
 ### Changed
+- Angle bisector variants now use traditional congruent-angle decorators (arc + ticks) and support paired radius syncing when decorators are dragged.
+- Angle decorators (including paired bisector decorators) can be dragged to change annotation radius.
+- Perpendicular bisector tool uses click-to-place previewed segment construction and creates a draggable constrained endpoint point for resizing.
 - Congruent/Similar copy defaults now use zero rotation and side placement (left or right chosen by available board space), with minimal vertical offset.
 - Rotate/Slide panel now includes `Reflect Horizontal` and `Reflect Vertical` controls for selected triangles.
 - `Rotate/Slide Triangle` button now spans full width in the Congruent/Similar Triangles submenu.
@@ -53,6 +60,9 @@ All notable changes to this project are documented in this file.
 - Canvas hint banner now hides when hovered and reappears when the cursor leaves.
 
 ### Fixed
+- Angle mark rendering now forces minor arcs (with straight-angle ambiguity guard) to avoid accidental full-circle/major-arc displays.
+- Constrained bisector helper points now recompute correctly on point-drag commit (prevents bisector snap-back after release).
+- Parallel mark annotations now apply to constructed `parallel` / `perpendicular` line objects.
 - Rotate/Slide transform now carries linked labels with their triangle points/sides (during preview and apply).
 - SVG export now includes draggable labels by rendering label text as internal SVG text elements.
 - Refined label dragging: background-click clearing is now ignored when interacting with label text objects.

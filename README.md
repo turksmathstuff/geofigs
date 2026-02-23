@@ -22,12 +22,15 @@ Do not open `index.html` directly with `file://`.
 ### Construct
 - Point
 - Segment, Line, Ray
+- Midpoint tools (plain, 1/2/3 tick variants)
 - Triangle submenu:
   - 3-Point Triangle
   - Right Triangle
   - Isosceles Triangle
 - Circle
 - Parallel / Perpendicular through a selected point
+- Angle Bisector tools (plain, 1/2/3 tick variants)
+- Perpendicular Bisector tools (segment placement variants with optional right-angle / midpoint marks)
 - Parallel / Perpendicular outputs now render with arrowheads and draggable visible-end handles
 - Congruent/Similar triangle duplication tools
 - Rotate/Slide triangle transform panel (with reflect options)
@@ -71,6 +74,10 @@ Do not open `index.html` directly with `file://`.
 - Drag arrow tips on rays/lines to resize how much of the object is visible.
 - Parallel/perpendicular lines are solid by default (can be changed with the Solid/Dashed style control), appear slightly inset from canvas edges, and have draggable arrow-tip resize handles.
 - Parallel/perpendicular lines can be reused as source lines for later parallel/perpendicular constructions.
+- Midpoint points and constructed bisector helper points are constrained and update with their source geometry.
+- Angle bisector tick variants add paired congruent angle decorators (arc + ticks), and dragging one angle decorator moves the pair together.
+- Angle decorators (arc / arc-tick / right-angle) can be dragged outward/inward to adjust radius.
+- Perpendicular bisector creates a one-sided segment from the midpoint after a preview placement click; drag its endpoint point to resize while staying perpendicular.
 - Floating canvas hints hide when hovered and reappear when the cursor leaves them.
 - Triangle transform panel includes:
   - Compass-style rotation drag

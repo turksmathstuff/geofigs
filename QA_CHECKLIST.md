@@ -118,19 +118,63 @@ Use this checklist on the current `main` branch build. Go in order.
 
 ---
 
-## 9. Congruent / Similar / Transform Triangle Tools
-### 9A. Congruent Triangle Copy
+## 9. Midpoint / Angle Bisector / Perpendicular Bisector Tools
+### 9A. Midpoint
+1. Create a segment and select it.
+2. Click `Midpoint` and confirm a midpoint point is created on the segment.
+3. Repeat using exactly two selected points (no segment) and confirm midpoint creation.
+4. Drag either source endpoint and confirm the midpoint tracks.
+5. Try invalid selection (no segment and not exactly two points) and confirm alert behavior.
+
+### 9B. Midpoint Tick Variants
+1. Select a segment (or two points) and create `Midpoint 1 Tick`, `2 Ticks`, and `3 Ticks`.
+2. Confirm midpoint point appears and tick marks render on both half-segments.
+3. Drag source endpoints and confirm the midpoint and both tick groups stay aligned.
+
+### 9C. Angle Bisector
+1. Select 3 points representing an angle (vertex is the second selected point).
+2. Click `Bisector` and confirm a bisector ray is created from the vertex.
+3. Drag either side point of the source angle and confirm the bisector ray updates.
+4. Select an existing angle annotation and click `Bisector`; confirm creation from the annotation works.
+5. Try a degenerate/straight angle and confirm the tool warns instead of creating invalid geometry.
+
+### 9D. Angle Bisector Tick Variants + Angle Decorator Drag
+1. Create `Bisector + 1 Tick`, then `+ 2 Ticks` (and `+ 3 Ticks` if desired).
+2. Confirm each bisector variant adds two congruent angle decorators (arc + ticks), one on each side of the bisector.
+3. Drag one of the angle decorators outward/inward and confirm both decorators in the pair move together (same radius).
+4. Confirm dragged angle decorator radius persists after moving source points and after undo/redo.
+5. Confirm angle marks never render as a full circle/major arc when source points are moved.
+
+### 9E. Perpendicular Bisector (Placement Segment)
+1. Select a segment (or exactly two points), open `Perp Bisector`, and choose `Bisector`.
+2. Move the cursor to one side of the segment and click to place.
+3. Confirm a perpendicular bisector **segment** (not full line) is created from the midpoint in one direction only.
+4. Confirm the midpoint point and the endpoint point are both visible.
+5. Drag source endpoints and confirm the perpendicular bisector remains perpendicular and stays anchored at the midpoint.
+6. Confirm dragging the bisector segment body does not move the construction.
+7. Drag the bisector endpoint point and confirm it slides along the perpendicular and resizes the segment.
+
+### 9F. Perpendicular Bisector Variants
+1. Create `Bisector + Rt ∠`, `Bisector + MP Ticks`, and `Bisector + Rt ∠ + MP`.
+2. Confirm right-angle decoration appears at the midpoint when selected.
+3. Confirm midpoint tick marks appear on the original source segment when selected.
+4. Confirm both decorations remain aligned after moving source endpoints or resizing via the bisector endpoint point.
+
+---
+
+## 10. Congruent / Similar / Transform Triangle Tools
+### 10A. Congruent Triangle Copy
 1. Create a triangle and select its 3 vertices (or its 3 side segments).
 2. Click `Congruent △`.
 3. Confirm a congruent offset copy is created.
 4. Confirm copy placement avoids obvious overlap when possible.
 
-### 9B. Similar Triangle Copy
+### 10B. Similar Triangle Copy
 1. Select one triangle again.
 2. Click `Similar △`.
 3. Confirm a larger similar copy is created.
 
-### 9C. Rotate/Slide Triangle Panel
+### 10C. Rotate/Slide Triangle Panel
 1. Select one triangle.
 2. Click `Rotate/Slide Triangle`.
 3. Confirm transform panel opens with live preview.
@@ -143,14 +187,14 @@ Use this checklist on the current `main` branch build. Go in order.
 
 ---
 
-## 10. Annotation Tools
-### 10A. Segment Ticks
+## 11. Annotation Tools
+### 11A. Segment Ticks
 1. Select one or more segments.
 2. Add `1` tick, then `2`, then `3` tick marks on test segments.
 3. Confirm marks appear on each selected segment.
 4. Try with no segment selected and confirm alert behavior.
 
-### 10B. Angle Arcs + Right Angle
+### 11B. Angle Arcs + Right Angle
 1. Select 3 points (counterclockwise) and add angle arc `1`.
 2. Repeat for arc `2` and `3` on a test angle.
 3. Add a right-angle marker using valid 3-point selection.
@@ -158,12 +202,12 @@ Use this checklist on the current `main` branch build. Go in order.
 5. In angle point-pick mode, click 3 existing points and confirm annotation is created.
 6. Confirm duplicate point clicks are rejected (should not create degenerate angle).
 
-### 10C. Parallel Marks
+### 11C. Parallel Marks
 1. Select one or more segments/lines.
 2. Add parallel marks (`1`, `2`, `3`) and confirm chevrons render.
 3. Try with no valid selection and confirm alert behavior.
 
-### 10D. Side Length + Angle Measure Labels
+### 11D. Side Length + Angle Measure Labels
 1. Select exactly one segment and click `Side Length`.
 2. Confirm prompt appears with default numeric value.
 3. Accept default and confirm a draggable label is created.
@@ -172,7 +216,7 @@ Use this checklist on the current `main` branch build. Go in order.
 6. Enter a value without `°` and confirm the app appends `°`.
 7. Drag both labels and confirm they move.
 
-### 10E. Manual Label + Auto Label Mode
+### 11E. Manual Label + Auto Label Mode
 1. Click `Add Label`, enter text, and confirm label appears.
 2. Select a point first, then `Add Label`; confirm it is placed near the point.
 3. Switch to `Auto Label` mode.
@@ -182,7 +226,7 @@ Use this checklist on the current `main` branch build. Go in order.
 
 ---
 
-## 11. Style Controls
+## 12. Style Controls
 1. Create a few test objects (point/segment/circle/triangle edge).
 2. Change stroke color and create a new object; confirm the new object uses the new color.
 3. Change stroke width and create a new object; confirm width applies.
@@ -193,7 +237,7 @@ Use this checklist on the current `main` branch build. Go in order.
 
 ---
 
-## 12. Hide / Show All (Export Cleanup)
+## 13. Hide / Show All (Export Cleanup)
 1. Select one or more objects.
 2. Use `Hide Selected` (or keyboard `H`) and confirm they disappear.
 3. Confirm hidden items are excluded visually but app remains functional.
@@ -202,7 +246,7 @@ Use this checklist on the current `main` branch build. Go in order.
 
 ---
 
-## 13. Save / Open (Persistence)
+## 14. Save / Open (Persistence)
 1. Create a mixed figure (triangle, circle, labels, annotations).
 2. Save/export the editable figure as `.geojson`.
 3. Clear the board (or reload page) and confirm canvas resets.
@@ -212,7 +256,7 @@ Use this checklist on the current `main` branch build. Go in order.
 
 ---
 
-## 14. SVG / PNG Export
+## 15. SVG / PNG Export
 1. Create a representative figure with labels and annotations.
 2. Download SVG with default settings.
 3. If available, test `tight` SVG export toggle and compare bounds.
