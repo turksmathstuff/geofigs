@@ -270,7 +270,11 @@ function applyPointConstraintToDraggedPosition(pointObj, pos) {
   if (!pointObj?.constraint || !pos) {
     return { pos, changedConstraint: false };
   }
-  if (pointObj.constraint.kind === "intersection" || pointObj.constraint.kind === "midpoint") {
+  if (
+    pointObj.constraint.kind === "intersection" ||
+    pointObj.constraint.kind === "midpoint" ||
+    pointObj.constraint.kind === "angleBisectorRay"
+  ) {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
   }
   if (pointObj.constraint.kind === "rightTriangleApex") {
@@ -430,6 +434,58 @@ function maybeCreateMidpointPoint(pointAId, pointBId) {
     constraint: {
       kind: "midpoint",
       sourcePointIds: [pointAId, pointBId],
+    },
+    style: { ...defaultStyle(), fixed: true },
+  });
+  return id;
+}
+
+function angleBisectorDirectionPoint(pointA, vertex, pointB, distanceOut = 1) {
+  if (!pointA || !vertex || !pointB) {
+    return null;
+  }
+  const ax = pointA.x - vertex.x;
+  const ay = pointA.y - vertex.y;
+  const bx = pointB.x - vertex.x;
+  const by = pointB.y - vertex.y;
+  const alen = Math.hypot(ax, ay);
+  const blen = Math.hypot(bx, by);
+  if (alen < 1e-9 || blen < 1e-9) {
+    return null;
+  }
+  const sx = ax / alen + bx / blen;
+  const sy = ay / alen + by / blen;
+  const slen = Math.hypot(sx, sy);
+  if (slen < 1e-9) {
+    return null;
+  }
+  const out = Math.max(0.5, Number(distanceOut) || 1);
+  return {
+    x: vertex.x + (sx / slen) * out,
+    y: vertex.y + (sy / slen) * out,
+  };
+}
+
+function maybeCreateAngleBisectorDirectionPoint(pointAId, vertexId, pointBId) {
+  const pointA = getPointById(pointAId);
+  const vertex = getPointById(vertexId);
+  const pointB = getPointById(pointBId);
+  const target = angleBisectorDirectionPoint(pointA, vertex, pointB, 1);
+  if (!target) {
+    return null;
+  }
+  const id = makeId("pt");
+  addObject({
+    id,
+    type: "point",
+    x: target.x,
+    y: target.y,
+    name: "",
+    hidden: true,
+    constraint: {
+      kind: "angleBisectorRay",
+      sourcePointIds: [pointAId, vertexId, pointBId],
+      distance: 1,
     },
     style: { ...defaultStyle(), fixed: true },
   });
@@ -1231,6 +1287,19 @@ function recomputeConstrainedPoints() {
       obj.y = (p1.y + p2.y) / 2;
       continue;
     }
+    if (obj.constraint.kind === "angleBisectorRay") {
+      const [id1, id2, id3] = obj.constraint.sourcePointIds || [];
+      const p1 = getPointById(id1);
+      const vertex = getPointById(id2);
+      const p3 = getPointById(id3);
+      const next = angleBisectorDirectionPoint(p1, vertex, p3, obj.constraint.distance);
+      if (!next) {
+        continue;
+      }
+      obj.x = next.x;
+      obj.y = next.y;
+      continue;
+    }
     if (obj.constraint.kind === "rightTriangleApex") {
       const rightVertex = getPointById(obj.constraint.rightVertexId);
       const baseVertex = getPointById(obj.constraint.baseVertexId);
@@ -1884,6 +1953,9 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (!p1Obj || !p2Obj) {
       return;
     }
+    if (rayObj.construction === "angleBisector") {
+      return;
+    }
     const unchanged =
       Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
       Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
@@ -2150,6 +2222,9 @@ function handleObjectMove(id, type, pos, options = {}) {
           obj.follow.offsetY = adjustedPos.y - base.y;
         }
       }
+      if (type === "point") {
+        recomputeConstrainedPoints();
+      }
       commitTransientSnapshotIfPresent(id, `move-${type}`);
       return;
     }
@@ -2162,6 +2237,9 @@ function handleObjectMove(id, type, pos, options = {}) {
           obj.follow.offsetX = adjustedPos.x - base.x;
           obj.follow.offsetY = adjustedPos.y - base.y;
         }
+      }
+      if (type === "point") {
+        recomputeConstrainedPoints();
       }
     });
   }
@@ -2200,6 +2278,10 @@ function removeWithDependencies(selectedSet) {
         changed = true;
       }
       if (obj.constraint?.kind === "midpoint" && obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
+      if (obj.constraint?.kind === "angleBisectorRay" && obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))) {
         selectedSet.add(obj.id);
         changed = true;
       }
@@ -2295,6 +2377,7 @@ function buildPointMap() {
             currentMode !== ToolMode.SELECT ||
             obj.constraint?.kind === "intersection" ||
             obj.constraint?.kind === "midpoint" ||
+            obj.constraint?.kind === "angleBisectorRay" ||
             obj.style?.fixed,
         });
     map.set(obj.id, pt);
@@ -2431,7 +2514,8 @@ function renderCurrentDoc(applySelection = true) {
       const p3 = points.get(ann.pointIds[2]);
       if (p1 && p2 && p3) {
         const arcCount = Math.max(1, Number(ann.arcCount || 1));
-        const decorator = ann.decorator === "arcTick" ? "arcTick" : "arc";
+        const decorator =
+          ann.decorator === "arcTick" ? "arcTick" : ann.decorator === "tickOnly" ? "tickOnly" : "arc";
         const tickCount = Math.max(1, Number(ann.tickCount || arcCount || 1));
         if (ann.right) {
           boardController.createAngle(ann.id, p1, p2, p3, {
@@ -2440,11 +2524,11 @@ function renderCurrentDoc(applySelection = true) {
             radius: 1,
           });
         } else {
-          if (decorator === "arcTick") {
+          if (decorator === "arcTick" || decorator === "tickOnly") {
             boardController.createAngle(ann.id, p1, p2, p3, {
               ...style,
               right: false,
-              decorator: "arcTick",
+              decorator,
               tickCount,
               radius: 1,
             });
@@ -3105,6 +3189,21 @@ function midpointSelectionEndpoints() {
   return null;
 }
 
+function angleBisectorSelectionPointIds() {
+  const selectedPoints = selectedOfTypes(["point"]);
+  if (selectedPoints.length === 3) {
+    return selectedPoints;
+  }
+  const selectedAngles = selectedOfTypes(["angle"]);
+  if (selectedAngles.length === 1) {
+    const ann = store.doc.annotations.find((a) => a.id === selectedAngles[0] && a.type === "angle");
+    if (ann?.pointIds?.length === 3) {
+      return [...ann.pointIds];
+    }
+  }
+  return null;
+}
+
 function addMidpoint(tickCount = 0) {
   const endpoints = midpointSelectionEndpoints();
   if (!endpoints) {
@@ -3142,6 +3241,68 @@ function addMidpoint(tickCount = 0) {
     }
     store.clearSelection();
     store.selection.add(midpointId);
+  });
+}
+
+function addAngleBisector(tickCount = 0) {
+  const pointIds = angleBisectorSelectionPointIds();
+  if (!pointIds) {
+    alert("Select exactly 3 points (with the vertex second) or one angle mark.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const [pointAId, vertexId, pointBId] = pointIds;
+  const pointA = getPointById(pointAId);
+  const vertex = getPointById(vertexId);
+  const pointB = getPointById(pointBId);
+  const probe = angleBisectorDirectionPoint(pointA, vertex, pointB, 1);
+  if (!probe) {
+    alert("Cannot bisect a degenerate or straight angle selection.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+
+  runMutation(`angle-bisector${tickCount ? `-${tickCount}-tick` : ""}`, () => {
+    const directionPointId = maybeCreateAngleBisectorDirectionPoint(pointAId, vertexId, pointBId);
+    if (!directionPointId) {
+      return;
+    }
+    const rayId = makeId("bis");
+    addObject({
+      id: rayId,
+      type: "line",
+      lineType: "ray",
+      pointIds: [vertexId, directionPointId],
+      construction: "angleBisector",
+      style: { ...defaultStyle(), rayExtension: normalizedRayExtension(store.doc.styles.rayExtension) },
+    });
+    if (tickCount > 0) {
+      const groupId = makeId("abm");
+      addAnnotation({
+        id: makeId("ang"),
+        type: "angle",
+        groupId,
+        pointIds: [pointAId, vertexId, directionPointId],
+        right: false,
+        arcCount: 1,
+        decorator: "arcTick",
+        tickCount,
+        style: defaultStyle(),
+      });
+      addAnnotation({
+        id: makeId("ang"),
+        type: "angle",
+        groupId,
+        pointIds: [directionPointId, vertexId, pointBId],
+        right: false,
+        arcCount: 1,
+        decorator: "arcTick",
+        tickCount,
+        style: defaultStyle(),
+      });
+    }
+    store.clearSelection();
+    store.selection.add(rayId);
   });
 }
 
@@ -3452,6 +3613,10 @@ function wireUi() {
   document.getElementById("makeMidpointTick1").addEventListener("click", () => addMidpoint(1));
   document.getElementById("makeMidpointTick2").addEventListener("click", () => addMidpoint(2));
   document.getElementById("makeMidpointTick3").addEventListener("click", () => addMidpoint(3));
+  document.getElementById("makeAngleBisector").addEventListener("click", () => addAngleBisector(0));
+  document.getElementById("makeAngleBisectorTick1").addEventListener("click", () => addAngleBisector(1));
+  document.getElementById("makeAngleBisectorTick2").addEventListener("click", () => addAngleBisector(2));
+  document.getElementById("makeAngleBisectorTick3").addEventListener("click", () => addAngleBisector(3));
   document.getElementById("markParallel1").addEventListener("click", () => addParallelMarks(1));
   document.getElementById("markParallel2").addEventListener("click", () => addParallelMarks(2));
   document.getElementById("markParallel3").addEventListener("click", () => addParallelMarks(3));
