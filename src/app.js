@@ -81,8 +81,6 @@ const constructionSelectionButtonIds = [
   "addAngleMeasure",
 ];
 
-const transientDragSnapshots = new Map();
-
 const boardController = new BoardController(
   "jxgbox",
   (coords, evt) => handleBoardClick(coords, evt),
@@ -476,18 +474,18 @@ function runMutation(label, mutator) {
 }
 
 function ensureTransientSnapshot(id) {
-  if (!id || transientDragSnapshots.has(id)) {
+  if (!id || session.transientDragSnapshots.has(id)) {
     return;
   }
-  transientDragSnapshots.set(id, store.snapshot());
+  session.transientDragSnapshots.set(id, store.snapshot());
 }
 
 function commitTransientSnapshotIfPresent(id, label) {
-  if (!id || !transientDragSnapshots.has(id)) {
+  if (!id || !session.transientDragSnapshots.has(id)) {
     return false;
   }
-  const before = transientDragSnapshots.get(id);
-  transientDragSnapshots.delete(id);
+  const before = session.transientDragSnapshots.get(id);
+  session.transientDragSnapshots.delete(id);
   store.doc.metadata.updatedAt = new Date().toISOString();
   const after = store.snapshot();
   store.commitSnapshot(label, before, after, applyDoc);
@@ -2113,7 +2111,7 @@ function handleObjectMove(id, type, pos, options = {}) {
       }
       renderCurrentDoc(false);
     } else {
-      if (transientDragSnapshots.has(id)) {
+      if (session.transientDragSnapshots.has(id)) {
         const targets =
           ann.groupId
             ? store.doc.annotations.filter((a) => a.type === "angle" && a.groupId === ann.groupId)
@@ -2158,7 +2156,7 @@ function handleObjectMove(id, type, pos, options = {}) {
         rayObj.style.rayExtension = nextExt;
         updateConstrainedPointsLive();
       } else {
-        if (transientDragSnapshots.has(id)) {
+        if (session.transientDragSnapshots.has(id)) {
           rayObj.style = rayObj.style || {};
           rayObj.style.rayExtension = nextExt;
           commitTransientSnapshotIfPresent(id, "resize-ray-visible");
@@ -2201,7 +2199,7 @@ function handleObjectMove(id, type, pos, options = {}) {
       p2Obj.y = pos.p2.y;
       updateConstrainedPointsLive();
     } else {
-      if (transientDragSnapshots.has(id)) {
+      if (session.transientDragSnapshots.has(id)) {
         p1Obj.x = pos.p1.x;
         p1Obj.y = pos.p1.y;
         p2Obj.x = pos.p2.x;
@@ -2252,7 +2250,7 @@ function handleObjectMove(id, type, pos, options = {}) {
         p2Obj.y = pos.p2.y;
         updateConstrainedPointsLive();
       } else {
-        if (transientDragSnapshots.has(id)) {
+        if (session.transientDragSnapshots.has(id)) {
           p1Obj.x = pos.p1.x;
           p1Obj.y = pos.p1.y;
           p2Obj.x = pos.p2.x;
@@ -2287,7 +2285,7 @@ function handleObjectMove(id, type, pos, options = {}) {
         lineObj.style.lineExtensionEnd = nextEnd;
         updateConstrainedPointsLive();
       } else {
-        if (transientDragSnapshots.has(id)) {
+        if (session.transientDragSnapshots.has(id)) {
           lineObj.style = lineObj.style || {};
           lineObj.style.lineExtensionStart = nextStart;
           lineObj.style.lineExtensionEnd = nextEnd;
@@ -2336,7 +2334,7 @@ function handleObjectMove(id, type, pos, options = {}) {
       p2Obj.y = pos.p2.y;
       updateConstrainedPointsLive();
     } else {
-      if (transientDragSnapshots.has(id)) {
+      if (session.transientDragSnapshots.has(id)) {
         p1Obj.x = pos.p1.x;
         p1Obj.y = pos.p1.y;
         p2Obj.x = pos.p2.x;
@@ -2383,7 +2381,7 @@ function handleObjectMove(id, type, pos, options = {}) {
       throughObj.y = pos.p2.y;
       updateConstrainedPointsLive();
     } else {
-      if (transientDragSnapshots.has(id)) {
+      if (session.transientDragSnapshots.has(id)) {
         centerObj.x = pos.p1.x;
         centerObj.y = pos.p1.y;
         throughObj.x = pos.p2.x;
@@ -2441,7 +2439,7 @@ function handleObjectMove(id, type, pos, options = {}) {
     }
     updateConstrainedPointsLive();
   } else {
-    if (transientDragSnapshots.has(id)) {
+    if (session.transientDragSnapshots.has(id)) {
       obj.x = adjustedPos.x;
       obj.y = adjustedPos.y;
       if (type === "label" && obj.follow) {
