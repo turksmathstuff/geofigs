@@ -48,6 +48,12 @@ const constructionSelectionButtonIds = [
   "makeCongruentTriangle",
   "makeSimilarTriangle",
   "transformSelectedTriangle",
+  "markTick1",
+  "markTick2",
+  "markTick3",
+  "markParallel1",
+  "markParallel2",
+  "markParallel3",
 ];
 
 let currentMode = ToolMode.SELECT;
@@ -1997,6 +2003,21 @@ function handleObjectClick(id, type, evt) {
   const multi = evt.shiftKey || evt.metaKey || evt.ctrlKey;
   const eventType = String(evt?.type || "").toLowerCase();
   const isReleaseEvent = eventType.includes("up") || eventType.includes("end");
+  if (evt && typeof evt === "object") {
+    const clickKey = `${type}:${id}`;
+    const dedupeStamp = `${eventType}:${Number(evt.timeStamp || 0)}`;
+    if (evt.__codexHandledObjectClicksStamp !== dedupeStamp) {
+      evt.__codexHandledObjectClicksStamp = dedupeStamp;
+      evt.__codexHandledObjectClicks = [];
+    }
+    if (!Array.isArray(evt.__codexHandledObjectClicks)) {
+      evt.__codexHandledObjectClicks = [];
+    }
+    if (evt.__codexHandledObjectClicks.includes(clickKey)) {
+      return;
+    }
+    evt.__codexHandledObjectClicks.push(clickKey);
+  }
   if (["segment", "line", "ray", "parallel", "perpendicular", "circle"].includes(type)) {
     const nearPoint = findNearbyVisiblePoint(boardController.getUserCoords(evt), 0.4);
     if (nearPoint && nearPoint.id !== id) {
@@ -2857,6 +2878,12 @@ function renderCurrentDoc(applySelection = true) {
       if (segment) {
         boardController.createTickMark(ann.id, segment, ann.tickCount, style);
       }
+    } else if (ann.type === "tickPoints") {
+      const p1 = points.get(ann.pointIds?.[0]);
+      const p2 = points.get(ann.pointIds?.[1]);
+      if (p1 && p2) {
+        boardController.createPointPairTickMarks(ann.id, p1, p2, ann.tickCount, style);
+      }
     } else if (ann.type === "midpointTick") {
       const p1 = points.get(ann.pointIds?.[0]);
       const pm = points.get(ann.pointIds?.[1]);
@@ -3564,35 +3591,59 @@ function createParallelOrPerpendicular(kind, options = {}) {
   return true;
 }
 
-function addTicks(tickCount) {
+function addTicks(tickCount, options = {}) {
+  const quiet = !!options.quiet;
   const segments = selectedOfTypes(["segment"]);
-  if (!segments.length) {
-    alert("Select one or more segments first.");
-    setMode(ToolMode.SELECT);
-    return;
+  const selectedPoints = selectedOfTypes(["point"]);
+  let pointPair = null;
+  if (!segments.length && selectedPoints.length === 2) {
+    pointPair = [selectedPoints[0], selectedPoints[1]];
+  }
+  if (!segments.length && !pointPair) {
+    if (!quiet) {
+      alert("Select one or more segments, or exactly two points.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
   const groupId = makeId("cg");
 
   runMutation(`tick-${tickCount}`, () => {
-    for (const segmentId of segments) {
+    if (segments.length) {
+      for (const segmentId of segments) {
+        addAnnotation({
+          id: makeId("tick"),
+          type: "tick",
+          groupId,
+          segmentId,
+          tickCount,
+          style: defaultStyle(),
+        });
+      }
+    } else if (pointPair) {
       addAnnotation({
         id: makeId("tick"),
-        type: "tick",
+        type: "tickPoints",
         groupId,
-        segmentId,
+        pointIds: [...pointPair],
         tickCount,
         style: defaultStyle(),
       });
     }
+    store.clearSelection();
   });
+  return true;
 }
 
-function addParallelMarks(markCount) {
+function addParallelMarks(markCount, options = {}) {
+  const quiet = !!options.quiet;
   const targets = selectedOfTypes(["segment", "line", "parallel", "perpendicular"]);
   if (!targets.length) {
-    alert("Select one or more segments/lines/parallel/perpendicular objects first.");
-    setMode(ToolMode.SELECT);
-    return;
+    if (!quiet) {
+      alert("Select one or more segments/lines/parallel/perpendicular objects first.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
   }
   const groupId = makeId("pm");
   runMutation(`parallel-mark-${markCount}`, () => {
@@ -3606,6 +3657,34 @@ function addParallelMarks(markCount) {
         style: defaultStyle(),
       });
     }
+    store.clearSelection();
+  });
+  return true;
+}
+
+function launchSegmentTicks(tickCount, buttonId) {
+  if (addTicks(tickCount, { quiet: true })) {
+    return;
+  }
+  startConstructionSelectionSession({
+    kind: `segment-ticks-${tickCount}`,
+    label: `Segment Ticks (${tickCount})`,
+    buttonId,
+    instructions: "Select one or more segments, or exactly two points.",
+    tryCreate: () => addTicks(tickCount, { quiet: true }),
+  });
+}
+
+function launchParallelMarks(markCount, buttonId) {
+  if (addParallelMarks(markCount, { quiet: true })) {
+    return;
+  }
+  startConstructionSelectionSession({
+    kind: `parallel-marks-${markCount}`,
+    label: `Parallel Marks (${markCount})`,
+    buttonId,
+    instructions: "Select one or more segments/lines/parallel/perpendicular objects.",
+    tryCreate: () => addParallelMarks(markCount, { quiet: true }),
   });
 }
 
@@ -4149,9 +4228,9 @@ function wireUi() {
     });
   }
 
-  document.getElementById("markTick1").addEventListener("click", () => addTicks(1));
-  document.getElementById("markTick2").addEventListener("click", () => addTicks(2));
-  document.getElementById("markTick3").addEventListener("click", () => addTicks(3));
+  document.getElementById("markTick1").addEventListener("click", () => launchSegmentTicks(1, "markTick1"));
+  document.getElementById("markTick2").addEventListener("click", () => launchSegmentTicks(2, "markTick2"));
+  document.getElementById("markTick3").addEventListener("click", () => launchSegmentTicks(3, "markTick3"));
   document.getElementById("makeMidpoint").addEventListener("click", () => launchMidpoint(0, "makeMidpoint"));
   document.getElementById("makeMidpointTick1").addEventListener("click", () => launchMidpoint(1, "makeMidpointTick1"));
   document.getElementById("makeMidpointTick2").addEventListener("click", () => launchMidpoint(2, "makeMidpointTick2"));
@@ -4177,9 +4256,9 @@ function wireUi() {
   document.getElementById("makeAngleBisectorTick1").addEventListener("click", () => launchAngleBisector(1, "makeAngleBisectorTick1"));
   document.getElementById("makeAngleBisectorTick2").addEventListener("click", () => launchAngleBisector(2, "makeAngleBisectorTick2"));
   document.getElementById("makeAngleBisectorTick3").addEventListener("click", () => launchAngleBisector(3, "makeAngleBisectorTick3"));
-  document.getElementById("markParallel1").addEventListener("click", () => addParallelMarks(1));
-  document.getElementById("markParallel2").addEventListener("click", () => addParallelMarks(2));
-  document.getElementById("markParallel3").addEventListener("click", () => addParallelMarks(3));
+  document.getElementById("markParallel1").addEventListener("click", () => launchParallelMarks(1, "markParallel1"));
+  document.getElementById("markParallel2").addEventListener("click", () => launchParallelMarks(2, "markParallel2"));
+  document.getElementById("markParallel3").addEventListener("click", () => launchParallelMarks(3, "markParallel3"));
   document.getElementById("addSideMeasure").addEventListener("click", addSideMeasure);
   document.getElementById("addAngleMeasure").addEventListener("click", addAngleMeasure);
 
