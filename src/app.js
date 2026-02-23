@@ -270,7 +270,7 @@ function applyPointConstraintToDraggedPosition(pointObj, pos) {
   if (!pointObj?.constraint || !pos) {
     return { pos, changedConstraint: false };
   }
-  if (pointObj.constraint.kind === "intersection") {
+  if (pointObj.constraint.kind === "intersection" || pointObj.constraint.kind === "midpoint") {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
   }
   if (pointObj.constraint.kind === "rightTriangleApex") {
@@ -410,6 +410,28 @@ function maybeCreateAttachedPoint(snap) {
       attach: { ...snap.attach },
     },
     style: { ...defaultStyle(), strokeColor: defaultAttachedPointColor() },
+  });
+  return id;
+}
+
+function maybeCreateMidpointPoint(pointAId, pointBId) {
+  const pointA = getPointById(pointAId);
+  const pointB = getPointById(pointBId);
+  if (!pointA || !pointB) {
+    return null;
+  }
+  const id = makeId("pt");
+  addObject({
+    id,
+    type: "point",
+    x: (pointA.x + pointB.x) / 2,
+    y: (pointA.y + pointB.y) / 2,
+    name: "",
+    constraint: {
+      kind: "midpoint",
+      sourcePointIds: [pointAId, pointBId],
+    },
+    style: { ...defaultStyle(), fixed: true },
   });
   return id;
 }
@@ -1196,6 +1218,17 @@ function recomputeConstrainedPoints() {
       }
       obj.x = point.x;
       obj.y = point.y;
+      continue;
+    }
+    if (obj.constraint.kind === "midpoint") {
+      const [id1, id2] = obj.constraint.sourcePointIds || [];
+      const p1 = getPointById(id1);
+      const p2 = getPointById(id2);
+      if (!p1 || !p2) {
+        continue;
+      }
+      obj.x = (p1.x + p2.x) / 2;
+      obj.y = (p1.y + p2.y) / 2;
       continue;
     }
     if (obj.constraint.kind === "rightTriangleApex") {
@@ -2166,6 +2199,10 @@ function removeWithDependencies(selectedSet) {
         selectedSet.add(obj.id);
         changed = true;
       }
+      if (obj.constraint?.kind === "midpoint" && obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
     }
     for (const ann of [...store.doc.annotations]) {
       if (selectedSet.has(ann.id)) {
@@ -2257,6 +2294,7 @@ function buildPointMap() {
           fixed:
             currentMode !== ToolMode.SELECT ||
             obj.constraint?.kind === "intersection" ||
+            obj.constraint?.kind === "midpoint" ||
             obj.style?.fixed,
         });
     map.set(obj.id, pt);
@@ -2374,6 +2412,13 @@ function renderCurrentDoc(applySelection = true) {
       const segment = boardController.getElement(ann.segmentId);
       if (segment) {
         boardController.createTickMark(ann.id, segment, ann.tickCount, style);
+      }
+    } else if (ann.type === "midpointTick") {
+      const p1 = points.get(ann.pointIds?.[0]);
+      const pm = points.get(ann.pointIds?.[1]);
+      const p2 = points.get(ann.pointIds?.[2]);
+      if (p1 && pm && p2) {
+        boardController.createMidpointTickMarks(ann.id, p1, pm, p2, ann.tickCount, style);
       }
     } else if (ann.type === "parallelMark") {
       const target = boardController.getElement(ann.targetId);
@@ -3024,9 +3069,9 @@ function addTicks(tickCount) {
 }
 
 function addParallelMarks(markCount) {
-  const targets = selectedOfTypes(["segment", "line"]);
+  const targets = selectedOfTypes(["segment", "line", "parallel", "perpendicular"]);
   if (!targets.length) {
-    alert("Select one or more segments/lines first.");
+    alert("Select one or more segments/lines/parallel/perpendicular objects first.");
     setMode(ToolMode.SELECT);
     return;
   }
@@ -3042,6 +3087,61 @@ function addParallelMarks(markCount) {
         style: defaultStyle(),
       });
     }
+  });
+}
+
+function midpointSelectionEndpoints() {
+  const selectedSegments = selectedOfTypes(["segment"]).map((id) => getObjectById(id)).filter(Boolean);
+  if (selectedSegments.length === 1) {
+    const [a, b] = selectedSegments[0].pointIds || [];
+    if (a && b) {
+      return [a, b];
+    }
+  }
+  const selectedPoints = selectedOfTypes(["point"]);
+  if (selectedPoints.length === 2) {
+    return selectedPoints;
+  }
+  return null;
+}
+
+function addMidpoint(tickCount = 0) {
+  const endpoints = midpointSelectionEndpoints();
+  if (!endpoints) {
+    alert("Select exactly one segment or exactly two points.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const [pointAId, pointBId] = endpoints;
+  if (!pointAId || !pointBId || pointAId === pointBId) {
+    alert("Select two distinct endpoints.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+  const pointA = getPointById(pointAId);
+  const pointB = getPointById(pointBId);
+  if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
+    alert("Selected endpoints must be distinct points.");
+    setMode(ToolMode.SELECT);
+    return;
+  }
+
+  runMutation(`midpoint${tickCount ? `-${tickCount}-tick` : ""}`, () => {
+    const midpointId = maybeCreateMidpointPoint(pointAId, pointBId);
+    if (!midpointId) {
+      return;
+    }
+    if (tickCount > 0) {
+      addAnnotation({
+        id: makeId("mdtk"),
+        type: "midpointTick",
+        pointIds: [pointAId, midpointId, pointBId],
+        tickCount,
+        style: defaultStyle(),
+      });
+    }
+    store.clearSelection();
+    store.selection.add(midpointId);
   });
 }
 
@@ -3348,6 +3448,10 @@ function wireUi() {
   document.getElementById("markTick1").addEventListener("click", () => addTicks(1));
   document.getElementById("markTick2").addEventListener("click", () => addTicks(2));
   document.getElementById("markTick3").addEventListener("click", () => addTicks(3));
+  document.getElementById("makeMidpoint").addEventListener("click", () => addMidpoint(0));
+  document.getElementById("makeMidpointTick1").addEventListener("click", () => addMidpoint(1));
+  document.getElementById("makeMidpointTick2").addEventListener("click", () => addMidpoint(2));
+  document.getElementById("makeMidpointTick3").addEventListener("click", () => addMidpoint(3));
   document.getElementById("markParallel1").addEventListener("click", () => addParallelMarks(1));
   document.getElementById("markParallel2").addEventListener("click", () => addParallelMarks(2));
   document.getElementById("markParallel3").addEventListener("click", () => addParallelMarks(3));
