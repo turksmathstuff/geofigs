@@ -7,6 +7,35 @@ Use this checklist on the current `main` branch build. Go in order.
 - If something fails, note the exact step number and what happened.
 - Prefer a fresh reload before starting.
 
+## Refactor Phase 0 Starter Subset (Fast Baseline)
+- Use this subset before starting `app.js` refactor work and after each refactor phase.
+- Goal: catch behavior regressions quickly without running the full checklist every time.
+
+### Minimum pass (recommended 15-30 minutes)
+1. **Basic draw tools**
+   - Create points, a segment, a line, a ray, and a circle.
+2. **Triangle variants**
+   - Create a 3-point triangle, right triangle, and isosceles triangle.
+3. **Angle tools**
+   - Add a regular angle mark and a right-angle mark.
+4. **Selection + marquee**
+   - Single select, multi-select, marquee select, and clear selection on background click.
+5. **Drag + undo safety check (critical)**
+   - Drag a point/object, then undo once.
+   - Confirm undo is not flooded with many tiny drag steps.
+6. **Transform workflow (critical)**
+   - Open `Rotate/Slide Triangle`, verify live preview (slider or compass), apply once, undo once.
+7. **Keyboard shortcuts**
+   - Test `Undo`, `Redo`, `Delete/Backspace`, and `Escape`.
+8. **Persistence / export**
+   - Save and reopen a doc.
+   - Trigger SVG and PNG export.
+
+### When to run the full checklist
+- Before merging a major refactor phase back to `main`
+- If the starter subset fails
+- After changes touching rendering, event wiring, or drag behavior
+
 ## Test Setup
 1. Start the app (`python3 -m http.server 8000`) and open `http://localhost:8000`.
 2. Confirm the app loads without a blank canvas or JS errors.
