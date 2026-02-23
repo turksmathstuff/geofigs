@@ -710,20 +710,24 @@ export class BoardController {
     }
     el.on("up", (evt) => {
       let pointOrLabelMoved = false;
+      let draggedPixels = 0;
       if (pointerDownObjPos && (type === "point" || type === "label")) {
         pointOrLabelMoved =
           Math.abs(pointerDownObjPos.x - Number(el.X?.())) > 1e-4 ||
           Math.abs(pointerDownObjPos.y - Number(el.Y?.())) > 1e-4;
       }
+      const pointerUpScreenPos = Array.isArray(JXG.getPosition?.(evt, 0))
+        ? JXG.getPosition(evt, 0)
+        : null;
+      if (pointerDownScreenPos && pointerUpScreenPos) {
+        const dx = pointerUpScreenPos[0] - pointerDownScreenPos[0];
+        const dy = pointerUpScreenPos[1] - pointerDownScreenPos[1];
+        draggedPixels = Math.hypot(dx, dy);
+      }
       if (deferredClick && this.onObjectClick) {
         let moved = false;
-        const pointerUpScreenPos = Array.isArray(JXG.getPosition?.(evt, 0))
-          ? JXG.getPosition(evt, 0)
-          : null;
         if (pointerDownScreenPos && pointerUpScreenPos) {
-          const dx = pointerUpScreenPos[0] - pointerDownScreenPos[0];
-          const dy = pointerUpScreenPos[1] - pointerDownScreenPos[1];
-          moved = Math.hypot(dx, dy) > 4;
+          moved = draggedPixels > 4;
         } else if (pointerDownObjPos && (type === "point" || type === "label")) {
           moved =
             Math.abs(pointerDownObjPos.x - Number(el.X?.())) > 1e-4 ||
@@ -748,6 +752,12 @@ export class BoardController {
           p1: { x: meta.centerPoint.X(), y: meta.centerPoint.Y() },
           p2: { x: meta.throughPoint.X(), y: meta.throughPoint.Y() },
         }, { transient: false, shiftKey: !!evt?.shiftKey });
+      } else if (type === "angle" && meta.angleVertex && draggedPixels > 4) {
+        const current = this.getUserCoords(evt);
+        const radius = Math.hypot(current.x - meta.angleVertex.X(), current.y - meta.angleVertex.Y());
+        if (Number.isFinite(radius)) {
+          this.onObjectMove(logicalId, type, { radius }, { transient: false });
+        }
       }
       deferredClick = false;
       pointerDownObjPos = null;
@@ -1087,7 +1097,10 @@ export class BoardController {
     if (!parts?.primary) {
       return null;
     }
-    const primary = this.registerElement(id, "angle", parts.primary);
+    const primary = this.registerElement(id, "angle", parts.primary, {
+      angleVertex: vertex,
+      angleRadius: Math.max(0.15, Number(style.radius || 1)),
+    });
     for (const el of parts.all) {
       if (el !== parts.primary && el?.visProp) {
         el.visProp.highlight = false;
