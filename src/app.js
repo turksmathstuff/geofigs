@@ -81,8 +81,6 @@ const constructionSelectionButtonIds = [
   "addAngleMeasure",
 ];
 
-let currentMode = ToolMode.SELECT;
-let pendingPointIds = [];
 let marqueeState = null;
 let transformSession = null;
 let compassDragging = false;
@@ -151,19 +149,19 @@ function canvasHintText() {
   if (constructionSelectionSession) {
     return `${constructionSelectionSession.instructions} Press Esc to cancel.`;
   }
-  if (currentMode === ToolMode.ANGLE) {
+  if (session.currentMode === ToolMode.ANGLE) {
     return "Select point, vertex, point.";
   }
-  if (currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right") {
+  if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right") {
     return "Right angle first, then base vertex, then height.";
   }
-  if (currentMode === ToolMode.LABEL) {
+  if (session.currentMode === ToolMode.LABEL) {
     return "Click objects to add label. Click labeled objects to remove label.";
   }
-  if (currentMode === ToolMode.SELECT) {
+  if (session.currentMode === ToolMode.SELECT) {
     return "Hold Shift to select more than one object. Drag to box-select.";
   }
-  if ([ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY, ToolMode.TRIANGLE].includes(currentMode)) {
+  if ([ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY, ToolMode.TRIANGLE].includes(session.currentMode)) {
     return "Hold Shift to move horizontal/vertical.";
   }
   return "";
@@ -174,21 +172,21 @@ function updateModeUi() {
     constructionSelectionSession?.buttonId || perpendicularBisectorPlacement?.buttonId || null;
   modeButtons.forEach((btn) => {
     const isSelectButton = btn.dataset.mode === ToolMode.SELECT;
-    const isModeActive = btn.dataset.mode === currentMode;
+    const isModeActive = btn.dataset.mode === session.currentMode;
     btn.classList.toggle("active", isModeActive && !(isSelectButton && activeConstructionButtonId));
   });
   if (triangleMenuBtn) {
-    triangleMenuBtn.classList.toggle("active", currentMode === ToolMode.TRIANGLE);
+    triangleMenuBtn.classList.toggle("active", session.currentMode === ToolMode.TRIANGLE);
   }
   triangleModeButtons.forEach((btn) => {
-    btn.classList.toggle("active", currentMode === ToolMode.TRIANGLE && btn.dataset.triangleMode === session.triangleVariant);
+    btn.classList.toggle("active", session.currentMode === ToolMode.TRIANGLE && btn.dataset.triangleMode === session.triangleVariant);
   });
   if (autoLabelBtn) {
-    autoLabelBtn.classList.toggle("active", currentMode === ToolMode.LABEL);
+    autoLabelBtn.classList.toggle("active", session.currentMode === ToolMode.LABEL);
   }
   angleMarkPresetButtons.forEach((btn) => {
     const isActivePreset =
-      currentMode === ToolMode.ANGLE &&
+      session.currentMode === ToolMode.ANGLE &&
       !session.pendingAngleIsRight &&
       !!session.activeAngleMarkPresetValue &&
       btn.dataset.angleMark === session.activeAngleMarkPresetValue;
@@ -196,7 +194,7 @@ function updateModeUi() {
   });
   const rightAngleBtn = document.getElementById("markRightAngle");
   if (rightAngleBtn) {
-    rightAngleBtn.classList.toggle("active", currentMode === ToolMode.ANGLE && session.pendingAngleIsRight);
+    rightAngleBtn.classList.toggle("active", session.currentMode === ToolMode.ANGLE && session.pendingAngleIsRight);
   }
   for (const id of constructionSelectionButtonIds) {
     const btn = document.getElementById(id);
@@ -207,7 +205,7 @@ function updateModeUi() {
   if (constructionSelectionSession) {
     statusEl.textContent = constructionSelectionStatusText();
   } else {
-    statusEl.textContent = `Mode: ${modeLabel(currentMode)}`;
+    statusEl.textContent = `Mode: ${modeLabel(session.currentMode)}`;
   }
   if (drawingHintEl) {
     const text = canvasHintText();
@@ -225,8 +223,8 @@ function setMode(mode) {
   }
   perpendicularBisectorPlacement = null;
   constructionSelectionSession = null;
-  currentMode = mode;
-  pendingPointIds = [];
+  session.currentMode = mode;
+  session.pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
     session.pendingAngleIsRight = false;
     session.pendingAngleArcCount = 1;
@@ -240,24 +238,24 @@ function setMode(mode) {
 
 function constructionSelectionStatusText() {
   if (!constructionSelectionSession) {
-    return `Mode: ${modeLabel(currentMode)}`;
+    return `Mode: ${modeLabel(session.currentMode)}`;
   }
   const count = store.selectedIds().length;
   return `Mode: ${constructionSelectionSession.label} (${count} selected, Esc = Select)`;
 }
 
-function startConstructionSelectionSession(session) {
-  if (!session) {
+function startConstructionSelectionSession(selectionSession) {
+  if (!selectionSession) {
     return;
   }
-  if (currentMode !== ToolMode.SELECT) {
+  if (session.currentMode !== ToolMode.SELECT) {
     setMode(ToolMode.SELECT);
   } else {
     perpendicularBisectorPlacement = null;
-    pendingPointIds = [];
+    session.pendingPointIds = [];
     boardController.clearPreview();
   }
-  constructionSelectionSession = session;
+  constructionSelectionSession = selectionSession;
   store.clearSelection();
   updateModeUi();
   renderCurrentDoc(false);
@@ -1026,10 +1024,10 @@ function snapToAxis(anchor, raw) {
 }
 
 function getPointInputCoords(rawCoords, evt) {
-  if (!evt?.shiftKey || !pendingPointIds.length) {
+  if (!evt?.shiftKey || !session.pendingPointIds.length) {
     return rawCoords;
   }
-  const anchor = getPointById(pendingPointIds[pendingPointIds.length - 1]);
+  const anchor = getPointById(session.pendingPointIds[session.pendingPointIds.length - 1]);
   if (!anchor) {
     return rawCoords;
   }
@@ -1409,19 +1407,19 @@ function updateConstrainedPointsLive() {
 }
 
 function updateLinearPreview(cursorCoords) {
-  if (![ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY].includes(currentMode)) {
+  if (![ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY].includes(session.currentMode)) {
     return false;
   }
-  if (pendingPointIds.length < 1) {
+  if (session.pendingPointIds.length < 1) {
     boardController.clearPreview();
     return true;
   }
-  const p1 = getPointById(pendingPointIds[0]);
+  const p1 = getPointById(session.pendingPointIds[0]);
   if (!p1) {
     boardController.clearPreview();
     return true;
   }
-  const previewKind = currentMode === ToolMode.SEGMENT ? "segment" : currentMode === ToolMode.RAY ? "ray" : "line";
+  const previewKind = session.currentMode === ToolMode.SEGMENT ? "segment" : session.currentMode === ToolMode.RAY ? "ray" : "line";
   const previewP2 =
     previewKind === "ray"
       ? { ...cursorCoords, rayExtension: normalizedRayExtension(store.doc.styles.rayExtension) }
@@ -1437,18 +1435,18 @@ function updateLinearPreview(cursorCoords) {
 }
 
 function updateTrianglePreview(cursorCoords, evt) {
-  if (currentMode !== ToolMode.TRIANGLE) {
+  if (session.currentMode !== ToolMode.TRIANGLE) {
     boardController.clearPreview();
     return;
   }
 
   if (session.triangleVariant === "three-point") {
-    if (pendingPointIds.length < 2) {
+    if (session.pendingPointIds.length < 2) {
       boardController.clearPreview();
       return;
     }
-    const p1 = getPointById(pendingPointIds[0]);
-    const p2 = getPointById(pendingPointIds[1]);
+    const p1 = getPointById(session.pendingPointIds[0]);
+    const p2 = getPointById(session.pendingPointIds[1]);
     if (!p1 || !p2) {
       boardController.clearPreview();
       return;
@@ -1458,12 +1456,12 @@ function updateTrianglePreview(cursorCoords, evt) {
   }
 
   if (session.triangleVariant === "right") {
-    if (pendingPointIds.length < 2) {
+    if (session.pendingPointIds.length < 2) {
       boardController.clearPreview();
       return;
     }
-    const p1 = getPointById(pendingPointIds[0]);
-    const p2 = getPointById(pendingPointIds[1]);
+    const p1 = getPointById(session.pendingPointIds[0]);
+    const p2 = getPointById(session.pendingPointIds[1]);
     if (!p1 || !p2) {
       boardController.clearPreview();
       return;
@@ -1480,12 +1478,12 @@ function updateTrianglePreview(cursorCoords, evt) {
   }
 
   if (session.triangleVariant === "isosceles") {
-    if (pendingPointIds.length < 2) {
+    if (session.pendingPointIds.length < 2) {
       boardController.clearPreview();
       return;
     }
-    const p1 = getPointById(pendingPointIds[0]);
-    const p2 = getPointById(pendingPointIds[1]);
+    const p1 = getPointById(session.pendingPointIds[0]);
+    const p2 = getPointById(session.pendingPointIds[1]);
     if (!p1 || !p2) {
       boardController.clearPreview();
       return;
@@ -1499,12 +1497,12 @@ function updateTrianglePreview(cursorCoords, evt) {
     return;
   }
 
-  if (pendingPointIds.length < 1) {
+  if (session.pendingPointIds.length < 1) {
     boardController.clearPreview();
     return;
   }
 
-  const p1 = getPointById(pendingPointIds[0]);
+  const p1 = getPointById(session.pendingPointIds[0]);
   if (!p1) {
     boardController.clearPreview();
     return;
@@ -1513,14 +1511,14 @@ function updateTrianglePreview(cursorCoords, evt) {
 }
 
 function updateCirclePreview(cursorCoords) {
-  if (currentMode !== ToolMode.CIRCLE) {
+  if (session.currentMode !== ToolMode.CIRCLE) {
     return false;
   }
-  if (pendingPointIds.length < 1) {
+  if (session.pendingPointIds.length < 1) {
     boardController.clearPreview();
     return true;
   }
-  const center = getPointById(pendingPointIds[0]);
+  const center = getPointById(session.pendingPointIds[0]);
   if (!center) {
     boardController.clearPreview();
     return true;
@@ -1530,17 +1528,17 @@ function updateCirclePreview(cursorCoords) {
 }
 
 function updateAnglePreview(cursorCoords) {
-  if (currentMode !== ToolMode.ANGLE) {
+  if (session.currentMode !== ToolMode.ANGLE) {
     return false;
   }
-  if (pendingPointIds.length < 2) {
-    if (pendingPointIds.length < 1) {
+  if (session.pendingPointIds.length < 2) {
+    if (session.pendingPointIds.length < 1) {
       boardController.clearPreview();
     }
     return true;
   }
-  const p1 = getPointById(pendingPointIds[0]);
-  const vertex = getPointById(pendingPointIds[1]);
+  const p1 = getPointById(session.pendingPointIds[0]);
+  const vertex = getPointById(session.pendingPointIds[1]);
   if (!p1 || !vertex) {
     boardController.clearPreview();
     return true;
@@ -1598,21 +1596,21 @@ function updatePerpendicularBisectorPreview(cursorCoords) {
 }
 
 function addPointInput(pointId, skipMutation = false) {
-  if (pointNeeds(currentMode) > 0 && pendingPointIds.includes(pointId)) {
-    statusEl.textContent = `Mode: ${modeLabel(currentMode)} (pick distinct points)`;
+  if (pointNeeds(session.currentMode) > 0 && session.pendingPointIds.includes(pointId)) {
+    statusEl.textContent = `Mode: ${modeLabel(session.currentMode)} (pick distinct points)`;
     return;
   }
 
-  pendingPointIds.push(pointId);
-  const need = pointNeeds(currentMode);
-  if (pendingPointIds.length < need) {
-    statusEl.textContent = `Mode: ${modeLabel(currentMode)} (${pendingPointIds.length}/${need})`;
+  session.pendingPointIds.push(pointId);
+  const need = pointNeeds(session.currentMode);
+  if (session.pendingPointIds.length < need) {
+    statusEl.textContent = `Mode: ${modeLabel(session.currentMode)} (${session.pendingPointIds.length}/${need})`;
     renderCurrentDoc(false);
     return;
   }
 
-  const modeForCreate = currentMode;
-  const pointsForCreate = pendingPointIds.slice();
+  const modeForCreate = session.currentMode;
+  const pointsForCreate = session.pendingPointIds.slice();
   const isRightAngle = session.pendingAngleIsRight;
   const createFromPoints = () => {
     const style = defaultStyle();
@@ -1729,7 +1727,7 @@ function addPointInput(pointId, skipMutation = false) {
     runMutation(`create-${modeForCreate}`, createFromPoints);
   }
 
-  pendingPointIds = [];
+  session.pendingPointIds = [];
   session.pendingRightTriangleForceIso = false;
   if (modeForCreate !== ToolMode.ANGLE) {
     session.pendingAngleIsRight = false;
@@ -1801,7 +1799,7 @@ function handleBoardClick(coords, evt) {
     updateModeUi();
     return;
   }
-  if (currentMode === ToolMode.SELECT) {
+  if (session.currentMode === ToolMode.SELECT) {
     const tag = String(evt?.target?.tagName || "").toLowerCase();
     const isBoardBackground = tag === "svg" || evt?.target === boardEl;
     if (!isBoardBackground) {
@@ -1820,7 +1818,7 @@ function handleBoardClick(coords, evt) {
 
   const snappedCoords = getPointInputCoords(coords, evt);
 
-  if (currentMode === ToolMode.POINT) {
+  if (session.currentMode === ToolMode.POINT) {
     const pointSnap = findPreferredPointSnap(snappedCoords);
     runMutation("create-point", () => {
       if (pointSnap?.sourceObjectIds) {
@@ -1834,13 +1832,13 @@ function handleBoardClick(coords, evt) {
     return;
   }
 
-  if (currentMode === ToolMode.ANGLE) {
-    statusEl.textContent = `Mode: ${modeLabel(currentMode)} (select existing points only)`;
+  if (session.currentMode === ToolMode.ANGLE) {
+    statusEl.textContent = `Mode: ${modeLabel(session.currentMode)} (select existing points only)`;
     return;
   }
 
-  if (pointNeeds(currentMode) > 0) {
-    if (currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && pendingPointIds.length === 2) {
+  if (pointNeeds(session.currentMode) > 0) {
+    if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && session.pendingPointIds.length === 2) {
       session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
     }
     const nearbyPoint = findNearbyVisiblePoint(snappedCoords);
@@ -1889,11 +1887,11 @@ function handleObjectClick(id, type, evt) {
     }
   }
 
-  if (currentMode === ToolMode.POINT) {
+  if (session.currentMode === ToolMode.POINT) {
     return false;
   }
 
-  if (currentMode === ToolMode.DELETE) {
+  if (session.currentMode === ToolMode.DELETE) {
     store.clearSelection();
     store.selection.add(id);
     deleteSelected();
@@ -1914,27 +1912,27 @@ function handleObjectClick(id, type, evt) {
     return;
   }
 
-  if (pointNeeds(currentMode) > 0 && type === "point") {
-    if (currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && pendingPointIds.length === 2) {
+  if (pointNeeds(session.currentMode) > 0 && type === "point") {
+    if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && session.pendingPointIds.length === 2) {
       session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
     }
     addPointInput(id);
     return;
   }
-  if (pointNeeds(currentMode) > 0 && type !== "point") {
+  if (pointNeeds(session.currentMode) > 0 && type !== "point") {
     return false;
   }
 
-  if (currentMode === ToolMode.LABEL) {
+  if (session.currentMode === ToolMode.LABEL) {
     toggleAutoLabelForObject(id);
     return;
   }
 
-  if (currentMode === ToolMode.SELECT && !multi && !isReleaseEvent) {
+  if (session.currentMode === ToolMode.SELECT && !multi && !isReleaseEvent) {
     return { deferUntilUp: true };
   }
 
-  if (currentMode === ToolMode.SELECT || currentMode === ToolMode.CONGRUENCY) {
+  if (session.currentMode === ToolMode.SELECT || session.currentMode === ToolMode.CONGRUENCY) {
     store.toggleSelection(id, multi);
     renderCurrentDoc();
   }
@@ -2006,7 +2004,7 @@ function startMarqueeSelection() {
   }
 
   boardEl.addEventListener("mousedown", (evt) => {
-    if (currentMode !== ToolMode.SELECT || evt.button !== 0) {
+    if (session.currentMode !== ToolMode.SELECT || evt.button !== 0) {
       return;
     }
     const tag = String(evt.target?.tagName || "").toLowerCase();
@@ -2029,7 +2027,7 @@ function startMarqueeSelection() {
   });
 
   window.addEventListener("mousemove", (evt) => {
-    if (!marqueeState || currentMode !== ToolMode.SELECT) {
+    if (!marqueeState || session.currentMode !== ToolMode.SELECT) {
       return;
     }
     marqueeState.lastX = evt.clientX;
@@ -2619,8 +2617,8 @@ function buildPointMap() {
           layer: obj.constraint ? 10 : obj.style?.layer,
           fixed:
             isPerpBisectorEndpoint
-              ? currentMode !== ToolMode.SELECT
-              : currentMode !== ToolMode.SELECT ||
+              ? session.currentMode !== ToolMode.SELECT
+              : session.currentMode !== ToolMode.SELECT ||
                 obj.constraint?.kind === "intersection" ||
                 obj.constraint?.kind === "midpoint" ||
                 obj.constraint?.kind === "angleBisectorRay" ||
@@ -2806,8 +2804,8 @@ function renderCurrentDoc(applySelection = true) {
       boardController.applyVisualState(id, true);
     }
   }
-  if (pointNeeds(currentMode) > 0 && pendingPointIds.length) {
-    for (const id of pendingPointIds) {
+  if (pointNeeds(session.currentMode) > 0 && session.pendingPointIds.length) {
+    for (const id of session.pendingPointIds) {
       boardController.applyVisualState(id, true);
     }
   }
@@ -3931,7 +3929,7 @@ function promptLabel() {
 }
 
 function autoLabelPoints() {
-  if (currentMode === ToolMode.LABEL) {
+  if (session.currentMode === ToolMode.LABEL) {
     setMode(ToolMode.SELECT);
   } else {
     setMode(ToolMode.LABEL);
@@ -4260,7 +4258,7 @@ function wireUi() {
     }
     if (evt.key === "Escape") {
       store.clearSelection();
-      pendingPointIds = [];
+      session.pendingPointIds = [];
       setMode(ToolMode.SELECT);
       renderCurrentDoc(false);
     }
