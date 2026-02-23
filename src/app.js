@@ -82,8 +82,6 @@ const constructionSelectionButtonIds = [
 ];
 
 let marqueeState = null;
-let perpendicularBisectorPlacement = null;
-let constructionSelectionSession = null;
 const transientDragSnapshots = new Map();
 
 const boardController = new BoardController(
@@ -144,8 +142,8 @@ function modeLabel(mode) {
 }
 
 function canvasHintText() {
-  if (constructionSelectionSession) {
-    return `${constructionSelectionSession.instructions} Press Esc to cancel.`;
+  if (session.constructionSelectionSession) {
+    return `${session.constructionSelectionSession.instructions} Press Esc to cancel.`;
   }
   if (session.currentMode === ToolMode.ANGLE) {
     return "Select point, vertex, point.";
@@ -167,7 +165,7 @@ function canvasHintText() {
 
 function updateModeUi() {
   const activeConstructionButtonId =
-    constructionSelectionSession?.buttonId || perpendicularBisectorPlacement?.buttonId || null;
+    session.constructionSelectionSession?.buttonId || session.perpendicularBisectorPlacement?.buttonId || null;
   modeButtons.forEach((btn) => {
     const isSelectButton = btn.dataset.mode === ToolMode.SELECT;
     const isModeActive = btn.dataset.mode === session.currentMode;
@@ -200,7 +198,7 @@ function updateModeUi() {
       btn.classList.toggle("active", id === activeConstructionButtonId);
     }
   }
-  if (constructionSelectionSession) {
+  if (session.constructionSelectionSession) {
     statusEl.textContent = constructionSelectionStatusText();
   } else {
     statusEl.textContent = `Mode: ${modeLabel(session.currentMode)}`;
@@ -219,8 +217,8 @@ function setMode(mode) {
   if (session.transformSession) {
     cancelTransformSession();
   }
-  perpendicularBisectorPlacement = null;
-  constructionSelectionSession = null;
+  session.perpendicularBisectorPlacement = null;
+  session.constructionSelectionSession = null;
   session.currentMode = mode;
   session.pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
@@ -235,11 +233,11 @@ function setMode(mode) {
 }
 
 function constructionSelectionStatusText() {
-  if (!constructionSelectionSession) {
+  if (!session.constructionSelectionSession) {
     return `Mode: ${modeLabel(session.currentMode)}`;
   }
   const count = store.selectedIds().length;
-  return `Mode: ${constructionSelectionSession.label} (${count} selected, Esc = Select)`;
+  return `Mode: ${session.constructionSelectionSession.label} (${count} selected, Esc = Select)`;
 }
 
 function startConstructionSelectionSession(selectionSession) {
@@ -249,35 +247,35 @@ function startConstructionSelectionSession(selectionSession) {
   if (session.currentMode !== ToolMode.SELECT) {
     setMode(ToolMode.SELECT);
   } else {
-    perpendicularBisectorPlacement = null;
+    session.perpendicularBisectorPlacement = null;
     session.pendingPointIds = [];
     boardController.clearPreview();
   }
-  constructionSelectionSession = selectionSession;
+  session.constructionSelectionSession = selectionSession;
   store.clearSelection();
   updateModeUi();
   renderCurrentDoc(false);
 }
 
 function finishConstructionSelectionSession() {
-  constructionSelectionSession = null;
-  if (!perpendicularBisectorPlacement) {
+  session.constructionSelectionSession = null;
+  if (!session.perpendicularBisectorPlacement) {
     updateModeUi();
     renderCurrentDoc(false);
   }
 }
 
 function maybeCompleteConstructionSelectionSession() {
-  if (!constructionSelectionSession) {
+  if (!session.constructionSelectionSession) {
     return false;
   }
-  const ok = constructionSelectionSession.tryCreate?.();
+  const ok = session.constructionSelectionSession.tryCreate?.();
   if (!ok) {
     updateModeUi();
     return false;
   }
-  if (constructionSelectionSession.persistAfterSuccess) {
-    if (constructionSelectionSession.clearSelectionAfterSuccess !== false) {
+  if (session.constructionSelectionSession.persistAfterSuccess) {
+    if (session.constructionSelectionSession.clearSelectionAfterSuccess !== false) {
       store.clearSelection();
     }
     updateModeUi();
@@ -1556,11 +1554,11 @@ function updateAnglePreview(cursorCoords) {
 }
 
 function updatePerpendicularBisectorPreview(cursorCoords) {
-  if (!perpendicularBisectorPlacement) {
+  if (!session.perpendicularBisectorPlacement) {
     return false;
   }
-  const p1 = getPointById(perpendicularBisectorPlacement.pointAId);
-  const p2 = getPointById(perpendicularBisectorPlacement.pointBId);
+  const p1 = getPointById(session.perpendicularBisectorPlacement.pointAId);
+  const p2 = getPointById(session.perpendicularBisectorPlacement.pointBId);
   if (!p1 || !p2) {
     boardController.clearPreview();
     return true;
@@ -1580,13 +1578,13 @@ function updatePerpendicularBisectorPreview(cursorCoords) {
   const vy = cursorCoords.y - my;
   const signed = vx * px + vy * py;
   const halfLength = Math.max(0.2, Math.abs(signed));
-  perpendicularBisectorPlacement.side = signed >= 0 ? 1 : -1;
-  perpendicularBisectorPlacement.halfLength = halfLength;
+  session.perpendicularBisectorPlacement.side = signed >= 0 ? 1 : -1;
+  session.perpendicularBisectorPlacement.halfLength = halfLength;
   boardController.showPreviewLinear(
     { x: mx, y: my },
     {
-      x: mx + px * halfLength * perpendicularBisectorPlacement.side,
-      y: my + py * halfLength * perpendicularBisectorPlacement.side,
+      x: mx + px * halfLength * session.perpendicularBisectorPlacement.side,
+      y: my + py * halfLength * session.perpendicularBisectorPlacement.side,
     },
     "segment"
   );
@@ -1739,7 +1737,7 @@ function addPointInput(pointId, skipMutation = false) {
 }
 
 function handleBoardClick(coords, evt) {
-  if (perpendicularBisectorPlacement) {
+  if (session.perpendicularBisectorPlacement) {
     const tag = String(evt?.target?.tagName || "").toLowerCase();
     const isBoardBackground = tag === "svg" || evt?.target === boardEl;
     if (!isBoardBackground) {
@@ -1747,19 +1745,19 @@ function handleBoardClick(coords, evt) {
     }
     const adjusted = getPointInputCoords(coords, evt);
     updatePerpendicularBisectorPreview(adjusted);
-    const session = perpendicularBisectorPlacement;
-    perpendicularBisectorPlacement = null;
+    const placementSession = session.perpendicularBisectorPlacement;
+    session.perpendicularBisectorPlacement = null;
     boardController.clearPreview();
-    const halfLength = Math.max(0.2, Number(session.halfLength) || 1);
-    runMutation(`perp-bisector${session.variantLabel}`, () => {
-      const midpointId = maybeCreateMidpointPoint(session.pointAId, session.pointBId);
+    const halfLength = Math.max(0.2, Number(placementSession.halfLength) || 1);
+    runMutation(`perp-bisector${placementSession.variantLabel}`, () => {
+      const midpointId = maybeCreateMidpointPoint(placementSession.pointAId, placementSession.pointBId);
       if (!midpointId) {
         return;
       }
       const endId = maybeCreatePerpendicularBisectorEndpointPoint(
-        session.pointAId,
-        session.pointBId,
-        session.side || 1,
+        placementSession.pointAId,
+        placementSession.pointBId,
+        placementSession.side || 1,
         halfLength
       );
       if (!endId) {
@@ -1773,20 +1771,20 @@ function handleBoardClick(coords, evt) {
         construction: "perpendicularBisector",
         style: { ...defaultStyle(), dash: 0, fixed: true },
       });
-      if (session.withMidpointTicks) {
+      if (placementSession.withMidpointTicks) {
         addAnnotation({
           id: makeId("mdtk"),
           type: "midpointTick",
-          pointIds: [session.pointAId, midpointId, session.pointBId],
+          pointIds: [placementSession.pointAId, midpointId, placementSession.pointBId],
           tickCount: 1,
           style: defaultStyle(),
         });
       }
-      if (session.withRightAngle) {
+      if (placementSession.withRightAngle) {
         addAnnotation({
           id: makeId("ang"),
           type: "angle",
-          pointIds: [session.pointAId, midpointId, endId],
+          pointIds: [placementSession.pointAId, midpointId, endId],
           right: true,
           arcCount: 1,
           style: defaultStyle(),
@@ -1808,7 +1806,7 @@ function handleBoardClick(coords, evt) {
     }
     store.clearSelection();
     renderCurrentDoc();
-    if (constructionSelectionSession) {
+    if (session.constructionSelectionSession) {
       updateModeUi();
     }
     return;
@@ -1896,7 +1894,7 @@ function handleObjectClick(id, type, evt) {
     return;
   }
 
-  if (constructionSelectionSession) {
+  if (session.constructionSelectionSession) {
     if (!multi && !isReleaseEvent) {
       return { deferUntilUp: true };
     }
@@ -3642,7 +3640,7 @@ function createPerpendicularBisectorVariant(options = {}, runtime = {}) {
     }
     return false;
   }
-  perpendicularBisectorPlacement = {
+  session.perpendicularBisectorPlacement = {
     pointAId,
     pointBId,
     withRightAngle: !!options.withRightAngle,
