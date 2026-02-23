@@ -41,6 +41,24 @@ body {
   margin: 0;
 }
 
+.topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-version {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(15, 118, 110, 0.1);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+
 .status {
   color: var(--muted);
   font-size: 0.95rem;
