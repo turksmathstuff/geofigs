@@ -82,8 +82,6 @@ const constructionSelectionButtonIds = [
 ];
 
 let marqueeState = null;
-let transformSession = null;
-let compassDragging = false;
 let perpendicularBisectorPlacement = null;
 let constructionSelectionSession = null;
 const transientDragSnapshots = new Map();
@@ -218,7 +216,7 @@ function setMode(mode) {
   if (!isToolMode(mode)) {
     return;
   }
-  if (transformSession) {
+  if (session.transformSession) {
     cancelTransformSession();
   }
   perpendicularBisectorPlacement = null;
@@ -3100,7 +3098,7 @@ function startTriangleTransformSession(kind, options = {}) {
     baseLabelPoints[obj.id] = { x: obj.x, y: obj.y };
   }
 
-  transformSession = {
+  session.transformSession = {
     kind,
     pointIds,
     segmentIds: triSegmentIds,
@@ -3119,10 +3117,10 @@ function startTriangleTransformSession(kind, options = {}) {
 }
 
 function applyTransformPreview() {
-  if (!transformSession) {
+  if (!session.transformSession) {
     return;
   }
-  const { pointIds, labelIds, basePoints, baseLabelPoints, center, dx, dy, angleDeg, mirrorX, mirrorY } = transformSession;
+  const { pointIds, labelIds, basePoints, baseLabelPoints, center, dx, dy, angleDeg, mirrorX, mirrorY } = session.transformSession;
   const angleRad = (angleDeg * Math.PI) / 180;
   for (const id of pointIds) {
     const base = basePoints[id];
@@ -3164,53 +3162,53 @@ function hideTransformPanel() {
   if (rotationCompassEl) {
     rotationCompassEl.classList.remove("dragging");
   }
-  compassDragging = false;
+  session.compassDragging = false;
 }
 
 function commitTransformSession(label) {
-  if (!transformSession) {
+  if (!session.transformSession) {
     return;
   }
   const after = store.snapshot();
   store.doc.metadata.updatedAt = new Date().toISOString();
-  store.commitSnapshot(label, transformSession.beforeDoc, after, applyDoc);
-  transformSession = null;
+  store.commitSnapshot(label, session.transformSession.beforeDoc, after, applyDoc);
+  session.transformSession = null;
   hideTransformPanel();
   renderCurrentDoc();
 }
 
 function cancelTransformSession() {
-  if (!transformSession) {
+  if (!session.transformSession) {
     hideTransformPanel();
     return;
   }
-  store.setDoc(transformSession.beforeDoc);
-  transformSession = null;
+  store.setDoc(session.transformSession.beforeDoc);
+  session.transformSession = null;
   hideTransformPanel();
   renderCurrentDoc();
 }
 
 function updateMoveReadouts() {
-  if (!transformSession) {
+  if (!session.transformSession) {
     return;
   }
   if (moveXValueEl) {
-    moveXValueEl.textContent = transformSession.dx.toFixed(1);
+    moveXValueEl.textContent = session.transformSession.dx.toFixed(1);
   }
   if (moveYValueEl) {
-    moveYValueEl.textContent = transformSession.dy.toFixed(1);
+    moveYValueEl.textContent = session.transformSession.dy.toFixed(1);
   }
 }
 
 function updateCompassReadout() {
-  if (!transformSession) {
+  if (!session.transformSession) {
     return;
   }
   if (rotateValueEl) {
-    rotateValueEl.textContent = `${transformSession.angleDeg.toFixed(1)}°`;
+    rotateValueEl.textContent = `${session.transformSession.angleDeg.toFixed(1)}°`;
   }
   if (compassArmEl) {
-    compassArmEl.style.transform = `translateY(-50%) rotate(${transformSession.angleDeg}deg)`;
+    compassArmEl.style.transform = `translateY(-50%) rotate(${session.transformSession.angleDeg}deg)`;
   }
 }
 
@@ -3228,11 +3226,11 @@ function transformSelectedTriangle() {
   if (!startTriangleTransformSession("transform")) {
     return;
   }
-  transformSession.dx = 0;
-  transformSession.dy = 0;
-  transformSession.angleDeg = 0;
-  transformSession.mirrorX = 1;
-  transformSession.mirrorY = 1;
+  session.transformSession.dx = 0;
+  session.transformSession.dy = 0;
+  session.transformSession.angleDeg = 0;
+  session.transformSession.mirrorX = 1;
+  session.transformSession.mirrorY = 1;
   showTransformPanel();
   if (moveXSliderEl) {
     moveXSliderEl.value = "0";
@@ -3261,11 +3259,11 @@ function launchTriangleCopy(kind, buttonId) {
 
 function launchTriangleTransform(buttonId) {
   if (startTriangleTransformSession("transform", { quiet: true })) {
-    transformSession.dx = 0;
-    transformSession.dy = 0;
-    transformSession.angleDeg = 0;
-    transformSession.mirrorX = 1;
-    transformSession.mirrorY = 1;
+    session.transformSession.dx = 0;
+    session.transformSession.dy = 0;
+    session.transformSession.angleDeg = 0;
+    session.transformSession.mirrorX = 1;
+    session.transformSession.mirrorY = 1;
     showTransformPanel();
     if (moveXSliderEl) {
       moveXSliderEl.value = "0";
@@ -3287,11 +3285,11 @@ function launchTriangleTransform(buttonId) {
       if (!startTriangleTransformSession("transform", { quiet: true })) {
         return false;
       }
-      transformSession.dx = 0;
-      transformSession.dy = 0;
-      transformSession.angleDeg = 0;
-      transformSession.mirrorX = 1;
-      transformSession.mirrorY = 1;
+      session.transformSession.dx = 0;
+      session.transformSession.dy = 0;
+      session.transformSession.angleDeg = 0;
+      session.transformSession.mirrorX = 1;
+      session.transformSession.mirrorY = 1;
       showTransformPanel();
       if (moveXSliderEl) {
         moveXSliderEl.value = "0";
@@ -4107,63 +4105,63 @@ function wireUi() {
   document.getElementById("cancelTransformTriangle").addEventListener("click", cancelTransformSession);
   document.getElementById("applyTransformTriangle").addEventListener("click", () => commitTransformSession("transform-selected-triangle"));
   document.getElementById("reflectHorizontalTriangle").addEventListener("click", () => {
-    if (!transformSession) {
+    if (!session.transformSession) {
       return;
     }
-    transformSession.mirrorY *= -1;
+    session.transformSession.mirrorY *= -1;
     applyTransformPreview();
   });
   document.getElementById("reflectVerticalTriangle").addEventListener("click", () => {
-    if (!transformSession) {
+    if (!session.transformSession) {
       return;
     }
-    transformSession.mirrorX *= -1;
+    session.transformSession.mirrorX *= -1;
     applyTransformPreview();
   });
 
   moveXSliderEl.addEventListener("input", () => {
-    if (!transformSession) {
+    if (!session.transformSession) {
       return;
     }
-    transformSession.dx = Number(moveXSliderEl.value);
+    session.transformSession.dx = Number(moveXSliderEl.value);
     updateMoveReadouts();
     applyTransformPreview();
   });
   moveYSliderEl.addEventListener("input", () => {
-    if (!transformSession) {
+    if (!session.transformSession) {
       return;
     }
-    transformSession.dy = Number(moveYSliderEl.value);
+    session.transformSession.dy = Number(moveYSliderEl.value);
     updateMoveReadouts();
     applyTransformPreview();
   });
 
   rotationCompassEl.addEventListener("mousedown", (evt) => {
-    if (!transformSession) {
+    if (!session.transformSession) {
       return;
     }
     evt.preventDefault();
-    compassDragging = true;
+    session.compassDragging = true;
     rotationCompassEl.classList.add("dragging");
-    transformSession.angleDeg = angleFromCompassEvent(evt);
+    session.transformSession.angleDeg = angleFromCompassEvent(evt);
     updateCompassReadout();
     applyTransformPreview();
   });
 
   window.addEventListener("mousemove", (evt) => {
-    if (!compassDragging || !transformSession) {
+    if (!session.compassDragging || !session.transformSession) {
       return;
     }
-    transformSession.angleDeg = angleFromCompassEvent(evt);
+    session.transformSession.angleDeg = angleFromCompassEvent(evt);
     updateCompassReadout();
     applyTransformPreview();
   });
 
   window.addEventListener("mouseup", () => {
-    if (!compassDragging) {
+    if (!session.compassDragging) {
       return;
     }
-    compassDragging = false;
+    session.compassDragging = false;
     rotationCompassEl.classList.remove("dragging");
   });
 
