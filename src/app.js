@@ -81,7 +81,6 @@ const constructionSelectionButtonIds = [
   "addAngleMeasure",
 ];
 
-let marqueeState = null;
 const transientDragSnapshots = new Map();
 
 const boardController = new BoardController(
@@ -1989,8 +1988,8 @@ function applyMarqueeSelection(bounds, additive) {
 }
 
 function removeMarqueeRect() {
-  if (marqueeState?.rectEl) {
-    marqueeState.rectEl.remove();
+  if (session.marqueeState?.rectEl) {
+    session.marqueeState.rectEl.remove();
   }
 }
 
@@ -2009,7 +2008,7 @@ function startMarqueeSelection() {
     }
     const rect = boardEl.getBoundingClientRect();
     const wrapRect = boardEl.parentElement.getBoundingClientRect();
-    marqueeState = {
+    session.marqueeState = {
       startX: evt.clientX,
       startY: evt.clientY,
       lastX: evt.clientX,
@@ -2023,50 +2022,50 @@ function startMarqueeSelection() {
   });
 
   window.addEventListener("mousemove", (evt) => {
-    if (!marqueeState || session.currentMode !== ToolMode.SELECT) {
+    if (!session.marqueeState || session.currentMode !== ToolMode.SELECT) {
       return;
     }
-    marqueeState.lastX = evt.clientX;
-    marqueeState.lastY = evt.clientY;
-    const dx = Math.abs(evt.clientX - marqueeState.startX);
-    const dy = Math.abs(evt.clientY - marqueeState.startY);
-    if (!marqueeState.dragging && Math.max(dx, dy) < 6) {
+    session.marqueeState.lastX = evt.clientX;
+    session.marqueeState.lastY = evt.clientY;
+    const dx = Math.abs(evt.clientX - session.marqueeState.startX);
+    const dy = Math.abs(evt.clientY - session.marqueeState.startY);
+    if (!session.marqueeState.dragging && Math.max(dx, dy) < 6) {
       return;
     }
-    marqueeState.dragging = true;
-    if (!marqueeState.rectEl) {
+    session.marqueeState.dragging = true;
+    if (!session.marqueeState.rectEl) {
       const rectEl = document.createElement("div");
       rectEl.className = "marquee-select";
       boardEl.parentElement.appendChild(rectEl);
-      marqueeState.rectEl = rectEl;
+      session.marqueeState.rectEl = rectEl;
     }
-    const minX = Math.max(marqueeState.boardRect.left, Math.min(marqueeState.startX, evt.clientX));
-    const minY = Math.max(marqueeState.boardRect.top, Math.min(marqueeState.startY, evt.clientY));
-    const maxX = Math.min(marqueeState.boardRect.right, Math.max(marqueeState.startX, evt.clientX));
-    const maxY = Math.min(marqueeState.boardRect.bottom, Math.max(marqueeState.startY, evt.clientY));
-    marqueeState.rectEl.style.left = `${minX - marqueeState.wrapRect.left}px`;
-    marqueeState.rectEl.style.top = `${minY - marqueeState.wrapRect.top}px`;
-    marqueeState.rectEl.style.width = `${Math.max(0, maxX - minX)}px`;
-    marqueeState.rectEl.style.height = `${Math.max(0, maxY - minY)}px`;
+    const minX = Math.max(session.marqueeState.boardRect.left, Math.min(session.marqueeState.startX, evt.clientX));
+    const minY = Math.max(session.marqueeState.boardRect.top, Math.min(session.marqueeState.startY, evt.clientY));
+    const maxX = Math.min(session.marqueeState.boardRect.right, Math.max(session.marqueeState.startX, evt.clientX));
+    const maxY = Math.min(session.marqueeState.boardRect.bottom, Math.max(session.marqueeState.startY, evt.clientY));
+    session.marqueeState.rectEl.style.left = `${minX - session.marqueeState.wrapRect.left}px`;
+    session.marqueeState.rectEl.style.top = `${minY - session.marqueeState.wrapRect.top}px`;
+    session.marqueeState.rectEl.style.width = `${Math.max(0, maxX - minX)}px`;
+    session.marqueeState.rectEl.style.height = `${Math.max(0, maxY - minY)}px`;
   });
 
   window.addEventListener("mouseup", () => {
-    if (!marqueeState) {
+    if (!session.marqueeState) {
       return;
     }
-    if (marqueeState.dragging) {
-      const p1 = boardController.screenToUser(marqueeState.startX, marqueeState.startY);
-      const p2 = boardController.screenToUser(marqueeState.lastX, marqueeState.lastY);
+    if (session.marqueeState.dragging) {
+      const p1 = boardController.screenToUser(session.marqueeState.startX, session.marqueeState.startY);
+      const p2 = boardController.screenToUser(session.marqueeState.lastX, session.marqueeState.lastY);
       const bounds = {
         minX: Math.min(p1.x, p2.x),
         maxX: Math.max(p1.x, p2.x),
         minY: Math.min(p1.y, p2.y),
         maxY: Math.max(p1.y, p2.y),
       };
-      applyMarqueeSelection(bounds, marqueeState.additive);
+      applyMarqueeSelection(bounds, session.marqueeState.additive);
     }
     removeMarqueeRect();
-    marqueeState = null;
+    session.marqueeState = null;
   });
 }
 
