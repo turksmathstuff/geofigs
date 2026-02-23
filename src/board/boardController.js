@@ -836,8 +836,10 @@ export class BoardController {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash || 0,
+      fixed: !!style.fixed,
     });
-    return this.registerElement(id, "segment", el, { basePoint1: p1, basePoint2: p2 });
+    const meta = style.fixed ? {} : { basePoint1: p1, basePoint2: p2 };
+    return this.registerElement(id, "segment", el, meta);
   }
 
   createLine(id, p1, p2, style = {}) {
