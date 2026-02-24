@@ -1,12 +1,30 @@
-export function wireUi({
-  dom,
+function bindModeButtons({ dom, doc, setMode, setTriangleMode }) {
+  const { modeButtons, triangleMenuBtn, triangleMenuPanel, triangleModeButtons } = dom;
+  modeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => setMode(btn.dataset.mode));
+  });
+  if (!triangleMenuBtn || !triangleMenuPanel) {
+    return;
+  }
+  triangleMenuBtn.addEventListener("click", (evt) => {
+    evt.stopPropagation();
+    triangleMenuPanel.hidden = !triangleMenuPanel.hidden;
+  });
+  triangleModeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setTriangleMode(btn.dataset.triangleMode);
+      triangleMenuPanel.hidden = true;
+    });
+  });
+  doc.addEventListener("click", (evt) => {
+    if (!triangleMenuPanel.hidden && !triangleMenuPanel.contains(evt.target) && evt.target !== triangleMenuBtn) {
+      triangleMenuPanel.hidden = true;
+    }
+  });
+}
+
+function bindConstructionButtons({
   doc,
-  win,
-  store,
-  session,
-  ToolMode,
-  setMode,
-  setTriangleMode,
   launchSegmentTicks,
   launchMidpoint,
   launchPerpendicularBisectorVariant,
@@ -14,66 +32,12 @@ export function wireUi({
   launchParallelMarks,
   launchSideMeasure,
   launchAngleMeasure,
-  setActiveAngleMarkPreset,
-  addAngleFromSelection,
   promptLabel,
   autoLabelPoints,
   launchParallelOrPerpendicular,
   launchTriangleCopy,
   launchTriangleTransform,
-  cancelTransformSession,
-  commitTransformSession,
-  applyTransformPreview,
-  updateMoveReadouts,
-  angleFromCompassEvent,
-  updateCompassReadout,
-  deleteSelected,
-  hideSelected,
-  showAllHidden,
-  clearBoard,
-  renderCurrentDoc,
-  downloadSvg,
-  downloadPng,
-  saveDoc,
-  openDocFromFile,
-  applyStyleToSelection,
-  runMutation,
 }) {
-  const {
-    modeButtons,
-    triangleMenuBtn,
-    triangleMenuPanel,
-    triangleModeButtons,
-    angleMarkPresetButtons,
-    moveXSliderEl,
-    moveYSliderEl,
-    rotationCompassEl,
-  } = dom;
-
-  modeButtons.forEach((btn) => {
-    btn.addEventListener("click", () => setMode(btn.dataset.mode));
-  });
-
-  if (triangleMenuBtn && triangleMenuPanel) {
-    triangleMenuBtn.addEventListener("click", (evt) => {
-      evt.stopPropagation();
-      triangleMenuPanel.hidden = !triangleMenuPanel.hidden;
-    });
-
-    triangleModeButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        setTriangleMode(btn.dataset.triangleMode);
-        triangleMenuPanel.hidden = true;
-      });
-    });
-
-    doc.addEventListener("click", (evt) => {
-      if (!triangleMenuPanel.hidden && !triangleMenuPanel.contains(evt.target) && evt.target !== triangleMenuBtn) {
-        triangleMenuPanel.hidden = true;
-      }
-    });
-  }
-
   doc.getElementById("markTick1").addEventListener("click", () => launchSegmentTicks(1, "markTick1"));
   doc.getElementById("markTick2").addEventListener("click", () => launchSegmentTicks(2, "markTick2"));
   doc.getElementById("markTick3").addEventListener("click", () => launchSegmentTicks(3, "markTick3"));
@@ -108,6 +72,24 @@ export function wireUi({
   doc.getElementById("addSideMeasure").addEventListener("click", () => launchSideMeasure("addSideMeasure"));
   doc.getElementById("addAngleMeasure").addEventListener("click", () => launchAngleMeasure("addAngleMeasure"));
 
+  doc.getElementById("addLabel").addEventListener("click", promptLabel);
+  doc.getElementById("autoLabel").addEventListener("click", autoLabelPoints);
+
+  doc.getElementById("makeParallel").addEventListener("click", () => launchParallelOrPerpendicular("parallel", "makeParallel"));
+  doc.getElementById("makePerpendicular").addEventListener("click", () => launchParallelOrPerpendicular("perpendicular", "makePerpendicular"));
+  doc.getElementById("makeCongruentTriangle").addEventListener("click", () =>
+    launchTriangleCopy("congruent", "makeCongruentTriangle")
+  );
+  doc.getElementById("makeSimilarTriangle").addEventListener("click", () =>
+    launchTriangleCopy("similar", "makeSimilarTriangle")
+  );
+  doc.getElementById("transformSelectedTriangle").addEventListener("click", () =>
+    launchTriangleTransform("transformSelectedTriangle")
+  );
+}
+
+function bindAngleMarkButtons({ dom, doc, session, ToolMode, setMode, setActiveAngleMarkPreset, addAngleFromSelection }) {
+  const { angleMarkPresetButtons } = dom;
   angleMarkPresetButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       setActiveAngleMarkPreset(btn.dataset.angleMark);
@@ -123,21 +105,22 @@ export function wireUi({
       setMode(ToolMode.ANGLE);
     }
   });
+}
 
-  doc.getElementById("addLabel").addEventListener("click", promptLabel);
-  doc.getElementById("autoLabel").addEventListener("click", autoLabelPoints);
+function bindTransformControls({
+  dom,
+  doc,
+  win,
+  session,
+  cancelTransformSession,
+  commitTransformSession,
+  applyTransformPreview,
+  updateMoveReadouts,
+  angleFromCompassEvent,
+  updateCompassReadout,
+}) {
+  const { moveXSliderEl, moveYSliderEl, rotationCompassEl } = dom;
 
-  doc.getElementById("makeParallel").addEventListener("click", () => launchParallelOrPerpendicular("parallel", "makeParallel"));
-  doc.getElementById("makePerpendicular").addEventListener("click", () => launchParallelOrPerpendicular("perpendicular", "makePerpendicular"));
-  doc.getElementById("makeCongruentTriangle").addEventListener("click", () =>
-    launchTriangleCopy("congruent", "makeCongruentTriangle")
-  );
-  doc.getElementById("makeSimilarTriangle").addEventListener("click", () =>
-    launchTriangleCopy("similar", "makeSimilarTriangle")
-  );
-  doc.getElementById("transformSelectedTriangle").addEventListener("click", () =>
-    launchTriangleTransform("transformSelectedTriangle")
-  );
   doc.getElementById("cancelTransformTriangle").addEventListener("click", cancelTransformSession);
   doc.getElementById("applyTransformTriangle").addEventListener("click", () => commitTransformSession("transform-selected-triangle"));
   doc.getElementById("reflectHorizontalTriangle").addEventListener("click", () => {
@@ -200,12 +183,16 @@ export function wireUi({
     session.compassDragging = false;
     rotationCompassEl.classList.remove("dragging");
   });
+}
 
+function bindSelectionActions({ doc, deleteSelected, hideSelected, showAllHidden, clearBoard }) {
   doc.getElementById("deleteSelected").addEventListener("click", deleteSelected);
   doc.getElementById("hideSelected").addEventListener("click", hideSelected);
   doc.getElementById("showAll").addEventListener("click", showAllHidden);
   doc.getElementById("clearBoard").addEventListener("click", clearBoard);
+}
 
+function bindUndoRedoActions({ doc, store, renderCurrentDoc }) {
   doc.getElementById("undoBtn").addEventListener("click", () => {
     store.commandStack.undo();
     renderCurrentDoc();
@@ -215,14 +202,18 @@ export function wireUi({
     store.commandStack.redo();
     renderCurrentDoc();
   });
+}
 
+function bindExportActions({ doc, downloadSvg, downloadPng }) {
   doc.getElementById("downloadSvg").addEventListener("click", () => {
     downloadSvg().catch((err) => alert(err.message));
   });
   doc.getElementById("downloadPng").addEventListener("click", () => {
     downloadPng().catch((err) => alert(err.message));
   });
+}
 
+function bindFileActions({ doc, saveDoc, openDocFromFile }) {
   doc.getElementById("saveDoc").addEventListener("click", saveDoc);
   doc.getElementById("openDoc").addEventListener("change", (evt) => {
     const file = evt.target.files?.[0];
@@ -231,7 +222,9 @@ export function wireUi({
     }
     evt.target.value = "";
   });
+}
 
+function bindStyleActions({ doc, store, applyStyleToSelection, runMutation }) {
   doc.getElementById("strokeColor").addEventListener("input", applyStyleToSelection);
   doc.getElementById("resetStrokeColor").addEventListener("click", () => {
     const colorInput = doc.getElementById("strokeColor");
@@ -250,7 +243,9 @@ export function wireUi({
       store.doc.styles.examMode = evt.target.checked;
     });
   });
+}
 
+function bindKeyboardShortcuts({ win, store, session, setMode, ToolMode, renderCurrentDoc, deleteSelected, hideSelected }) {
   win.addEventListener(
     "keydown",
     (evt) => {
@@ -301,4 +296,17 @@ export function wireUi({
     },
     true
   );
+}
+
+export function wireUi(deps) {
+  bindModeButtons(deps);
+  bindConstructionButtons(deps);
+  bindAngleMarkButtons(deps);
+  bindTransformControls(deps);
+  bindSelectionActions(deps);
+  bindUndoRedoActions(deps);
+  bindExportActions(deps);
+  bindFileActions(deps);
+  bindStyleActions(deps);
+  bindKeyboardShortcuts(deps);
 }
