@@ -33,6 +33,7 @@ import { normalizedRayExtension, normalizedLineExtension, rayEndpoint } from "./
 import { createEditorSession } from "./app/session/editorSession.js";
 import { createDomRefs } from "./app/dom/domRefs.js";
 import { createModeUi } from "./app/ui/modeUi.js";
+import { syncStyleInputsFromDoc as syncStyleInputsFromDocUi } from "./app/ui/styleUi.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -2744,23 +2745,7 @@ function applyDoc(doc, fromCommand = false) {
 }
 
 function syncStyleInputsFromDoc() {
-  const styles = store.doc.styles || {};
-  const strokeColorEl = document.getElementById("strokeColor");
-  const strokeWidthEl = document.getElementById("strokeWidth");
-  const lineStyleEl = document.getElementById("lineStyle");
-  const examModeEl = document.getElementById("examMode");
-  if (strokeColorEl && styles.defaultStrokeColor) {
-    strokeColorEl.value = styles.defaultStrokeColor;
-  }
-  if (strokeWidthEl && Number.isFinite(styles.defaultStrokeWidth)) {
-    strokeWidthEl.value = String(styles.defaultStrokeWidth);
-  }
-  if (lineStyleEl) {
-    lineStyleEl.value = Number(styles.defaultDash) ? "dashed" : "solid";
-  }
-  if (examModeEl) {
-    examModeEl.checked = !!styles.examMode;
-  }
+  syncStyleInputsFromDocUi({ store, doc: document });
 }
 
 function selectedOfTypes(types) {

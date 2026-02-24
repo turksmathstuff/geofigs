@@ -69,6 +69,10 @@ Isolate direct DOM coupling (element lookup and display updates) without changin
 - Drawing hint text behavior and hover hide/show behavior
 - Style input synchronization after load/applyDoc
 
+## Working Notes / Follow-up
+
+- Investigate intermittent Circle tool oddity reported during phase 3 smoke testing (currently hard to reproduce consistently).
+
 ## Exit Criteria
 
 - DOM refs are centralized
@@ -80,4 +84,3 @@ Isolate direct DOM coupling (element lookup and display updates) without changin
 - `domRefs` extraction
 - `modeUi` extraction
 - `styleUi` extraction
-
