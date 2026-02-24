@@ -35,6 +35,7 @@ import { createDomRefs } from "./app/dom/domRefs.js";
 import { createModeUi } from "./app/ui/modeUi.js";
 import { syncStyleInputsFromDoc as syncStyleInputsFromDocUi } from "./app/ui/styleUi.js";
 import { createRenderDoc } from "./app/render/renderDoc.js";
+import { createApplyDoc } from "./app/render/docApply.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -2593,21 +2594,14 @@ const renderCurrentDoc = createRenderDoc({
   recomputeConstrainedPoints,
 });
 
-function applyDoc(doc, fromCommand = false) {
-  store.setDoc(doc);
-  store.doc.styles.rayExtension = normalizedRayExtension(store.doc.styles.rayExtension);
-  store.doc.styles.lineExtensionStart = normalizedLineExtension(store.doc.styles.lineExtensionStart);
-  store.doc.styles.lineExtensionEnd = normalizedLineExtension(store.doc.styles.lineExtensionEnd);
-  if (!Number.isFinite(store.doc.styles.fontSize) || store.doc.styles.fontSize < 20) {
-    store.doc.styles.fontSize = 20;
-  }
-  migratePointNamesToDraggableLabels();
-  if (!fromCommand) {
-    store.commandStack.clear();
-  }
-  renderCurrentDoc();
-  syncStyleInputsFromDoc();
-}
+const applyDoc = createApplyDoc({
+  store,
+  normalizedRayExtension,
+  normalizedLineExtension,
+  migratePointNamesToDraggableLabels,
+  renderCurrentDoc,
+  syncStyleInputsFromDoc,
+});
 
 function syncStyleInputsFromDoc() {
   syncStyleInputsFromDocUi({ store, doc: document });
