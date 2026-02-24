@@ -44,6 +44,7 @@ import { createPointPlacementClickWorkflow } from "./app/workflows/pointPlacemen
 import { createPointCollectionBoardClickWorkflow } from "./app/workflows/pointCollectionBoardClick.js";
 import { createPointCollectionObjectClickWorkflow } from "./app/workflows/pointCollectionObjectClick.js";
 import { createObjectClickModeBranchesWorkflow } from "./app/workflows/objectClickModeBranches.js";
+import { createObjectClickConstructionSelectionWorkflow } from "./app/workflows/objectClickConstructionSelection.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1778,18 +1779,9 @@ function handleObjectClick(id, type, evt) {
     return modeBranchClick.returnValue;
   }
 
-  if (session.constructionSelectionSession) {
-    if (!multi && !isReleaseEvent) {
-      return { deferUntilUp: true };
-    }
-    if (multi) {
-      store.toggleSelection(id, true);
-    } else {
-      store.selection.add(id);
-    }
-    renderCurrentDoc();
-    maybeCompleteConstructionSelectionSession();
-    return;
+  const constructionSelectionClick = handleObjectClickConstructionSelection(id, multi, isReleaseEvent);
+  if (constructionSelectionClick.matched) {
+    return constructionSelectionClick.returnValue;
   }
 
   if (pointNeeds(session.currentMode) > 0) {
@@ -1868,6 +1860,13 @@ const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow(
   ToolMode,
   store,
   deleteSelected,
+});
+
+const { handleObjectClickConstructionSelection } = createObjectClickConstructionSelectionWorkflow({
+  session,
+  store,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  maybeCompleteConstructionSelectionSession: (...args) => maybeCompleteConstructionSelectionSession(...args),
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
