@@ -86,6 +86,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `146c2be` - Extract `POINT`-mode board click workflow to `src/app/workflows/pointPlacementClick.js`
 - `998ceb9` - Extract board-click point-collection workflow (`pointNeeds(...) > 0` branch) to `src/app/workflows/pointCollectionBoardClick.js`
 - `5e9fee7` - Extract object-click point-collection workflow to `src/app/workflows/pointCollectionObjectClick.js`
+- `d19d467` - Extract object-click mode branches (label/delete and related small isolated branches)
 
 ### Current Safe Boundary
 
@@ -97,8 +98,8 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 ### Next Recommended Safe Steps
 
 1. Extract `handleObjectClick` construction-selection session branch (preserve `deferUntilUp` behavior exactly).
-2. Extract `handleObjectClick` label/delete mode branches (small isolated branches).
-3. Extract `handleBoardClick` perpendicular-bisector placement branch (medium risk; stateful but isolated).
+2. Extract `handleBoardClick` perpendicular-bisector placement branch (medium risk; stateful but isolated).
+3. Extract another small isolated `handleBoardClick` mode branch (if available) before broader construction workflow consolidation.
 
 ### Defer Until Later (Higher Risk)
 
