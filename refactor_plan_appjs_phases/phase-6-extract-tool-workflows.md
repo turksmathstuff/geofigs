@@ -90,6 +90,8 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `3b64280` - Extract object-click construction-selection session branch (`deferUntilUp` semantics preserved) to `src/app/workflows/objectClickConstructionSelection.js`
 - `e71e62a` - Extract `handleBoardClick` perpendicular-bisector placement branch to `src/app/workflows/perpendicularBisectorPlacementBoardClick.js`
 - `3788dac` - Extract `handleBoardClick` angle-mode status/early-return guard to `src/app/workflows/angleModeBoardClick.js`
+- `179b2f0` - Extract `addPointInput` linear/circle create branches (`SEGMENT`/`LINE`/`RAY`/`CIRCLE`) to `src/app/workflows/pointInputLinearCircleCreate.js`
+- `d1af72c` - Extract `addPointInput` angle create branch to `src/app/workflows/pointInputAngleCreate.js`
 
 ### Current Safe Boundary
 
@@ -99,12 +101,13 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `handleObjectMove` drag/undo batching logic is untouched (intentionally deferred).
 - `handleBoardClick` perpendicular-bisector placement and angle-mode guard now delegate to workflow modules (board-click branch order preserved).
 - Board preview updates, marquee workflow, and point-collection branches now delegate to workflow modules.
+- `addPointInput` linear/circle and angle creation branches now delegate to workflow modules; pending-point sequencing, mutation wrapping, and reset timing remain in `app.js`.
 
 ### Next Recommended Safe Steps
 
-1. Extract the next small isolated `handleBoardClick` construction-related branch only if it can be moved without changing pending-point state/order.
-2. Otherwise, plan a broader `handleBoardClick` construction-flow consolidation with explicit invariants/tests first (pending-point collection order, mode resets, status text behavior).
-3. Re-run a focused regression pass on board-click construction flows after each extraction (pending-point state/order and mode resets).
+1. Extract the remaining `addPointInput` triangle creation branch as a dedicated workflow module (highest-risk remaining portion of `addPointInput`; preserve mutation/reset timing in `app.js`).
+2. Run a focused regression pass on triangle variants (three-point, right, isosceles, regular/equilateral variant path) including constrained apex behavior and right-angle annotation creation.
+3. Continue deferring `handleObjectMove(...)` drag/undo batching extraction until the non-drag workflow families are complete.
 
 ### Defer Until Later (Higher Risk)
 
