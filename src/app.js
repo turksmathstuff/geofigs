@@ -42,6 +42,7 @@ import { createSelectionClickWorkflow } from "./app/workflows/selectionClicks.js
 import { createBoardMovePreviewWorkflow } from "./app/workflows/boardMovePreview.js";
 import { createPointPlacementClickWorkflow } from "./app/workflows/pointPlacementClick.js";
 import { createPointCollectionBoardClickWorkflow } from "./app/workflows/pointCollectionBoardClick.js";
+import { createPointCollectionObjectClickWorkflow } from "./app/workflows/pointCollectionObjectClick.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1796,15 +1797,11 @@ function handleObjectClick(id, type, evt) {
     return;
   }
 
-  if (pointNeeds(session.currentMode) > 0 && type === "point") {
-    if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && session.pendingPointIds.length === 2) {
-      session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
+  if (pointNeeds(session.currentMode) > 0) {
+    const pointCollectionClick = handlePointCollectionObjectClick(id, type, evt);
+    if (pointCollectionClick.matched) {
+      return pointCollectionClick.returnValue;
     }
-    addPointInput(id);
-    return;
-  }
-  if (pointNeeds(session.currentMode) > 0 && type !== "point") {
-    return false;
   }
 
   if (session.currentMode === ToolMode.LABEL) {
@@ -1861,6 +1858,14 @@ const { handlePointCollectionBoardClick } = createPointCollectionBoardClickWorkf
   maybeCreateIntersectionPoint,
   maybeCreateAttachedPoint,
   maybeCreatePoint,
+});
+
+const { handlePointCollectionObjectClick } = createPointCollectionObjectClickWorkflow({
+  session,
+  ToolMode,
+  pointNeeds,
+  rightTriangleIsoModifierActive,
+  addPointInput,
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
