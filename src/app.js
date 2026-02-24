@@ -31,28 +31,34 @@ import {
 } from "./app/geometry/transforms.js";
 import { normalizedRayExtension, normalizedLineExtension, rayEndpoint } from "./app/geometry/linear.js";
 import { createEditorSession } from "./app/session/editorSession.js";
+import { createDomRefs } from "./app/dom/domRefs.js";
+import { createModeUi } from "./app/ui/modeUi.js";
+import { syncStyleInputsFromDoc as syncStyleInputsFromDocUi } from "./app/ui/styleUi.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
 const session = createEditorSession();
-const statusEl = document.getElementById("statusText");
-const drawingHintEl = document.getElementById("drawingHint");
-const autoLabelBtn = document.getElementById("autoLabel");
-const boardEl = document.getElementById("jxgbox");
-const transformPanelEl = document.getElementById("transformPanel");
-const transformTitleEl = document.getElementById("transformTitle");
-const moveXSliderEl = document.getElementById("moveXSlider");
-const moveYSliderEl = document.getElementById("moveYSlider");
-const moveXValueEl = document.getElementById("moveXValue");
-const moveYValueEl = document.getElementById("moveYValue");
-const rotationCompassEl = document.getElementById("rotationCompass");
-const compassArmEl = document.getElementById("compassArm");
-const rotateValueEl = document.getElementById("rotateValue");
-const modeButtons = [...document.querySelectorAll("button[data-mode]")];
-const triangleMenuBtn = document.getElementById("triangleMenuBtn");
-const triangleMenuPanel = document.getElementById("triangleMenuPanel");
-const triangleModeButtons = [...document.querySelectorAll("button[data-triangle-mode]")];
-const angleMarkPresetButtons = [...document.querySelectorAll("button[data-angle-mark]")];
+const dom = createDomRefs(document);
+const {
+  statusEl,
+  drawingHintEl,
+  autoLabelBtn,
+  boardEl,
+  transformPanelEl,
+  transformTitleEl,
+  moveXSliderEl,
+  moveYSliderEl,
+  moveXValueEl,
+  moveYValueEl,
+  rotationCompassEl,
+  compassArmEl,
+  rotateValueEl,
+  modeButtons,
+  triangleMenuBtn,
+  triangleMenuPanel,
+  triangleModeButtons,
+  angleMarkPresetButtons,
+} = dom;
 const constructionSelectionButtonIds = [
   "makeMidpoint",
   "makeMidpointTick1",
@@ -80,6 +86,16 @@ const constructionSelectionButtonIds = [
   "addSideMeasure",
   "addAngleMeasure",
 ];
+
+const { modeLabel, canvasHintText, updateModeUi } = createModeUi({
+  store,
+  session,
+  dom,
+  ToolMode,
+  constructionSelectionButtonIds,
+  getButtonById: (id) => document.getElementById(id),
+  getRightAngleButton: () => document.getElementById("markRightAngle"),
+});
 
 const boardController = new BoardController(
   "jxgbox",
@@ -122,91 +138,6 @@ function getLineExtentsForObject(obj) {
   };
 }
 
-function modeLabel(mode) {
-  if (mode === ToolMode.TRIANGLE) {
-    if (session.triangleVariant === "right") {
-      return "Right Triangle";
-    }
-    if (session.triangleVariant === "isosceles") {
-      return "Isosceles Triangle";
-    }
-    return "3-Point Triangle";
-  }
-  if (mode === ToolMode.LABEL) {
-    return "Auto Label";
-  }
-  return mode.charAt(0).toUpperCase() + mode.slice(1);
-}
-
-function canvasHintText() {
-  if (session.constructionSelectionSession) {
-    return `${session.constructionSelectionSession.instructions} Press Esc to cancel.`;
-  }
-  if (session.currentMode === ToolMode.ANGLE) {
-    return "Select point, vertex, point.";
-  }
-  if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right") {
-    return "Right angle first, then base vertex, then height.";
-  }
-  if (session.currentMode === ToolMode.LABEL) {
-    return "Click objects to add label. Click labeled objects to remove label.";
-  }
-  if (session.currentMode === ToolMode.SELECT) {
-    return "Hold Shift to select more than one object. Drag to box-select.";
-  }
-  if ([ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY, ToolMode.TRIANGLE].includes(session.currentMode)) {
-    return "Hold Shift to move horizontal/vertical.";
-  }
-  return "";
-}
-
-function updateModeUi() {
-  const activeConstructionButtonId =
-    session.constructionSelectionSession?.buttonId || session.perpendicularBisectorPlacement?.buttonId || null;
-  modeButtons.forEach((btn) => {
-    const isSelectButton = btn.dataset.mode === ToolMode.SELECT;
-    const isModeActive = btn.dataset.mode === session.currentMode;
-    btn.classList.toggle("active", isModeActive && !(isSelectButton && activeConstructionButtonId));
-  });
-  if (triangleMenuBtn) {
-    triangleMenuBtn.classList.toggle("active", session.currentMode === ToolMode.TRIANGLE);
-  }
-  triangleModeButtons.forEach((btn) => {
-    btn.classList.toggle("active", session.currentMode === ToolMode.TRIANGLE && btn.dataset.triangleMode === session.triangleVariant);
-  });
-  if (autoLabelBtn) {
-    autoLabelBtn.classList.toggle("active", session.currentMode === ToolMode.LABEL);
-  }
-  angleMarkPresetButtons.forEach((btn) => {
-    const isActivePreset =
-      session.currentMode === ToolMode.ANGLE &&
-      !session.pendingAngleIsRight &&
-      !!session.activeAngleMarkPresetValue &&
-      btn.dataset.angleMark === session.activeAngleMarkPresetValue;
-    btn.classList.toggle("active", isActivePreset);
-  });
-  const rightAngleBtn = document.getElementById("markRightAngle");
-  if (rightAngleBtn) {
-    rightAngleBtn.classList.toggle("active", session.currentMode === ToolMode.ANGLE && session.pendingAngleIsRight);
-  }
-  for (const id of constructionSelectionButtonIds) {
-    const btn = document.getElementById(id);
-    if (btn) {
-      btn.classList.toggle("active", id === activeConstructionButtonId);
-    }
-  }
-  if (session.constructionSelectionSession) {
-    statusEl.textContent = constructionSelectionStatusText();
-  } else {
-    statusEl.textContent = `Mode: ${modeLabel(session.currentMode)}`;
-  }
-  if (drawingHintEl) {
-    const text = canvasHintText();
-    drawingHintEl.textContent = text;
-    drawingHintEl.hidden = !text;
-  }
-}
-
 function setMode(mode) {
   if (!isToolMode(mode)) {
     return;
@@ -227,14 +158,6 @@ function setMode(mode) {
   boardController.clearPreview();
   updateModeUi();
   renderCurrentDoc();
-}
-
-function constructionSelectionStatusText() {
-  if (!session.constructionSelectionSession) {
-    return `Mode: ${modeLabel(session.currentMode)}`;
-  }
-  const count = store.selectedIds().length;
-  return `Mode: ${session.constructionSelectionSession.label} (${count} selected, Esc = Select)`;
 }
 
 function startConstructionSelectionSession(selectionSession) {
@@ -2822,23 +2745,7 @@ function applyDoc(doc, fromCommand = false) {
 }
 
 function syncStyleInputsFromDoc() {
-  const styles = store.doc.styles || {};
-  const strokeColorEl = document.getElementById("strokeColor");
-  const strokeWidthEl = document.getElementById("strokeWidth");
-  const lineStyleEl = document.getElementById("lineStyle");
-  const examModeEl = document.getElementById("examMode");
-  if (strokeColorEl && styles.defaultStrokeColor) {
-    strokeColorEl.value = styles.defaultStrokeColor;
-  }
-  if (strokeWidthEl && Number.isFinite(styles.defaultStrokeWidth)) {
-    strokeWidthEl.value = String(styles.defaultStrokeWidth);
-  }
-  if (lineStyleEl) {
-    lineStyleEl.value = Number(styles.defaultDash) ? "dashed" : "solid";
-  }
-  if (examModeEl) {
-    examModeEl.checked = !!styles.examMode;
-  }
+  syncStyleInputsFromDocUi({ store, doc: document });
 }
 
 function selectedOfTypes(types) {
