@@ -74,3 +74,34 @@ Break up monolithic interaction handlers into workflow modules while preserving 
 
 - One workflow family per commit
 
+## Working Progress (Resume Here)
+
+Use this section as the continuity checkpoint if work pauses or moves to a new thread.
+
+### Completed Slices
+
+- `05744e3` - Extract marquee selection workflow (`startMarqueeSelection` + helpers) to `src/app/workflows/marqueeSelection.js`
+- `d8bb5d5` - Extract select-mode click handling (board/object select branches) to `src/app/workflows/selectionClicks.js`
+- `845b6d7` - Extract board-move preview dispatch (`handleBoardMove`) to `src/app/workflows/boardMovePreview.js`
+- `146c2be` - Extract `POINT`-mode board click workflow to `src/app/workflows/pointPlacementClick.js`
+- `998ceb9` - Extract board-click point-collection workflow (`pointNeeds(...) > 0` branch) to `src/app/workflows/pointCollectionBoardClick.js`
+- `5e9fee7` - Extract object-click point-collection workflow to `src/app/workflows/pointCollectionObjectClick.js`
+
+### Current Safe Boundary
+
+- `handleBoardClick`, `handleObjectClick`, `handleObjectMove` still exist in `app.js` as top-level entrypoints.
+- `handleObjectClick` dedupe logic remains in `app.js` (intentionally preserved).
+- `handleObjectMove` drag/undo batching logic is untouched (intentionally deferred).
+- Board preview updates, marquee workflow, and point-collection branches now delegate to workflow modules.
+
+### Next Recommended Safe Steps
+
+1. Extract `handleObjectClick` construction-selection session branch (preserve `deferUntilUp` behavior exactly).
+2. Extract `handleObjectClick` label/delete mode branches (small isolated branches).
+3. Extract `handleBoardClick` perpendicular-bisector placement branch (medium risk; stateful but isolated).
+
+### Defer Until Later (Higher Risk)
+
+- `handleObjectMove(...)` drag workflows and transient drag snapshot commit/flush logic
+- Any changes to object-click dedupe stamp / handled-click bookkeeping
+- Broader reordering of top-level handler branch order
