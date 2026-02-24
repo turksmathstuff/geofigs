@@ -31,28 +31,32 @@ import {
 } from "./app/geometry/transforms.js";
 import { normalizedRayExtension, normalizedLineExtension, rayEndpoint } from "./app/geometry/linear.js";
 import { createEditorSession } from "./app/session/editorSession.js";
+import { createDomRefs } from "./app/dom/domRefs.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
 const session = createEditorSession();
-const statusEl = document.getElementById("statusText");
-const drawingHintEl = document.getElementById("drawingHint");
-const autoLabelBtn = document.getElementById("autoLabel");
-const boardEl = document.getElementById("jxgbox");
-const transformPanelEl = document.getElementById("transformPanel");
-const transformTitleEl = document.getElementById("transformTitle");
-const moveXSliderEl = document.getElementById("moveXSlider");
-const moveYSliderEl = document.getElementById("moveYSlider");
-const moveXValueEl = document.getElementById("moveXValue");
-const moveYValueEl = document.getElementById("moveYValue");
-const rotationCompassEl = document.getElementById("rotationCompass");
-const compassArmEl = document.getElementById("compassArm");
-const rotateValueEl = document.getElementById("rotateValue");
-const modeButtons = [...document.querySelectorAll("button[data-mode]")];
-const triangleMenuBtn = document.getElementById("triangleMenuBtn");
-const triangleMenuPanel = document.getElementById("triangleMenuPanel");
-const triangleModeButtons = [...document.querySelectorAll("button[data-triangle-mode]")];
-const angleMarkPresetButtons = [...document.querySelectorAll("button[data-angle-mark]")];
+const dom = createDomRefs(document);
+const {
+  statusEl,
+  drawingHintEl,
+  autoLabelBtn,
+  boardEl,
+  transformPanelEl,
+  transformTitleEl,
+  moveXSliderEl,
+  moveYSliderEl,
+  moveXValueEl,
+  moveYValueEl,
+  rotationCompassEl,
+  compassArmEl,
+  rotateValueEl,
+  modeButtons,
+  triangleMenuBtn,
+  triangleMenuPanel,
+  triangleModeButtons,
+  angleMarkPresetButtons,
+} = dom;
 const constructionSelectionButtonIds = [
   "makeMidpoint",
   "makeMidpointTick1",
