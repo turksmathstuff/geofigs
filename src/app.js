@@ -46,6 +46,7 @@ import { createPointCollectionObjectClickWorkflow } from "./app/workflows/pointC
 import { createObjectClickModeBranchesWorkflow } from "./app/workflows/objectClickModeBranches.js";
 import { createObjectClickConstructionSelectionWorkflow } from "./app/workflows/objectClickConstructionSelection.js";
 import { createPerpendicularBisectorPlacementBoardClickWorkflow } from "./app/workflows/perpendicularBisectorPlacementBoardClick.js";
+import { createAngleModeBoardClickWorkflow } from "./app/workflows/angleModeBoardClick.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1684,8 +1685,7 @@ function handleBoardClick(coords, evt) {
     return;
   }
 
-  if (session.currentMode === ToolMode.ANGLE) {
-    statusEl.textContent = `Mode: ${modeLabel(session.currentMode)} (select existing points only)`;
+  if (handleAngleModeBoardClick()) {
     return;
   }
 
@@ -1830,6 +1830,13 @@ const { handlePerpendicularBisectorPlacementBoardClick } = createPerpendicularBi
   addAnnotation,
   store,
   updateModeUi: (...args) => updateModeUi(...args),
+});
+
+const { handleAngleModeBoardClick } = createAngleModeBoardClickWorkflow({
+  session,
+  ToolMode,
+  statusEl,
+  modeLabel,
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
