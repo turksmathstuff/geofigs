@@ -38,6 +38,7 @@ import { wireUi } from "./app/ui/wireUi.js";
 import { createRenderDoc } from "./app/render/renderDoc.js";
 import { createApplyDoc } from "./app/render/docApply.js";
 import { createMarqueeSelectionWorkflow } from "./app/workflows/marqueeSelection.js";
+import { createSelectionClickWorkflow } from "./app/workflows/selectionClicks.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1720,20 +1721,9 @@ function handleBoardClick(coords, evt) {
     return;
   }
   if (session.currentMode === ToolMode.SELECT) {
-    const tag = String(evt?.target?.tagName || "").toLowerCase();
-    const isBoardBackground = tag === "svg" || evt?.target === boardEl;
-    if (!isBoardBackground) {
+    if (handleSelectBoardClick(evt)) {
       return;
     }
-    if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
-      return;
-    }
-    store.clearSelection();
-    renderCurrentDoc();
-    if (session.constructionSelectionSession) {
-      updateModeUi();
-    }
-    return;
   }
 
   const snappedCoords = getPointInputCoords(coords, evt);
@@ -1848,13 +1838,9 @@ function handleObjectClick(id, type, evt) {
     return;
   }
 
-  if (session.currentMode === ToolMode.SELECT && !multi && !isReleaseEvent) {
-    return { deferUntilUp: true };
-  }
-
-  if (session.currentMode === ToolMode.SELECT || session.currentMode === ToolMode.CONGRUENCY) {
-    store.toggleSelection(id, multi);
-    renderCurrentDoc();
+  const selectionClickResult = handleSelectObjectClick(id, multi, isReleaseEvent);
+  if (selectionClickResult) {
+    return selectionClickResult === true ? undefined : selectionClickResult;
   }
 }
 
@@ -1868,6 +1854,15 @@ const { startMarqueeSelection } = createMarqueeSelectionWorkflow({
   renderCurrentDoc: (...args) => renderCurrentDoc(...args),
   doc: document,
   win: window,
+});
+
+const { handleSelectBoardClick, handleSelectObjectClick } = createSelectionClickWorkflow({
+  store,
+  session,
+  ToolMode,
+  boardEl,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  updateModeUi: () => updateModeUi(),
 });
 
 function handleBoardMove(coords, evt) {
