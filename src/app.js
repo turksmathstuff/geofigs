@@ -48,6 +48,7 @@ import { createObjectClickConstructionSelectionWorkflow } from "./app/workflows/
 import { createPerpendicularBisectorPlacementBoardClickWorkflow } from "./app/workflows/perpendicularBisectorPlacementBoardClick.js";
 import { createAngleModeBoardClickWorkflow } from "./app/workflows/angleModeBoardClick.js";
 import { createPointInputLinearCircleCreateWorkflow } from "./app/workflows/pointInputLinearCircleCreate.js";
+import { createPointInputAngleCreateWorkflow } from "./app/workflows/pointInputAngleCreate.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1614,18 +1615,8 @@ function addPointInput(pointId, skipMutation = false) {
         });
         addTriangleEdges([pointsForCreate[0], pointsForCreate[1], apexId], style);
       }
-    } else if (modeForCreate === ToolMode.ANGLE) {
-      addAnnotation({
-        id: makeId("ang"),
-        type: "angle",
-        pointIds: pointsForCreate,
-        right: isRightAngle,
-        arcCount: isRightAngle ? 1 : session.pendingAngleArcCount,
-        decorator: isRightAngle ? "right" : session.pendingAngleDecorator,
-        tickCount: isRightAngle ? 0 : session.pendingAngleDecorator === "arcTick" ? session.pendingAngleArcCount : 0,
-        style,
-      });
-      store.clearSelection();
+    } else if (handlePointInputAngleCreate(modeForCreate, pointsForCreate, isRightAngle, style)) {
+      // handled by angle point-input creation workflow
     }
   };
 
@@ -1824,6 +1815,14 @@ const { handlePointInputLinearCircleCreate } = createPointInputLinearCircleCreat
   makeId,
   normalizedLineExtension,
   normalizedRayExtension,
+  store,
+});
+
+const { handlePointInputAngleCreate } = createPointInputAngleCreateWorkflow({
+  ToolMode,
+  session,
+  addAnnotation,
+  makeId,
   store,
 });
 
