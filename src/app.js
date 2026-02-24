@@ -39,6 +39,7 @@ import { createRenderDoc } from "./app/render/renderDoc.js";
 import { createApplyDoc } from "./app/render/docApply.js";
 import { createMarqueeSelectionWorkflow } from "./app/workflows/marqueeSelection.js";
 import { createSelectionClickWorkflow } from "./app/workflows/selectionClicks.js";
+import { createBoardMovePreviewWorkflow } from "./app/workflows/boardMovePreview.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1865,22 +1866,14 @@ const { handleSelectBoardClick, handleSelectObjectClick } = createSelectionClick
   updateModeUi: () => updateModeUi(),
 });
 
-function handleBoardMove(coords, evt) {
-  const adjusted = getPointInputCoords(coords, evt);
-  if (updatePerpendicularBisectorPreview(adjusted)) {
-    return;
-  }
-  if (updateLinearPreview(adjusted)) {
-    return;
-  }
-  if (updateCirclePreview(adjusted)) {
-    return;
-  }
-  if (updateAnglePreview(adjusted)) {
-    return;
-  }
-  updateTrianglePreview(adjusted, evt);
-}
+const { handleBoardMove } = createBoardMovePreviewWorkflow({
+  getPointInputCoords,
+  updatePerpendicularBisectorPreview,
+  updateLinearPreview,
+  updateCirclePreview,
+  updateAnglePreview,
+  updateTrianglePreview,
+});
 
 function handleObjectMove(id, type, pos, options = {}) {
   const transient = !!options?.transient;
