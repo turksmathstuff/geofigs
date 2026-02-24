@@ -47,6 +47,7 @@ import { createObjectClickModeBranchesWorkflow } from "./app/workflows/objectCli
 import { createObjectClickConstructionSelectionWorkflow } from "./app/workflows/objectClickConstructionSelection.js";
 import { createPerpendicularBisectorPlacementBoardClickWorkflow } from "./app/workflows/perpendicularBisectorPlacementBoardClick.js";
 import { createAngleModeBoardClickWorkflow } from "./app/workflows/angleModeBoardClick.js";
+import { createPointInputLinearCircleCreateWorkflow } from "./app/workflows/pointInputLinearCircleCreate.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1543,30 +1544,8 @@ function addPointInput(pointId, skipMutation = false) {
   const isRightAngle = session.pendingAngleIsRight;
   const createFromPoints = () => {
     const style = defaultStyle();
-    if (modeForCreate === ToolMode.SEGMENT) {
-      addObject({ id: makeId("seg"), type: "segment", pointIds: pointsForCreate, style });
-    } else if (modeForCreate === ToolMode.LINE) {
-      addObject({
-        id: makeId("line"),
-        type: "line",
-        pointIds: pointsForCreate,
-        lineType: "line",
-        style: {
-          ...style,
-          lineExtensionStart: normalizedLineExtension(store.doc.styles.lineExtensionStart),
-          lineExtensionEnd: normalizedLineExtension(store.doc.styles.lineExtensionEnd),
-        },
-      });
-    } else if (modeForCreate === ToolMode.RAY) {
-      addObject({
-        id: makeId("ray"),
-        type: "line",
-        pointIds: pointsForCreate,
-        lineType: "ray",
-        style: { ...style, rayExtension: normalizedRayExtension(store.doc.styles.rayExtension) },
-      });
-    } else if (modeForCreate === ToolMode.CIRCLE) {
-      addObject({ id: makeId("circle"), type: "circle", pointIds: pointsForCreate, style });
+    if (handlePointInputLinearCircleCreate(modeForCreate, pointsForCreate, style)) {
+      // handled by linear/circle point-input creation workflow
     } else if (modeForCreate === ToolMode.TRIANGLE) {
       if (session.triangleVariant === "three-point") {
         addTriangleEdges(pointsForCreate, style);
@@ -1837,6 +1816,15 @@ const { handleAngleModeBoardClick } = createAngleModeBoardClickWorkflow({
   ToolMode,
   statusEl,
   modeLabel,
+});
+
+const { handlePointInputLinearCircleCreate } = createPointInputLinearCircleCreateWorkflow({
+  ToolMode,
+  addObject,
+  makeId,
+  normalizedLineExtension,
+  normalizedRayExtension,
+  store,
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
