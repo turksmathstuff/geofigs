@@ -1799,6 +1799,11 @@ function handleObjectClick(id, type, evt) {
     }
   }
 
+  if (session.currentMode === ToolMode.LABEL) {
+    toggleAutoLabelForObject(id);
+    return;
+  }
+
   const selectionClickResult = handleSelectObjectClick(id, multi, isReleaseEvent);
   if (selectionClickResult) {
     return selectionClickResult === true ? undefined : selectionClickResult;
@@ -1863,7 +1868,6 @@ const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow(
   ToolMode,
   store,
   deleteSelected,
-  toggleAutoLabelForObject,
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
