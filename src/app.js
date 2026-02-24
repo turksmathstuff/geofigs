@@ -40,6 +40,7 @@ import { createApplyDoc } from "./app/render/docApply.js";
 import { createMarqueeSelectionWorkflow } from "./app/workflows/marqueeSelection.js";
 import { createSelectionClickWorkflow } from "./app/workflows/selectionClicks.js";
 import { createBoardMovePreviewWorkflow } from "./app/workflows/boardMovePreview.js";
+import { createPointPlacementClickWorkflow } from "./app/workflows/pointPlacementClick.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1729,17 +1730,7 @@ function handleBoardClick(coords, evt) {
 
   const snappedCoords = getPointInputCoords(coords, evt);
 
-  if (session.currentMode === ToolMode.POINT) {
-    const pointSnap = findPreferredPointSnap(snappedCoords);
-    runMutation("create-point", () => {
-      if (pointSnap?.sourceObjectIds) {
-        maybeCreateIntersectionPoint(pointSnap);
-      } else if (pointSnap?.sourceObjectId) {
-        maybeCreateAttachedPoint(pointSnap);
-      } else {
-        maybeCreatePoint(snappedCoords);
-      }
-    });
+  if (handlePointModeBoardClick(snappedCoords)) {
     return;
   }
 
@@ -1864,6 +1855,16 @@ const { handleSelectBoardClick, handleSelectObjectClick } = createSelectionClick
   boardEl,
   renderCurrentDoc: (...args) => renderCurrentDoc(...args),
   updateModeUi: () => updateModeUi(),
+});
+
+const { handlePointModeBoardClick } = createPointPlacementClickWorkflow({
+  session,
+  ToolMode,
+  findPreferredPointSnap,
+  runMutation,
+  maybeCreateIntersectionPoint,
+  maybeCreateAttachedPoint,
+  maybeCreatePoint,
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
