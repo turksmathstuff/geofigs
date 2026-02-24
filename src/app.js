@@ -41,6 +41,7 @@ import { createMarqueeSelectionWorkflow } from "./app/workflows/marqueeSelection
 import { createSelectionClickWorkflow } from "./app/workflows/selectionClicks.js";
 import { createBoardMovePreviewWorkflow } from "./app/workflows/boardMovePreview.js";
 import { createPointPlacementClickWorkflow } from "./app/workflows/pointPlacementClick.js";
+import { createPointCollectionBoardClickWorkflow } from "./app/workflows/pointCollectionBoardClick.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1739,27 +1740,8 @@ function handleBoardClick(coords, evt) {
     return;
   }
 
-  if (pointNeeds(session.currentMode) > 0) {
-    if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && session.pendingPointIds.length === 2) {
-      session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
-    }
-    const nearbyPoint = findNearbyVisiblePoint(snappedCoords);
-    if (nearbyPoint) {
-      addPointInput(nearbyPoint.id);
-      return;
-    }
-    runMutation("create-inline-point", () => {
-      const pointSnap = findPreferredPointSnap(snappedCoords);
-      let ptId;
-      if (pointSnap?.sourceObjectIds) {
-        ptId = maybeCreateIntersectionPoint(pointSnap);
-      } else if (pointSnap?.sourceObjectId) {
-        ptId = maybeCreateAttachedPoint(pointSnap);
-      } else {
-        ptId = maybeCreatePoint(snappedCoords);
-      }
-      addPointInput(ptId, true);
-    });
+  if (handlePointCollectionBoardClick(snappedCoords, evt)) {
+    return;
   }
 }
 
@@ -1862,6 +1844,20 @@ const { handlePointModeBoardClick } = createPointPlacementClickWorkflow({
   ToolMode,
   findPreferredPointSnap,
   runMutation,
+  maybeCreateIntersectionPoint,
+  maybeCreateAttachedPoint,
+  maybeCreatePoint,
+});
+
+const { handlePointCollectionBoardClick } = createPointCollectionBoardClickWorkflow({
+  session,
+  ToolMode,
+  pointNeeds,
+  rightTriangleIsoModifierActive,
+  findNearbyVisiblePoint,
+  addPointInput,
+  runMutation,
+  findPreferredPointSnap,
   maybeCreateIntersectionPoint,
   maybeCreateAttachedPoint,
   maybeCreatePoint,
