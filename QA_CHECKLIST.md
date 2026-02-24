@@ -127,6 +127,8 @@ Use this checklist on the current `main` branch build. Go in order.
 ---
 
 ## 7. Undo / Redo
+Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded content becomes the new baseline, and undo/redo should apply to actions performed after opening.
+
 1. Create several objects (point, segment, triangle).
 2. Press `Cmd/Ctrl+Z` multiple times and confirm actions undo in order.
 3. Press `Cmd/Ctrl+Shift+Z` (or `Ctrl+Y`) and confirm redo works.
