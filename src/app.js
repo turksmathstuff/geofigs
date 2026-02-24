@@ -43,6 +43,7 @@ import { createBoardMovePreviewWorkflow } from "./app/workflows/boardMovePreview
 import { createPointPlacementClickWorkflow } from "./app/workflows/pointPlacementClick.js";
 import { createPointCollectionBoardClickWorkflow } from "./app/workflows/pointCollectionBoardClick.js";
 import { createPointCollectionObjectClickWorkflow } from "./app/workflows/pointCollectionObjectClick.js";
+import { createObjectClickModeBranchesWorkflow } from "./app/workflows/objectClickModeBranches.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1772,15 +1773,9 @@ function handleObjectClick(id, type, evt) {
     }
   }
 
-  if (session.currentMode === ToolMode.POINT) {
-    return false;
-  }
-
-  if (session.currentMode === ToolMode.DELETE) {
-    store.clearSelection();
-    store.selection.add(id);
-    deleteSelected();
-    return;
+  const modeBranchClick = handleObjectClickModeBranches(id);
+  if (modeBranchClick.matched) {
+    return modeBranchClick.returnValue;
   }
 
   if (session.constructionSelectionSession) {
@@ -1802,11 +1797,6 @@ function handleObjectClick(id, type, evt) {
     if (pointCollectionClick.matched) {
       return pointCollectionClick.returnValue;
     }
-  }
-
-  if (session.currentMode === ToolMode.LABEL) {
-    toggleAutoLabelForObject(id);
-    return;
   }
 
   const selectionClickResult = handleSelectObjectClick(id, multi, isReleaseEvent);
@@ -1866,6 +1856,14 @@ const { handlePointCollectionObjectClick } = createPointCollectionObjectClickWor
   pointNeeds,
   rightTriangleIsoModifierActive,
   addPointInput,
+});
+
+const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow({
+  session,
+  ToolMode,
+  store,
+  deleteSelected,
+  toggleAutoLabelForObject,
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
