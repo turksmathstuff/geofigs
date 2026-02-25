@@ -58,6 +58,7 @@ import { createObjectMoveSegmentWorkflow } from "./app/workflows/objectMoveSegme
 import { createObjectMoveCircleWorkflow } from "./app/workflows/objectMoveCircle.js";
 import { createObjectMoveRayWorkflow } from "./app/workflows/objectMoveRay.js";
 import { createObjectMoveLineWorkflow } from "./app/workflows/objectMoveLine.js";
+import { createObjectMovePointLabelWorkflow } from "./app/workflows/objectMovePointLabel.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1848,6 +1849,21 @@ const { handleObjectMoveLine } = createObjectMoveLineWorkflow({
   runMutation,
 });
 
+const { handleObjectMovePointLabel } = createObjectMovePointLabelWorkflow({
+  session,
+  JXG,
+  boardController,
+  getObjectById,
+  maybeAxisLockDraggedPoint,
+  applyPointConstraintToDraggedPosition,
+  labelFollowBaseAnchor,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  recomputeConstrainedPoints,
+  runMutation,
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updatePerpendicularBisectorPreview,
@@ -1912,76 +1928,8 @@ function handleObjectMove(id, type, pos, options = {}) {
     return;
   }
 
-  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
+  if (handleObjectMovePointLabel(id, type, pos, options, transient)) {
     return;
-  }
-  if (type !== "point" && type !== "label") {
-    return;
-  }
-  const obj = getObjectById(id);
-  if (!obj) {
-    return;
-  }
-  let adjustedPos = type === "point" ? maybeAxisLockDraggedPoint(id, pos, options) : pos;
-  if (type === "point") {
-    adjustedPos = applyPointConstraintToDraggedPosition(obj, adjustedPos).pos;
-  }
-  if (Math.abs((obj.x ?? 0) - adjustedPos.x) < 0.0001 && Math.abs((obj.y ?? 0) - adjustedPos.y) < 0.0001) {
-    if (!transient) {
-      commitTransientSnapshotIfPresent(id, `move-${type}`);
-    }
-    return;
-  }
-
-  if (transient) {
-    ensureTransientSnapshot(id);
-    obj.x = adjustedPos.x;
-    obj.y = adjustedPos.y;
-    if (type === "label" && obj.follow) {
-      const base = labelFollowBaseAnchor(obj);
-      if (base) {
-        obj.follow.offsetX = adjustedPos.x - base.x;
-        obj.follow.offsetY = adjustedPos.y - base.y;
-      }
-    }
-    if (type === "point") {
-      const el = boardController.getElement(id);
-      if (el?.setPosition) {
-        el.setPosition(JXG.COORDS_BY_USER, [adjustedPos.x, adjustedPos.y]);
-      }
-    }
-    updateConstrainedPointsLive();
-  } else {
-    if (session.transientDragSnapshots.has(id)) {
-      obj.x = adjustedPos.x;
-      obj.y = adjustedPos.y;
-      if (type === "label" && obj.follow) {
-        const base = labelFollowBaseAnchor(obj);
-        if (base) {
-          obj.follow.offsetX = adjustedPos.x - base.x;
-          obj.follow.offsetY = adjustedPos.y - base.y;
-        }
-      }
-      if (type === "point") {
-        recomputeConstrainedPoints();
-      }
-      commitTransientSnapshotIfPresent(id, `move-${type}`);
-      return;
-    }
-    runMutation(`move-${type}`, () => {
-      obj.x = adjustedPos.x;
-      obj.y = adjustedPos.y;
-      if (type === "label" && obj.follow) {
-        const base = labelFollowBaseAnchor(obj);
-        if (base) {
-          obj.follow.offsetX = adjustedPos.x - base.x;
-          obj.follow.offsetY = adjustedPos.y - base.y;
-        }
-      }
-      if (type === "point") {
-        recomputeConstrainedPoints();
-      }
-    });
   }
 }
 
