@@ -57,6 +57,7 @@ import { createObjectMoveLineVisibleResizeWorkflow } from "./app/workflows/objec
 import { createObjectMoveSegmentWorkflow } from "./app/workflows/objectMoveSegment.js";
 import { createObjectMoveCircleWorkflow } from "./app/workflows/objectMoveCircle.js";
 import { createObjectMoveRayWorkflow } from "./app/workflows/objectMoveRay.js";
+import { createObjectMoveLineWorkflow } from "./app/workflows/objectMoveLine.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1838,6 +1839,15 @@ const { handleObjectMoveRay } = createObjectMoveRayWorkflow({
   runMutation,
 });
 
+const { handleObjectMoveLine } = createObjectMoveLineWorkflow({
+  session,
+  getPointById,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updatePerpendicularBisectorPreview,
@@ -1871,49 +1881,7 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (!lineObj || !["line", "parallel", "perpendicular"].includes(lineObj.type)) {
       return;
     }
-    if (pos?.p1 && pos?.p2) {
-      if (lineObj.type !== "line") {
-        return;
-      }
-      const p1Obj = getPointById(lineObj.pointIds?.[0]);
-      const p2Obj = getPointById(lineObj.pointIds?.[1]);
-      if (!p1Obj || !p2Obj) {
-        return;
-      }
-      const unchanged =
-        Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
-        Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
-        Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
-        Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
-      if (unchanged) {
-        if (!transient) {
-          commitTransientSnapshotIfPresent(id, "move-line");
-        }
-        return;
-      }
-      if (transient) {
-        ensureTransientSnapshot(id);
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-        updateConstrainedPointsLive();
-      } else {
-        if (session.transientDragSnapshots.has(id)) {
-          p1Obj.x = pos.p1.x;
-          p1Obj.y = pos.p1.y;
-          p2Obj.x = pos.p2.x;
-          p2Obj.y = pos.p2.y;
-          commitTransientSnapshotIfPresent(id, "move-line");
-          return;
-        }
-        runMutation("move-line", () => {
-          p1Obj.x = pos.p1.x;
-          p1Obj.y = pos.p1.y;
-          p2Obj.x = pos.p2.x;
-          p2Obj.y = pos.p2.y;
-        });
-      }
+    if (handleObjectMoveLine(id, type, lineObj, pos, transient)) {
       return;
     }
     if (handleObjectMoveLineVisibleResize(id, lineObj, pos, transient)) {

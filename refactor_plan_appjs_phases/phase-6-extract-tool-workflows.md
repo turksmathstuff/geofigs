@@ -101,6 +101,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `dc0d6a9` - Extract `handleObjectMove` segment move branch to `src/app/workflows/objectMoveSegment.js`
 - (working tree) - Extract `handleObjectMove` circle move branch to `src/app/workflows/objectMoveCircle.js`
 - (working tree) - Extract `handleObjectMove` ray endpoint-move branch to `src/app/workflows/objectMoveRay.js`
+- (working tree) - Extract `handleObjectMove` line endpoint-move branch to `src/app/workflows/objectMoveLine.js`
 
 ### Current Safe Boundary
 
@@ -115,6 +116,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `handleObjectMove` segment move branch now delegates to a workflow module; perpendicular-bisector guard and transient/undo batching semantics preserved.
 - `handleObjectMove` circle move branch now delegates to a workflow module; transient snapshot + undo batching semantics preserved.
 - `handleObjectMove` ray endpoint-move branch now delegates to a workflow module; angle-bisector guard and transient/undo batching semantics preserved.
+- `handleObjectMove` line endpoint-move branch now delegates to a workflow module; line-only guard and transient/undo batching semantics preserved.
 - `handleBoardClick` perpendicular-bisector placement and angle-mode guard now delegate to workflow modules (board-click branch order preserved).
 - Board preview updates, marquee workflow, and point-collection branches now delegate to workflow modules.
 - `addPointInput` linear/circle, triangle, and angle creation branches now delegate to workflow modules; pending-point sequencing, mutation wrapping, and reset timing remain in `app.js`.
