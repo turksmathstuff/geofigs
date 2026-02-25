@@ -10,7 +10,7 @@ It is retained for historical/reference purposes after Phase 6 completion.
 
 ## Source: `REFACTOR_PLAN_appjs.md`
 
-# Safe Refactor Plan for `/Users/sturk/Desktop/Geo Figures/src/app.js` (4545 lines)
+# Safe Refactor Plan for `src/app.js` (4545 lines)
 
 ## Summary
 
@@ -90,27 +90,27 @@ This avoids a high-risk “architecture rewrite” while still producing a maint
 This architecture is intentionally incremental and minimal. It avoids introducing new patterns until behavior is stabilized.
 
 ### Phase Target Structure
-- `/Users/sturk/Desktop/Geo Figures/src/app.js`
+- `src/app.js`
   - App bootstrap/orchestration only
   - Creates `store`, `boardController`, `domRefs`, `editorSession`
   - Wires extracted modules together
-- `/Users/sturk/Desktop/Geo Figures/src/app/session/editorSession.js`
+- `src/app/session/editorSession.js`
   - Plain object factory + reset helpers for app-local mutable state
-- `/Users/sturk/Desktop/Geo Figures/src/app/dom/domRefs.js`
+- `src/app/dom/domRefs.js`
   - DOM element lookup/cache (current top-level `getElementById` calls)
-- `/Users/sturk/Desktop/Geo Figures/src/app/ui/modeUi.js`
+- `src/app/ui/modeUi.js`
   - `modeLabel`, `canvasHintText`, `updateModeUi`, construction selection status helpers
-- `/Users/sturk/Desktop/Geo Figures/src/app/ui/styleUi.js`
+- `src/app/ui/styleUi.js`
   - `syncStyleInputsFromDoc`, style input helper functions
-- `/Users/sturk/Desktop/Geo Figures/src/app/render/renderDoc.js`
+- `src/app/render/renderDoc.js`
   - `renderCurrentDoc`, extracted helpers for rendering objects/annotations
-- `/Users/sturk/Desktop/Geo Figures/src/app/render/docApply.js`
+- `src/app/render/docApply.js`
   - `applyDoc`, migration/style normalization orchestration
-- `/Users/sturk/Desktop/Geo Figures/src/app/geometry/*.js`
+- `src/app/geometry/*.js`
   - Pure geometric/math and transform helpers
-- `/Users/sturk/Desktop/Geo Figures/src/app/tools/*` (later phase)
+- `src/app/tools/*` (later phase)
   - Tool-specific workflows only after session + rendering extraction stabilizes
-- `/Users/sturk/Desktop/Geo Figures/src/app/ui/wireUi.js`
+- `src/app/ui/wireUi.js`
   - Split event binding functions (toolbar, transform, file ops, styles, keyboard)
 
 ## Public APIs / Interfaces / Types (Changes and Additions)
@@ -152,9 +152,9 @@ Suggested shape (internal):
 - Keeps event handler behavior identical.
 
 ### Existing APIs to Preserve
-- `BoardController` external API in `/Users/sturk/Desktop/Geo Figures/src/board/boardController.js`
-- `AppStore` API in `/Users/sturk/Desktop/Geo Figures/src/state/store.js`
-- Document shape in `/Users/sturk/Desktop/Geo Figures/src/state/figureDoc.js`
+- `BoardController` external API in `src/board/boardController.js`
+- `AppStore` API in `src/state/store.js`
+- Document shape in `src/state/figureDoc.js`
 
 ## Implementation Plan (Decision-Complete, Ordered)
 
@@ -474,7 +474,7 @@ This sequence yields immediate reduction in `app.js` size while protecting the h
 
 # `app.js` Refactor Phase Docs
 
-This folder breaks `/Users/sturk/Desktop/Geo Figures/REFACTOR_PLAN_appjs.md` into separate, actionable phase documents.
+This folder breaks `REFACTOR_PLAN_appjs.md` into separate, actionable phase documents.
 
 ## Order
 
@@ -496,7 +496,7 @@ This folder breaks `/Users/sturk/Desktop/Geo Figures/REFACTOR_PLAN_appjs.md` int
 ## Source of Truth
 
 The master plan remains:
-- `/Users/sturk/Desktop/Geo Figures/REFACTOR_PLAN_appjs.md`
+- `REFACTOR_PLAN_appjs.md`
 
 These phase docs are execution slices derived from that plan.
 
@@ -584,7 +584,7 @@ Shrink `src/app.js` by moving pure/low-coupling helper logic into dedicated modu
 
 ## Target Outcome
 
-- New modules under `/Users/sturk/Desktop/Geo Figures/src/app/geometry/` (or similar)
+- New modules under `src/app/geometry/` (or similar)
 - `src/app.js` imports extracted helpers
 - No changes to event sequencing or render flow
 
@@ -662,7 +662,7 @@ Replace file-scope mutable workflow state in `src/app.js` with a single explicit
 
 ## Target Outcome
 
-- New `/Users/sturk/Desktop/Geo Figures/src/app/session/editorSession.js`
+- New `src/app/session/editorSession.js`
 - `createEditorSession()` factory returns all current app-local mutable state
 - `app.js` uses `session.<field>` instead of top-level `let` variables
 
@@ -748,9 +748,9 @@ Isolate direct DOM coupling (element lookup and display updates) without changin
 
 ## New Modules
 
-- `/Users/sturk/Desktop/Geo Figures/src/app/dom/domRefs.js`
-- `/Users/sturk/Desktop/Geo Figures/src/app/ui/modeUi.js`
-- `/Users/sturk/Desktop/Geo Figures/src/app/ui/styleUi.js`
+- `src/app/dom/domRefs.js`
+- `src/app/ui/modeUi.js`
+- `src/app/ui/styleUi.js`
 
 ## Functions to Move
 
@@ -840,8 +840,8 @@ Move rendering and document-application orchestration into dedicated modules whi
 
 ## New Modules
 
-- `/Users/sturk/Desktop/Geo Figures/src/app/render/renderDoc.js`
-- `/Users/sturk/Desktop/Geo Figures/src/app/render/docApply.js`
+- `src/app/render/renderDoc.js`
+- `src/app/render/docApply.js`
 
 ## Functions to Move
 
@@ -930,7 +930,7 @@ Break `wireUi()` into smaller event-binding functions/modules without changing e
 
 ## Target Outcome
 
-- New `/Users/sturk/Desktop/Geo Figures/src/app/ui/wireUi.js`
+- New `src/app/ui/wireUi.js`
 - `wireUi()` delegated to semantic binding groups
 - Event behavior remains unchanged
 
