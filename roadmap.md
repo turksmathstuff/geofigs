@@ -95,6 +95,11 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 - [ ] Incrementally refactor `src/app.js` into feature/domain modules (labels, angles, export actions, UI wiring, triangle transform) without changing behavior.
 - [ ] Consider vendoring JSXGraph locally (instead of CDN-only) to avoid school-network CDN blocking issues on GitHub Pages.
 
+## Known UX Quirks / Deferred Investigations
+- [ ] Constrained point drag preview can temporarily leave its source segment/ray during drag, then snap back onto the segment/ray on release (final state is valid; likely transient preview vs constraint recompute timing mismatch).
+- [ ] Circle-move edge case: an intersection point can temporarily disappear in some drag scenarios, but `Undo` restores it (likely constraint/intersection recompute timing edge case).
+- [ ] Angle-bisector ray drag can appear to "teleport" from initial to final position instead of visibly moving during drag (verify/polish after move-handler refactor stabilization).
+
 ## Teacher Priority Features (Next)
 1. `Midpoint` tool (two points or segment -> dependent midpoint).
 2. `Angle Bisector` tool (from 3 points / angle mark).
