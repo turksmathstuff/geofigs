@@ -99,6 +99,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `9d669c7` - Extract `handleObjectMove` ray visible-resize (`rayExtension`) branch to `src/app/workflows/objectMoveRayVisibleResize.js`
 - `212c598` - Extract `handleObjectMove` line visible-resize (`lineExtensionStart`/`lineExtensionEnd`) branch to `src/app/workflows/objectMoveLineVisibleResize.js`
 - `dc0d6a9` - Extract `handleObjectMove` segment move branch to `src/app/workflows/objectMoveSegment.js`
+- (working tree) - Extract `handleObjectMove` circle move branch to `src/app/workflows/objectMoveCircle.js`
 
 ### Current Safe Boundary
 
@@ -111,6 +112,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `handleObjectMove` ray visible-resize branch now delegates to a workflow module; transient snapshot + undo batching semantics preserved.
 - `handleObjectMove` line visible-resize branch now delegates to a workflow module; transient snapshot + undo batching semantics preserved.
 - `handleObjectMove` segment move branch now delegates to a workflow module; perpendicular-bisector guard and transient/undo batching semantics preserved.
+- `handleObjectMove` circle move branch now delegates to a workflow module; transient snapshot + undo batching semantics preserved.
 - `handleBoardClick` perpendicular-bisector placement and angle-mode guard now delegate to workflow modules (board-click branch order preserved).
 - Board preview updates, marquee workflow, and point-collection branches now delegate to workflow modules.
 - `addPointInput` linear/circle, triangle, and angle creation branches now delegate to workflow modules; pending-point sequencing, mutation wrapping, and reset timing remain in `app.js`.
@@ -127,3 +129,4 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `handleObjectMove(...)` drag workflows and transient drag snapshot commit/flush logic
 - Any changes to object-click dedupe stamp / handled-click bookkeeping
 - Broader reordering of top-level handler branch order
+- Investigate circle-move edge case where an intersection point can temporarily disappear in some drag scenarios (undo restores it; low urgency, likely constraint/intersection recompute timing edge case)
