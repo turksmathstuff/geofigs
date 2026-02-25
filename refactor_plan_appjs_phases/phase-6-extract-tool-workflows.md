@@ -93,6 +93,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `179b2f0` - Extract `addPointInput` linear/circle create branches (`SEGMENT`/`LINE`/`RAY`/`CIRCLE`) to `src/app/workflows/pointInputLinearCircleCreate.js`
 - `d1af72c` - Extract `addPointInput` angle create branch to `src/app/workflows/pointInputAngleCreate.js`
 - (working tree) - Extract `addPointInput` triangle create branch to `src/app/workflows/pointInputTriangleCreate.js`
+- (working tree) - Move `LABEL` object-click branch into `src/app/workflows/objectClickModeBranches.js`
 
 ### Current Safe Boundary
 
