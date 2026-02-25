@@ -51,6 +51,7 @@ import { createAngleModeBoardClickWorkflow } from "./app/workflows/angleModeBoar
 import { createPointInputLinearCircleCreateWorkflow } from "./app/workflows/pointInputLinearCircleCreate.js";
 import { createPointInputAngleCreateWorkflow } from "./app/workflows/pointInputAngleCreate.js";
 import { createPointInputTriangleCreateWorkflow } from "./app/workflows/pointInputTriangleCreate.js";
+import { createObjectMoveAngleWorkflow } from "./app/workflows/objectMoveAngle.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1776,6 +1777,15 @@ const { handlePointInputTriangleCreate } = createPointInputTriangleCreateWorkflo
   ccwAnglePointIds,
 });
 
+const { handleObjectMoveAngle } = createObjectMoveAngleWorkflow({
+  store,
+  session,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  runMutation,
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updatePerpendicularBisectorPreview,
@@ -1787,54 +1797,7 @@ const { handleBoardMove } = createBoardMovePreviewWorkflow({
 
 function handleObjectMove(id, type, pos, options = {}) {
   const transient = !!options?.transient;
-  if (type === "angle") {
-    const ann = store.doc.annotations.find((a) => a.id === id && a.type === "angle");
-    if (!ann || !pos || !Number.isFinite(pos.radius)) {
-      return;
-    }
-    const nextRadius = Math.max(0.15, Number(pos.radius));
-    const prevRadius = Math.max(0.15, Number(ann.style?.radius || 1));
-    if (Math.abs(nextRadius - prevRadius) < 0.0001) {
-      if (!transient) {
-        commitTransientSnapshotIfPresent(id, "move-angle-radius");
-      }
-      return;
-    }
-    if (transient) {
-      ensureTransientSnapshot(id);
-      const targets =
-        ann.groupId
-          ? store.doc.annotations.filter((a) => a.type === "angle" && a.groupId === ann.groupId)
-          : [ann];
-      for (const target of targets) {
-        target.style = target.style || {};
-        target.style.radius = nextRadius;
-      }
-      renderCurrentDoc(false);
-    } else {
-      if (session.transientDragSnapshots.has(id)) {
-        const targets =
-          ann.groupId
-            ? store.doc.annotations.filter((a) => a.type === "angle" && a.groupId === ann.groupId)
-            : [ann];
-        for (const target of targets) {
-          target.style = target.style || {};
-          target.style.radius = nextRadius;
-        }
-        commitTransientSnapshotIfPresent(id, "move-angle-radius");
-        return;
-      }
-      runMutation("move-angle-radius", () => {
-        const targets =
-          ann.groupId
-            ? store.doc.annotations.filter((a) => a.type === "angle" && a.groupId === ann.groupId)
-            : [ann];
-        for (const target of targets) {
-          target.style = target.style || {};
-          target.style.radius = nextRadius;
-        }
-      });
-    }
+  if (handleObjectMoveAngle(id, type, pos, transient)) {
     return;
   }
   if (type === "ray") {
