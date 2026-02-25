@@ -92,13 +92,13 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `3788dac` - Extract `handleBoardClick` angle-mode status/early-return guard to `src/app/workflows/angleModeBoardClick.js`
 - `179b2f0` - Extract `addPointInput` linear/circle create branches (`SEGMENT`/`LINE`/`RAY`/`CIRCLE`) to `src/app/workflows/pointInputLinearCircleCreate.js`
 - `d1af72c` - Extract `addPointInput` angle create branch to `src/app/workflows/pointInputAngleCreate.js`
-- (working tree) - Extract `addPointInput` triangle create branch to `src/app/workflows/pointInputTriangleCreate.js`
-- (working tree) - Move `LABEL` object-click branch into `src/app/workflows/objectClickModeBranches.js`
-- (working tree) - Extract object-click near-point redirect branch (linear/circle -> nearby point recursion) to `src/app/workflows/objectClickNearPointRedirect.js`
-- (working tree) - Extract `handleObjectMove` angle-radius branch to `src/app/workflows/objectMoveAngle.js`
-- (working tree) - Extract `handleObjectMove` ray visible-resize (`rayExtension`) branch to `src/app/workflows/objectMoveRayVisibleResize.js`
-- (working tree) - Extract `handleObjectMove` line visible-resize (`lineExtensionStart`/`lineExtensionEnd`) branch to `src/app/workflows/objectMoveLineVisibleResize.js`
-- (working tree) - Extract `handleObjectMove` segment move branch to `src/app/workflows/objectMoveSegment.js`
+- `07c5e57` - Extract `addPointInput` triangle create branch to `src/app/workflows/pointInputTriangleCreate.js`
+- `cedaaa9` - Move `LABEL` object-click branch into `src/app/workflows/objectClickModeBranches.js`
+- `9f8ab5c` - Extract object-click near-point redirect branch (linear/circle -> nearby point recursion) to `src/app/workflows/objectClickNearPointRedirect.js`
+- `896b134` - Extract `handleObjectMove` angle-radius branch to `src/app/workflows/objectMoveAngle.js`
+- `9d669c7` - Extract `handleObjectMove` ray visible-resize (`rayExtension`) branch to `src/app/workflows/objectMoveRayVisibleResize.js`
+- `212c598` - Extract `handleObjectMove` line visible-resize (`lineExtensionStart`/`lineExtensionEnd`) branch to `src/app/workflows/objectMoveLineVisibleResize.js`
+- `dc0d6a9` - Extract `handleObjectMove` segment move branch to `src/app/workflows/objectMoveSegment.js`
 
 ### Current Safe Boundary
 
