@@ -52,6 +52,7 @@ import { createPointInputLinearCircleCreateWorkflow } from "./app/workflows/poin
 import { createPointInputAngleCreateWorkflow } from "./app/workflows/pointInputAngleCreate.js";
 import { createPointInputTriangleCreateWorkflow } from "./app/workflows/pointInputTriangleCreate.js";
 import { createObjectMoveAngleWorkflow } from "./app/workflows/objectMoveAngle.js";
+import { createObjectMoveRayVisibleResizeWorkflow } from "./app/workflows/objectMoveRayVisibleResize.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1786,6 +1787,16 @@ const { handleObjectMoveAngle } = createObjectMoveAngleWorkflow({
   runMutation,
 });
 
+const { handleObjectMoveRayVisibleResize } = createObjectMoveRayVisibleResizeWorkflow({
+  session,
+  normalizedRayExtension,
+  getRayExtensionForObject,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updatePerpendicularBisectorPreview,
@@ -1805,32 +1816,7 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (!rayObj || rayObj.type !== "line" || rayObj.lineType !== "ray") {
       return;
     }
-    if (pos && "rayExtension" in pos) {
-      const nextExt = normalizedRayExtension(pos.rayExtension);
-      const prevExt = getRayExtensionForObject(rayObj);
-      if (Math.abs(nextExt - prevExt) < 0.0001) {
-        if (!transient) {
-          commitTransientSnapshotIfPresent(id, "resize-ray-visible");
-        }
-        return;
-      }
-      if (transient) {
-        ensureTransientSnapshot(id);
-        rayObj.style = rayObj.style || {};
-        rayObj.style.rayExtension = nextExt;
-        updateConstrainedPointsLive();
-      } else {
-        if (session.transientDragSnapshots.has(id)) {
-          rayObj.style = rayObj.style || {};
-          rayObj.style.rayExtension = nextExt;
-          commitTransientSnapshotIfPresent(id, "resize-ray-visible");
-          return;
-        }
-        runMutation("resize-ray-visible", () => {
-          rayObj.style = rayObj.style || {};
-          rayObj.style.rayExtension = nextExt;
-        });
-      }
+    if (handleObjectMoveRayVisibleResize(id, rayObj, pos, transient)) {
       return;
     }
     if (!pos?.p1 || !pos?.p2) {

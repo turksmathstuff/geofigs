@@ -96,6 +96,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - (working tree) - Move `LABEL` object-click branch into `src/app/workflows/objectClickModeBranches.js`
 - (working tree) - Extract object-click near-point redirect branch (linear/circle -> nearby point recursion) to `src/app/workflows/objectClickNearPointRedirect.js`
 - (working tree) - Extract `handleObjectMove` angle-radius branch to `src/app/workflows/objectMoveAngle.js`
+- (working tree) - Extract `handleObjectMove` ray visible-resize (`rayExtension`) branch to `src/app/workflows/objectMoveRayVisibleResize.js`
 
 ### Current Safe Boundary
 
@@ -105,6 +106,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `handleObjectClick` construction-selection session branch now delegates to a workflow module (with original branch order and `deferUntilUp` behavior preserved).
 - `handleObjectMove` drag/undo batching logic is untouched (intentionally deferred).
 - `handleObjectMove` angle-radius branch now delegates to a workflow module; transient snapshot + grouped-angle radius semantics preserved.
+- `handleObjectMove` ray visible-resize branch now delegates to a workflow module; transient snapshot + undo batching semantics preserved.
 - `handleBoardClick` perpendicular-bisector placement and angle-mode guard now delegate to workflow modules (board-click branch order preserved).
 - Board preview updates, marquee workflow, and point-collection branches now delegate to workflow modules.
 - `addPointInput` linear/circle, triangle, and angle creation branches now delegate to workflow modules; pending-point sequencing, mutation wrapping, and reset timing remain in `app.js`.
