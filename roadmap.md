@@ -68,8 +68,8 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 - [ ] Preset-figure quick actions (`Isosceles`, `Right Triangle`, `Coordinate Plane`).
 
 ### Phase 5: Deployment
-- [ ] GitHub repository initialization (if not already set externally).
-- [ ] GitHub Pages setup.
+- [x] GitHub repository initialization.
+- [x] GitHub Pages setup.
 - [ ] Feedback/report link in UI.
 - [ ] Version banner and changelog notes.
 
@@ -82,17 +82,18 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 - [ ] Confirm multi-select and deselect behavior.
 
 ## Next Priority Work
-1. Add figure preset buttons and generation logic.
-2. Add lightweight in-app export validation checklist hints.
-3. Complete deployment configuration and README usage guide.
+1. Add `Polygon / Polyline` tool support (start with regular polygon workflow).
+2. Add point visibility controls (including a quick hide/show all point objects action).
+3. Add lightweight in-app export validation checklist hints.
+4. Add figure preset buttons and generation logic.
+5. Add feedback/report link and version banner polish.
 
-## TODO (Label Follow Edge Cases)
-- [ ] Add a `Midpoint` construction tool (select two points or a segment; create midpoint and preserve dependency).
+## Developer TODOs / Technical Debt
 - [ ] Make labels attached to `parallel` / `perpendicular` objects follow line orientation changes (not just the through-point anchor).
 - [ ] Preserve/rotate attached label `follow.offsetX/offsetY` during triangle rotate/slide transforms so labels move as a rigid transform with the figure.
 - [ ] Fix point-on-line click prioritization edge case: after creating a segment using endpoints that lie on an existing line, `Segment` tool can require an extra canvas click before starting the next segment (interaction dedupe / hit-target routing cleanup).
 - [ ] Consider making side-length / angle-measure labels optionally live-track actual values, support double-click edit overrides, and restore tracking after geometry moves (or provide explicit toggle between auto/manual measure labels).
-- [ ] Incrementally refactor `src/app.js` into feature/domain modules (labels, angles, export actions, UI wiring, triangle transform) without changing behavior.
+- [ ] Continue targeted feature-domain extraction from `src/app.js` as needed (labels, angles, export actions, bulk object actions), now that Phase 6 workflow refactor is complete.
 - [ ] Consider vendoring JSXGraph locally (instead of CDN-only) to avoid school-network CDN blocking issues on GitHub Pages.
 
 ## Known UX Quirks / Deferred Investigations
@@ -101,13 +102,15 @@ Build a browser app for teachers to create clean static geometry diagrams quickl
 - [ ] Angle-bisector ray drag can appear to "teleport" from initial to final position instead of visibly moving during drag (verify/polish after move-handler refactor stabilization).
 
 ## Teacher Priority Features (Next)
-1. `Midpoint` tool (two points or segment -> dependent midpoint).
-2. `Angle Bisector` tool (from 3 points / angle mark).
-3. `Perpendicular Bisector` tool (from segment).
-4. `Text Box` annotation (free text not attached to geometry).
-5. `Point Rename` / point naming controls (manual point labels and renaming).
-6. `Hide Point Markers` export/presentation toggle (keep geometry, suppress dots).
-7. `Coordinate Plane` / axes-grid preset for analytic geometry and trig diagrams.
-8. `Center + Radius` circle tool (numeric radius entry).
-9. `Polygon / Polyline` tool for quadrilaterals and composite worksheet figures.
-10. Angle/measure display options (degree symbol toggle, radians support later).
+1. `Polygon / Polyline` tool for quadrilaterals and composite worksheet figures (regular polygon workflow first).
+2. `Hide Point Markers` export/presentation toggle (keep geometry, suppress dots).
+3. `Text Box` annotation (free text not attached to geometry).
+4. `Point Rename` / point naming controls (manual point labels and renaming).
+5. `Coordinate Plane` / axes-grid preset for analytic geometry and trig diagrams.
+6. `Center + Radius` circle tool (numeric radius entry).
+7. Angle/measure display options (degree symbol toggle, radians support later).
+
+## Recently Completed (for roadmap context)
+- `Midpoint` construction tool (including midpoint tick variants)
+- `Angle Bisector` tool (including tick/decorator variants)
+- `Perpendicular Bisector` tool (placement segment + variants)
