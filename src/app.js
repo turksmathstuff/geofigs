@@ -37,6 +37,28 @@ import { syncStyleInputsFromDoc as syncStyleInputsFromDocUi } from "./app/ui/sty
 import { wireUi } from "./app/ui/wireUi.js";
 import { createRenderDoc } from "./app/render/renderDoc.js";
 import { createApplyDoc } from "./app/render/docApply.js";
+import { createMarqueeSelectionWorkflow } from "./app/workflows/marqueeSelection.js";
+import { createSelectionClickWorkflow } from "./app/workflows/selectionClicks.js";
+import { createBoardMovePreviewWorkflow } from "./app/workflows/boardMovePreview.js";
+import { createPointPlacementClickWorkflow } from "./app/workflows/pointPlacementClick.js";
+import { createPointCollectionBoardClickWorkflow } from "./app/workflows/pointCollectionBoardClick.js";
+import { createPointCollectionObjectClickWorkflow } from "./app/workflows/pointCollectionObjectClick.js";
+import { createObjectClickModeBranchesWorkflow } from "./app/workflows/objectClickModeBranches.js";
+import { createObjectClickConstructionSelectionWorkflow } from "./app/workflows/objectClickConstructionSelection.js";
+import { createObjectClickNearPointRedirectWorkflow } from "./app/workflows/objectClickNearPointRedirect.js";
+import { createPerpendicularBisectorPlacementBoardClickWorkflow } from "./app/workflows/perpendicularBisectorPlacementBoardClick.js";
+import { createAngleModeBoardClickWorkflow } from "./app/workflows/angleModeBoardClick.js";
+import { createPointInputLinearCircleCreateWorkflow } from "./app/workflows/pointInputLinearCircleCreate.js";
+import { createPointInputAngleCreateWorkflow } from "./app/workflows/pointInputAngleCreate.js";
+import { createPointInputTriangleCreateWorkflow } from "./app/workflows/pointInputTriangleCreate.js";
+import { createObjectMoveAngleWorkflow } from "./app/workflows/objectMoveAngle.js";
+import { createObjectMoveRayVisibleResizeWorkflow } from "./app/workflows/objectMoveRayVisibleResize.js";
+import { createObjectMoveLineVisibleResizeWorkflow } from "./app/workflows/objectMoveLineVisibleResize.js";
+import { createObjectMoveSegmentWorkflow } from "./app/workflows/objectMoveSegment.js";
+import { createObjectMoveCircleWorkflow } from "./app/workflows/objectMoveCircle.js";
+import { createObjectMoveRayWorkflow } from "./app/workflows/objectMoveRay.js";
+import { createObjectMoveLineWorkflow } from "./app/workflows/objectMoveLine.js";
+import { createObjectMovePointLabelWorkflow } from "./app/workflows/objectMovePointLabel.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1533,110 +1555,12 @@ function addPointInput(pointId, skipMutation = false) {
   const isRightAngle = session.pendingAngleIsRight;
   const createFromPoints = () => {
     const style = defaultStyle();
-    if (modeForCreate === ToolMode.SEGMENT) {
-      addObject({ id: makeId("seg"), type: "segment", pointIds: pointsForCreate, style });
-    } else if (modeForCreate === ToolMode.LINE) {
-      addObject({
-        id: makeId("line"),
-        type: "line",
-        pointIds: pointsForCreate,
-        lineType: "line",
-        style: {
-          ...style,
-          lineExtensionStart: normalizedLineExtension(store.doc.styles.lineExtensionStart),
-          lineExtensionEnd: normalizedLineExtension(store.doc.styles.lineExtensionEnd),
-        },
-      });
-    } else if (modeForCreate === ToolMode.RAY) {
-      addObject({
-        id: makeId("ray"),
-        type: "line",
-        pointIds: pointsForCreate,
-        lineType: "ray",
-        style: { ...style, rayExtension: normalizedRayExtension(store.doc.styles.rayExtension) },
-      });
-    } else if (modeForCreate === ToolMode.CIRCLE) {
-      addObject({ id: makeId("circle"), type: "circle", pointIds: pointsForCreate, style });
-    } else if (modeForCreate === ToolMode.TRIANGLE) {
-      if (session.triangleVariant === "three-point") {
-        addTriangleEdges(pointsForCreate, style);
-      } else if (session.triangleVariant === "right") {
-        const pointRight = getPointById(pointsForCreate[0]);
-        const pointBase = getPointById(pointsForCreate[1]);
-        const cursorPoint = getPointById(pointsForCreate[2]);
-        if (!pointRight || !pointBase || !cursorPoint) {
-          return;
-        }
-        const apex = rightTriangleApexFromCursor(pointRight, pointBase, cursorPoint, {
-          forceIsosceles: session.pendingRightTriangleForceIso,
-        });
-        if (!apex) {
-          return;
-        }
-        cursorPoint.x = apex.x;
-        cursorPoint.y = apex.y;
-        cursorPoint.constraint = {
-          kind: "rightTriangleApex",
-          rightVertexId: pointsForCreate[0],
-          baseVertexId: pointsForCreate[1],
-          height: apex.height,
-        };
-        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
-        addAnnotation({
-          id: makeId("ang"),
-          type: "angle",
-          pointIds: ccwAnglePointIds(pointsForCreate[1], pointsForCreate[0], pointsForCreate[2]),
-          right: true,
-          arcCount: 1,
-          style,
-        });
-      } else if (session.triangleVariant === "isosceles") {
-        const pointA = getPointById(pointsForCreate[0]);
-        const pointB = getPointById(pointsForCreate[1]);
-        const cursorPoint = getPointById(pointsForCreate[2]);
-        if (!pointA || !pointB || !cursorPoint) {
-          return;
-        }
-        const apex = isoscelesApexFromCursor(pointA, pointB, cursorPoint);
-        if (!apex) {
-          return;
-        }
-        cursorPoint.x = apex.x;
-        cursorPoint.y = apex.y;
-        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
-      } else {
-        const pointA = getPointById(pointsForCreate[0]);
-        const pointB = getPointById(pointsForCreate[1]);
-        if (!pointA || !pointB) {
-          return;
-        }
-        const apex = triangleVerticesFromVariant(pointA, pointB);
-        if (!apex) {
-          return;
-        }
-        const apexId = makeId("pt");
-        addObject({
-          id: apexId,
-          type: "point",
-          x: apex.x,
-          y: apex.y,
-          name: "",
-          style,
-        });
-        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], apexId], style);
-      }
-    } else if (modeForCreate === ToolMode.ANGLE) {
-      addAnnotation({
-        id: makeId("ang"),
-        type: "angle",
-        pointIds: pointsForCreate,
-        right: isRightAngle,
-        arcCount: isRightAngle ? 1 : session.pendingAngleArcCount,
-        decorator: isRightAngle ? "right" : session.pendingAngleDecorator,
-        tickCount: isRightAngle ? 0 : session.pendingAngleDecorator === "arcTick" ? session.pendingAngleArcCount : 0,
-        style,
-      });
-      store.clearSelection();
+    if (handlePointInputLinearCircleCreate(modeForCreate, pointsForCreate, style)) {
+      // handled by linear/circle point-input creation workflow
+    } else if (handlePointInputTriangleCreate(modeForCreate, pointsForCreate, style)) {
+      // handled by triangle point-input creation workflow
+    } else if (handlePointInputAngleCreate(modeForCreate, pointsForCreate, isRightAngle, style)) {
+      // handled by angle point-input creation workflow
     }
   };
 
@@ -1660,123 +1584,27 @@ function addPointInput(pointId, skipMutation = false) {
 }
 
 function handleBoardClick(coords, evt) {
-  if (session.perpendicularBisectorPlacement) {
-    const tag = String(evt?.target?.tagName || "").toLowerCase();
-    const isBoardBackground = tag === "svg" || evt?.target === boardEl;
-    if (!isBoardBackground) {
-      return;
-    }
-    const adjusted = getPointInputCoords(coords, evt);
-    updatePerpendicularBisectorPreview(adjusted);
-    const placementSession = session.perpendicularBisectorPlacement;
-    session.perpendicularBisectorPlacement = null;
-    boardController.clearPreview();
-    const halfLength = Math.max(0.2, Number(placementSession.halfLength) || 1);
-    runMutation(`perp-bisector${placementSession.variantLabel}`, () => {
-      const midpointId = maybeCreateMidpointPoint(placementSession.pointAId, placementSession.pointBId);
-      if (!midpointId) {
-        return;
-      }
-      const endId = maybeCreatePerpendicularBisectorEndpointPoint(
-        placementSession.pointAId,
-        placementSession.pointBId,
-        placementSession.side || 1,
-        halfLength
-      );
-      if (!endId) {
-        return;
-      }
-      const segId = makeId("pb");
-      addObject({
-        id: segId,
-        type: "segment",
-        pointIds: [midpointId, endId],
-        construction: "perpendicularBisector",
-        style: { ...defaultStyle(), dash: 0, fixed: true },
-      });
-      if (placementSession.withMidpointTicks) {
-        addAnnotation({
-          id: makeId("mdtk"),
-          type: "midpointTick",
-          pointIds: [placementSession.pointAId, midpointId, placementSession.pointBId],
-          tickCount: 1,
-          style: defaultStyle(),
-        });
-      }
-      if (placementSession.withRightAngle) {
-        addAnnotation({
-          id: makeId("ang"),
-          type: "angle",
-          pointIds: [placementSession.pointAId, midpointId, endId],
-          right: true,
-          arcCount: 1,
-          style: defaultStyle(),
-        });
-      }
-      store.clearSelection();
-    });
-    updateModeUi();
+  if (handlePerpendicularBisectorPlacementBoardClick(coords, evt)) {
     return;
   }
   if (session.currentMode === ToolMode.SELECT) {
-    const tag = String(evt?.target?.tagName || "").toLowerCase();
-    const isBoardBackground = tag === "svg" || evt?.target === boardEl;
-    if (!isBoardBackground) {
+    if (handleSelectBoardClick(evt)) {
       return;
     }
-    if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
-      return;
-    }
-    store.clearSelection();
-    renderCurrentDoc();
-    if (session.constructionSelectionSession) {
-      updateModeUi();
-    }
-    return;
   }
 
   const snappedCoords = getPointInputCoords(coords, evt);
 
-  if (session.currentMode === ToolMode.POINT) {
-    const pointSnap = findPreferredPointSnap(snappedCoords);
-    runMutation("create-point", () => {
-      if (pointSnap?.sourceObjectIds) {
-        maybeCreateIntersectionPoint(pointSnap);
-      } else if (pointSnap?.sourceObjectId) {
-        maybeCreateAttachedPoint(pointSnap);
-      } else {
-        maybeCreatePoint(snappedCoords);
-      }
-    });
+  if (handlePointModeBoardClick(snappedCoords)) {
     return;
   }
 
-  if (session.currentMode === ToolMode.ANGLE) {
-    statusEl.textContent = `Mode: ${modeLabel(session.currentMode)} (select existing points only)`;
+  if (handleAngleModeBoardClick()) {
     return;
   }
 
-  if (pointNeeds(session.currentMode) > 0) {
-    if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && session.pendingPointIds.length === 2) {
-      session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
-    }
-    const nearbyPoint = findNearbyVisiblePoint(snappedCoords);
-    if (nearbyPoint) {
-      addPointInput(nearbyPoint.id);
-      return;
-    }
-    runMutation("create-inline-point", () => {
-      const pointSnap = findPreferredPointSnap(snappedCoords);
-      let ptId;
-      if (pointSnap?.sourceObjectIds) {
-        ptId = maybeCreateIntersectionPoint(pointSnap);
-      } else if (pointSnap?.sourceObjectId) {
-        ptId = maybeCreateAttachedPoint(pointSnap);
-      } else {
-        ptId = maybeCreatePoint(snappedCoords);
-      }
-      addPointInput(ptId, true);
-    });
+  if (handlePointCollectionBoardClick(snappedCoords, evt)) {
+    return;
   }
 }
 
@@ -1799,267 +1627,255 @@ function handleObjectClick(id, type, evt) {
     }
     evt.__codexHandledObjectClicks.push(clickKey);
   }
-  if (["segment", "line", "ray", "parallel", "perpendicular", "circle"].includes(type)) {
-    const nearPoint = findNearbyVisiblePoint(boardController.getUserCoords(evt), 0.4);
-    if (nearPoint && nearPoint.id !== id) {
-      return handleObjectClick(nearPoint.id, "point", evt);
+  const nearPointRedirect = handleObjectClickNearPointRedirect(id, type, evt);
+  if (nearPointRedirect.matched) {
+    return nearPointRedirect.returnValue;
+  }
+
+  const modeBranchClick = handleObjectClickModeBranches(id);
+  if (modeBranchClick.matched) {
+    return modeBranchClick.returnValue;
+  }
+
+  const constructionSelectionClick = handleObjectClickConstructionSelection(id, multi, isReleaseEvent);
+  if (constructionSelectionClick.matched) {
+    return constructionSelectionClick.returnValue;
+  }
+
+  if (pointNeeds(session.currentMode) > 0) {
+    const pointCollectionClick = handlePointCollectionObjectClick(id, type, evt);
+    if (pointCollectionClick.matched) {
+      return pointCollectionClick.returnValue;
     }
   }
 
-  if (session.currentMode === ToolMode.POINT) {
-    return false;
-  }
-
-  if (session.currentMode === ToolMode.DELETE) {
-    store.clearSelection();
-    store.selection.add(id);
-    deleteSelected();
-    return;
-  }
-
-  if (session.constructionSelectionSession) {
-    if (!multi && !isReleaseEvent) {
-      return { deferUntilUp: true };
-    }
-    if (multi) {
-      store.toggleSelection(id, true);
-    } else {
-      store.selection.add(id);
-    }
-    renderCurrentDoc();
-    maybeCompleteConstructionSelectionSession();
-    return;
-  }
-
-  if (pointNeeds(session.currentMode) > 0 && type === "point") {
-    if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right" && session.pendingPointIds.length === 2) {
-      session.pendingRightTriangleForceIso = rightTriangleIsoModifierActive(evt);
-    }
-    addPointInput(id);
-    return;
-  }
-  if (pointNeeds(session.currentMode) > 0 && type !== "point") {
-    return false;
-  }
-
-  if (session.currentMode === ToolMode.LABEL) {
-    toggleAutoLabelForObject(id);
-    return;
-  }
-
-  if (session.currentMode === ToolMode.SELECT && !multi && !isReleaseEvent) {
-    return { deferUntilUp: true };
-  }
-
-  if (session.currentMode === ToolMode.SELECT || session.currentMode === ToolMode.CONGRUENCY) {
-    store.toggleSelection(id, multi);
-    renderCurrentDoc();
+  const selectionClickResult = handleSelectObjectClick(id, multi, isReleaseEvent);
+  if (selectionClickResult) {
+    return selectionClickResult === true ? undefined : selectionClickResult;
   }
 }
 
-function objectRepresentativePoint(obj) {
-  if (obj.type === "point" || obj.type === "label") {
-    return { x: obj.x, y: obj.y };
-  }
-  if (obj.type === "segment" || obj.type === "line") {
-    const p1 = getPointById(obj.pointIds?.[0]);
-    const p2 = getPointById(obj.pointIds?.[1]);
-    if (p1 && p2) {
-      return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-    }
-  }
-  if (obj.type === "circle") {
-    const c = getPointById(obj.pointIds?.[0]);
-    if (c) {
-      return { x: c.x, y: c.y };
-    }
-  }
-  if (obj.type === "parallel" || obj.type === "perpendicular") {
-    const p = getPointById(obj.throughPointId);
-    if (p) {
-      return { x: p.x, y: p.y };
-    }
-  }
-  return null;
-}
+const { startMarqueeSelection } = createMarqueeSelectionWorkflow({
+  store,
+  session,
+  boardEl,
+  boardController,
+  ToolMode,
+  getPointById,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  doc: document,
+  win: window,
+});
 
-function inBounds(pt, bounds) {
-  return pt.x >= bounds.minX && pt.x <= bounds.maxX && pt.y >= bounds.minY && pt.y <= bounds.maxY;
-}
+const { handleSelectBoardClick, handleSelectObjectClick } = createSelectionClickWorkflow({
+  store,
+  session,
+  ToolMode,
+  boardEl,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  updateModeUi: () => updateModeUi(),
+});
 
-function applyMarqueeSelection(bounds, additive) {
-  const selected = additive ? new Set(store.selectedIds()) : new Set();
-  for (const obj of store.doc.objects) {
-    const rep = objectRepresentativePoint(obj);
-    if (rep && inBounds(rep, bounds)) {
-      selected.add(obj.id);
-    }
-  }
-  for (const ann of store.doc.annotations) {
-    if (ann.segmentId && selected.has(ann.segmentId)) {
-      selected.add(ann.id);
-    } else if (ann.targetId && selected.has(ann.targetId)) {
-      selected.add(ann.id);
-    } else if (ann.pointIds && ann.pointIds.every((pid) => selected.has(pid))) {
-      selected.add(ann.id);
-    }
-  }
-  store.clearSelection();
-  for (const id of selected) {
-    store.selection.add(id);
-  }
-  renderCurrentDoc();
-}
+const { handlePointModeBoardClick } = createPointPlacementClickWorkflow({
+  session,
+  ToolMode,
+  findPreferredPointSnap,
+  runMutation,
+  maybeCreateIntersectionPoint,
+  maybeCreateAttachedPoint,
+  maybeCreatePoint,
+});
 
-function removeMarqueeRect() {
-  if (session.marqueeState?.rectEl) {
-    session.marqueeState.rectEl.remove();
-  }
-}
+const { handlePointCollectionBoardClick } = createPointCollectionBoardClickWorkflow({
+  session,
+  ToolMode,
+  pointNeeds,
+  rightTriangleIsoModifierActive,
+  findNearbyVisiblePoint,
+  addPointInput,
+  runMutation,
+  findPreferredPointSnap,
+  maybeCreateIntersectionPoint,
+  maybeCreateAttachedPoint,
+  maybeCreatePoint,
+});
 
-function startMarqueeSelection() {
-  if (!boardEl) {
-    return;
-  }
+const { handlePointCollectionObjectClick } = createPointCollectionObjectClickWorkflow({
+  session,
+  ToolMode,
+  pointNeeds,
+  rightTriangleIsoModifierActive,
+  addPointInput,
+});
 
-  boardEl.addEventListener("mousedown", (evt) => {
-    if (session.currentMode !== ToolMode.SELECT || evt.button !== 0) {
-      return;
-    }
-    const tag = String(evt.target?.tagName || "").toLowerCase();
-    if (tag !== "svg" && evt.target !== boardEl) {
-      return;
-    }
-    const rect = boardEl.getBoundingClientRect();
-    const wrapRect = boardEl.parentElement.getBoundingClientRect();
-    session.marqueeState = {
-      startX: evt.clientX,
-      startY: evt.clientY,
-      lastX: evt.clientX,
-      lastY: evt.clientY,
-      additive: evt.shiftKey || evt.metaKey || evt.ctrlKey,
-      dragging: false,
-      rectEl: null,
-      boardRect: rect,
-      wrapRect,
-    };
-  });
+const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow({
+  session,
+  ToolMode,
+  store,
+  deleteSelected,
+  toggleAutoLabelForObject,
+});
 
-  window.addEventListener("mousemove", (evt) => {
-    if (!session.marqueeState || session.currentMode !== ToolMode.SELECT) {
-      return;
-    }
-    session.marqueeState.lastX = evt.clientX;
-    session.marqueeState.lastY = evt.clientY;
-    const dx = Math.abs(evt.clientX - session.marqueeState.startX);
-    const dy = Math.abs(evt.clientY - session.marqueeState.startY);
-    if (!session.marqueeState.dragging && Math.max(dx, dy) < 6) {
-      return;
-    }
-    session.marqueeState.dragging = true;
-    if (!session.marqueeState.rectEl) {
-      const rectEl = document.createElement("div");
-      rectEl.className = "marquee-select";
-      boardEl.parentElement.appendChild(rectEl);
-      session.marqueeState.rectEl = rectEl;
-    }
-    const minX = Math.max(session.marqueeState.boardRect.left, Math.min(session.marqueeState.startX, evt.clientX));
-    const minY = Math.max(session.marqueeState.boardRect.top, Math.min(session.marqueeState.startY, evt.clientY));
-    const maxX = Math.min(session.marqueeState.boardRect.right, Math.max(session.marqueeState.startX, evt.clientX));
-    const maxY = Math.min(session.marqueeState.boardRect.bottom, Math.max(session.marqueeState.startY, evt.clientY));
-    session.marqueeState.rectEl.style.left = `${minX - session.marqueeState.wrapRect.left}px`;
-    session.marqueeState.rectEl.style.top = `${minY - session.marqueeState.wrapRect.top}px`;
-    session.marqueeState.rectEl.style.width = `${Math.max(0, maxX - minX)}px`;
-    session.marqueeState.rectEl.style.height = `${Math.max(0, maxY - minY)}px`;
-  });
+const { handleObjectClickConstructionSelection } = createObjectClickConstructionSelectionWorkflow({
+  session,
+  store,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  maybeCompleteConstructionSelectionSession: (...args) => maybeCompleteConstructionSelectionSession(...args),
+});
 
-  window.addEventListener("mouseup", () => {
-    if (!session.marqueeState) {
-      return;
-    }
-    if (session.marqueeState.dragging) {
-      const p1 = boardController.screenToUser(session.marqueeState.startX, session.marqueeState.startY);
-      const p2 = boardController.screenToUser(session.marqueeState.lastX, session.marqueeState.lastY);
-      const bounds = {
-        minX: Math.min(p1.x, p2.x),
-        maxX: Math.max(p1.x, p2.x),
-        minY: Math.min(p1.y, p2.y),
-        maxY: Math.max(p1.y, p2.y),
-      };
-      applyMarqueeSelection(bounds, session.marqueeState.additive);
-    }
-    removeMarqueeRect();
-    session.marqueeState = null;
-  });
-}
+const { handleObjectClickNearPointRedirect } = createObjectClickNearPointRedirectWorkflow({
+  boardController,
+  findNearbyVisiblePoint,
+  handleObjectClick: (...args) => handleObjectClick(...args),
+});
 
-function handleBoardMove(coords, evt) {
-  const adjusted = getPointInputCoords(coords, evt);
-  if (updatePerpendicularBisectorPreview(adjusted)) {
-    return;
-  }
-  if (updateLinearPreview(adjusted)) {
-    return;
-  }
-  if (updateCirclePreview(adjusted)) {
-    return;
-  }
-  if (updateAnglePreview(adjusted)) {
-    return;
-  }
-  updateTrianglePreview(adjusted, evt);
-}
+const { handlePerpendicularBisectorPlacementBoardClick } = createPerpendicularBisectorPlacementBoardClickWorkflow({
+  session,
+  boardEl,
+  getPointInputCoords,
+  updatePerpendicularBisectorPreview,
+  boardController,
+  runMutation,
+  maybeCreateMidpointPoint,
+  maybeCreatePerpendicularBisectorEndpointPoint,
+  makeId,
+  addObject,
+  defaultStyle,
+  addAnnotation,
+  store,
+  updateModeUi: (...args) => updateModeUi(...args),
+});
+
+const { handleAngleModeBoardClick } = createAngleModeBoardClickWorkflow({
+  session,
+  ToolMode,
+  statusEl,
+  modeLabel,
+});
+
+const { handlePointInputLinearCircleCreate } = createPointInputLinearCircleCreateWorkflow({
+  ToolMode,
+  addObject,
+  makeId,
+  normalizedLineExtension,
+  normalizedRayExtension,
+  store,
+});
+
+const { handlePointInputAngleCreate } = createPointInputAngleCreateWorkflow({
+  ToolMode,
+  session,
+  addAnnotation,
+  makeId,
+  store,
+});
+
+const { handlePointInputTriangleCreate } = createPointInputTriangleCreateWorkflow({
+  ToolMode,
+  session,
+  getPointById,
+  rightTriangleApexFromCursor,
+  isoscelesApexFromCursor,
+  triangleVerticesFromVariant,
+  addTriangleEdges,
+  addAnnotation,
+  addObject,
+  makeId,
+  ccwAnglePointIds,
+});
+
+const { handleObjectMoveAngle } = createObjectMoveAngleWorkflow({
+  store,
+  session,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  runMutation,
+});
+
+const { handleObjectMoveRayVisibleResize } = createObjectMoveRayVisibleResizeWorkflow({
+  session,
+  normalizedRayExtension,
+  getRayExtensionForObject,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
+const { handleObjectMoveLineVisibleResize } = createObjectMoveLineVisibleResizeWorkflow({
+  store,
+  session,
+  normalizedLineExtension,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
+const { handleObjectMoveSegment } = createObjectMoveSegmentWorkflow({
+  session,
+  getPointById,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
+const { handleObjectMoveCircle } = createObjectMoveCircleWorkflow({
+  session,
+  getPointById,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
+const { handleObjectMoveRay } = createObjectMoveRayWorkflow({
+  session,
+  getPointById,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
+const { handleObjectMoveLine } = createObjectMoveLineWorkflow({
+  session,
+  getPointById,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
+const { handleObjectMovePointLabel } = createObjectMovePointLabelWorkflow({
+  session,
+  JXG,
+  boardController,
+  getObjectById,
+  maybeAxisLockDraggedPoint,
+  applyPointConstraintToDraggedPosition,
+  labelFollowBaseAnchor,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  recomputeConstrainedPoints,
+  runMutation,
+});
+
+const { handleBoardMove } = createBoardMovePreviewWorkflow({
+  getPointInputCoords,
+  updatePerpendicularBisectorPreview,
+  updateLinearPreview,
+  updateCirclePreview,
+  updateAnglePreview,
+  updateTrianglePreview,
+});
 
 function handleObjectMove(id, type, pos, options = {}) {
   const transient = !!options?.transient;
-  if (type === "angle") {
-    const ann = store.doc.annotations.find((a) => a.id === id && a.type === "angle");
-    if (!ann || !pos || !Number.isFinite(pos.radius)) {
-      return;
-    }
-    const nextRadius = Math.max(0.15, Number(pos.radius));
-    const prevRadius = Math.max(0.15, Number(ann.style?.radius || 1));
-    if (Math.abs(nextRadius - prevRadius) < 0.0001) {
-      if (!transient) {
-        commitTransientSnapshotIfPresent(id, "move-angle-radius");
-      }
-      return;
-    }
-    if (transient) {
-      ensureTransientSnapshot(id);
-      const targets =
-        ann.groupId
-          ? store.doc.annotations.filter((a) => a.type === "angle" && a.groupId === ann.groupId)
-          : [ann];
-      for (const target of targets) {
-        target.style = target.style || {};
-        target.style.radius = nextRadius;
-      }
-      renderCurrentDoc(false);
-    } else {
-      if (session.transientDragSnapshots.has(id)) {
-        const targets =
-          ann.groupId
-            ? store.doc.annotations.filter((a) => a.type === "angle" && a.groupId === ann.groupId)
-            : [ann];
-        for (const target of targets) {
-          target.style = target.style || {};
-          target.style.radius = nextRadius;
-        }
-        commitTransientSnapshotIfPresent(id, "move-angle-radius");
-        return;
-      }
-      runMutation("move-angle-radius", () => {
-        const targets =
-          ann.groupId
-            ? store.doc.annotations.filter((a) => a.type === "angle" && a.groupId === ann.groupId)
-            : [ann];
-        for (const target of targets) {
-          target.style = target.style || {};
-          target.style.radius = nextRadius;
-        }
-      });
-    }
+  if (handleObjectMoveAngle(id, type, pos, transient)) {
     return;
   }
   if (type === "ray") {
@@ -2067,78 +1883,11 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (!rayObj || rayObj.type !== "line" || rayObj.lineType !== "ray") {
       return;
     }
-    if (pos && "rayExtension" in pos) {
-      const nextExt = normalizedRayExtension(pos.rayExtension);
-      const prevExt = getRayExtensionForObject(rayObj);
-      if (Math.abs(nextExt - prevExt) < 0.0001) {
-        if (!transient) {
-          commitTransientSnapshotIfPresent(id, "resize-ray-visible");
-        }
-        return;
-      }
-      if (transient) {
-        ensureTransientSnapshot(id);
-        rayObj.style = rayObj.style || {};
-        rayObj.style.rayExtension = nextExt;
-        updateConstrainedPointsLive();
-      } else {
-        if (session.transientDragSnapshots.has(id)) {
-          rayObj.style = rayObj.style || {};
-          rayObj.style.rayExtension = nextExt;
-          commitTransientSnapshotIfPresent(id, "resize-ray-visible");
-          return;
-        }
-        runMutation("resize-ray-visible", () => {
-          rayObj.style = rayObj.style || {};
-          rayObj.style.rayExtension = nextExt;
-        });
-      }
+    if (handleObjectMoveRayVisibleResize(id, rayObj, pos, transient)) {
       return;
     }
-    if (!pos?.p1 || !pos?.p2) {
+    if (handleObjectMoveRay(id, type, rayObj, pos, transient)) {
       return;
-    }
-    const p1Obj = getPointById(rayObj.pointIds?.[0]);
-    const p2Obj = getPointById(rayObj.pointIds?.[1]);
-    if (!p1Obj || !p2Obj) {
-      return;
-    }
-    if (rayObj.construction === "angleBisector") {
-      return;
-    }
-    const unchanged =
-      Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
-      Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
-      Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
-      Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
-    if (unchanged) {
-      if (!transient) {
-        commitTransientSnapshotIfPresent(id, "move-ray");
-      }
-      return;
-    }
-    if (transient) {
-      ensureTransientSnapshot(id);
-      p1Obj.x = pos.p1.x;
-      p1Obj.y = pos.p1.y;
-      p2Obj.x = pos.p2.x;
-      p2Obj.y = pos.p2.y;
-      updateConstrainedPointsLive();
-    } else {
-      if (session.transientDragSnapshots.has(id)) {
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-        commitTransientSnapshotIfPresent(id, "move-ray");
-        return;
-      }
-      runMutation("move-ray", () => {
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-      });
     }
     return;
   }
@@ -2148,253 +1897,39 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (!lineObj || !["line", "parallel", "perpendicular"].includes(lineObj.type)) {
       return;
     }
-    if (pos?.p1 && pos?.p2) {
-      if (lineObj.type !== "line") {
-        return;
-      }
-      const p1Obj = getPointById(lineObj.pointIds?.[0]);
-      const p2Obj = getPointById(lineObj.pointIds?.[1]);
-      if (!p1Obj || !p2Obj) {
-        return;
-      }
-      const unchanged =
-        Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
-        Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
-        Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
-        Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
-      if (unchanged) {
-        if (!transient) {
-          commitTransientSnapshotIfPresent(id, "move-line");
-        }
-        return;
-      }
-      if (transient) {
-        ensureTransientSnapshot(id);
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-        updateConstrainedPointsLive();
-      } else {
-        if (session.transientDragSnapshots.has(id)) {
-          p1Obj.x = pos.p1.x;
-          p1Obj.y = pos.p1.y;
-          p2Obj.x = pos.p2.x;
-          p2Obj.y = pos.p2.y;
-          commitTransientSnapshotIfPresent(id, "move-line");
-          return;
-        }
-        runMutation("move-line", () => {
-          p1Obj.x = pos.p1.x;
-          p1Obj.y = pos.p1.y;
-          p2Obj.x = pos.p2.x;
-          p2Obj.y = pos.p2.y;
-        });
-      }
+    if (handleObjectMoveLine(id, type, lineObj, pos, transient)) {
       return;
     }
-    if (pos && ("lineExtensionStart" in pos || "lineExtensionEnd" in pos)) {
-      const nextStart = normalizedLineExtension(pos.lineExtensionStart ?? lineObj.style?.lineExtensionStart);
-      const nextEnd = normalizedLineExtension(pos.lineExtensionEnd ?? lineObj.style?.lineExtensionEnd);
-      const prevStart = normalizedLineExtension(lineObj.style?.lineExtensionStart ?? store.doc.styles.lineExtensionStart);
-      const prevEnd = normalizedLineExtension(lineObj.style?.lineExtensionEnd ?? store.doc.styles.lineExtensionEnd);
-      if (Math.abs(nextStart - prevStart) < 0.0001 && Math.abs(nextEnd - prevEnd) < 0.0001) {
-        if (!transient) {
-          commitTransientSnapshotIfPresent(id, "resize-line-visible");
-        }
-        return;
-      }
-      if (transient) {
-        ensureTransientSnapshot(id);
-        lineObj.style = lineObj.style || {};
-        lineObj.style.lineExtensionStart = nextStart;
-        lineObj.style.lineExtensionEnd = nextEnd;
-        updateConstrainedPointsLive();
-      } else {
-        if (session.transientDragSnapshots.has(id)) {
-          lineObj.style = lineObj.style || {};
-          lineObj.style.lineExtensionStart = nextStart;
-          lineObj.style.lineExtensionEnd = nextEnd;
-          commitTransientSnapshotIfPresent(id, "resize-line-visible");
-          return;
-        }
-        runMutation("resize-line-visible", () => {
-          lineObj.style = lineObj.style || {};
-          lineObj.style.lineExtensionStart = nextStart;
-          lineObj.style.lineExtensionEnd = nextEnd;
-        });
-      }
+    if (handleObjectMoveLineVisibleResize(id, lineObj, pos, transient)) {
+      return;
     }
     return;
   }
 
   if (type === "segment") {
     const segObj = getObjectById(id);
-    if (!segObj || segObj.type !== "segment" || !pos?.p1 || !pos?.p2) {
+    if (!segObj) {
       return;
     }
-    if (segObj.construction === "perpendicularBisector") {
+    if (handleObjectMoveSegment(id, type, segObj, pos, transient)) {
       return;
-    }
-    const p1Obj = getPointById(segObj.pointIds?.[0]);
-    const p2Obj = getPointById(segObj.pointIds?.[1]);
-    if (!p1Obj || !p2Obj) {
-      return;
-    }
-    const unchanged =
-      Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
-      Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
-      Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
-      Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
-    if (unchanged) {
-      if (!transient) {
-        commitTransientSnapshotIfPresent(id, "move-segment");
-      }
-      return;
-    }
-    if (transient) {
-      ensureTransientSnapshot(id);
-      p1Obj.x = pos.p1.x;
-      p1Obj.y = pos.p1.y;
-      p2Obj.x = pos.p2.x;
-      p2Obj.y = pos.p2.y;
-      updateConstrainedPointsLive();
-    } else {
-      if (session.transientDragSnapshots.has(id)) {
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-        commitTransientSnapshotIfPresent(id, "move-segment");
-        return;
-      }
-      runMutation("move-segment", () => {
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-      });
     }
     return;
   }
 
   if (type === "circle") {
     const circleObj = getObjectById(id);
-    if (!circleObj || circleObj.type !== "circle" || !pos?.p1 || !pos?.p2) {
+    if (!circleObj) {
       return;
     }
-    const centerObj = getPointById(circleObj.pointIds?.[0]);
-    const throughObj = getPointById(circleObj.pointIds?.[1]);
-    if (!centerObj || !throughObj) {
+    if (handleObjectMoveCircle(id, type, circleObj, pos, transient)) {
       return;
-    }
-    const unchanged =
-      Math.abs(centerObj.x - pos.p1.x) < 0.0001 &&
-      Math.abs(centerObj.y - pos.p1.y) < 0.0001 &&
-      Math.abs(throughObj.x - pos.p2.x) < 0.0001 &&
-      Math.abs(throughObj.y - pos.p2.y) < 0.0001;
-    if (unchanged) {
-      if (!transient) {
-        commitTransientSnapshotIfPresent(id, "move-circle");
-      }
-      return;
-    }
-    if (transient) {
-      ensureTransientSnapshot(id);
-      centerObj.x = pos.p1.x;
-      centerObj.y = pos.p1.y;
-      throughObj.x = pos.p2.x;
-      throughObj.y = pos.p2.y;
-      updateConstrainedPointsLive();
-    } else {
-      if (session.transientDragSnapshots.has(id)) {
-        centerObj.x = pos.p1.x;
-        centerObj.y = pos.p1.y;
-        throughObj.x = pos.p2.x;
-        throughObj.y = pos.p2.y;
-        commitTransientSnapshotIfPresent(id, "move-circle");
-        return;
-      }
-      runMutation("move-circle", () => {
-        centerObj.x = pos.p1.x;
-        centerObj.y = pos.p1.y;
-        throughObj.x = pos.p2.x;
-        throughObj.y = pos.p2.y;
-      });
     }
     return;
   }
 
-  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
+  if (handleObjectMovePointLabel(id, type, pos, options, transient)) {
     return;
-  }
-  if (type !== "point" && type !== "label") {
-    return;
-  }
-  const obj = getObjectById(id);
-  if (!obj) {
-    return;
-  }
-  let adjustedPos = type === "point" ? maybeAxisLockDraggedPoint(id, pos, options) : pos;
-  if (type === "point") {
-    adjustedPos = applyPointConstraintToDraggedPosition(obj, adjustedPos).pos;
-  }
-  if (Math.abs((obj.x ?? 0) - adjustedPos.x) < 0.0001 && Math.abs((obj.y ?? 0) - adjustedPos.y) < 0.0001) {
-    if (!transient) {
-      commitTransientSnapshotIfPresent(id, `move-${type}`);
-    }
-    return;
-  }
-
-  if (transient) {
-    ensureTransientSnapshot(id);
-    obj.x = adjustedPos.x;
-    obj.y = adjustedPos.y;
-    if (type === "label" && obj.follow) {
-      const base = labelFollowBaseAnchor(obj);
-      if (base) {
-        obj.follow.offsetX = adjustedPos.x - base.x;
-        obj.follow.offsetY = adjustedPos.y - base.y;
-      }
-    }
-    if (type === "point") {
-      const el = boardController.getElement(id);
-      if (el?.setPosition) {
-        el.setPosition(JXG.COORDS_BY_USER, [adjustedPos.x, adjustedPos.y]);
-      }
-    }
-    updateConstrainedPointsLive();
-  } else {
-    if (session.transientDragSnapshots.has(id)) {
-      obj.x = adjustedPos.x;
-      obj.y = adjustedPos.y;
-      if (type === "label" && obj.follow) {
-        const base = labelFollowBaseAnchor(obj);
-        if (base) {
-          obj.follow.offsetX = adjustedPos.x - base.x;
-          obj.follow.offsetY = adjustedPos.y - base.y;
-        }
-      }
-      if (type === "point") {
-        recomputeConstrainedPoints();
-      }
-      commitTransientSnapshotIfPresent(id, `move-${type}`);
-      return;
-    }
-    runMutation(`move-${type}`, () => {
-      obj.x = adjustedPos.x;
-      obj.y = adjustedPos.y;
-      if (type === "label" && obj.follow) {
-        const base = labelFollowBaseAnchor(obj);
-        if (base) {
-          obj.follow.offsetX = adjustedPos.x - base.x;
-          obj.follow.offsetY = adjustedPos.y - base.y;
-        }
-      }
-      if (type === "point") {
-        recomputeConstrainedPoints();
-      }
-    });
   }
 }
 
