@@ -55,6 +55,7 @@ import { createObjectMoveAngleWorkflow } from "./app/workflows/objectMoveAngle.j
 import { createObjectMoveRayVisibleResizeWorkflow } from "./app/workflows/objectMoveRayVisibleResize.js";
 import { createObjectMoveLineVisibleResizeWorkflow } from "./app/workflows/objectMoveLineVisibleResize.js";
 import { createObjectMoveSegmentWorkflow } from "./app/workflows/objectMoveSegment.js";
+import { createObjectMoveCircleWorkflow } from "./app/workflows/objectMoveCircle.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1818,6 +1819,15 @@ const { handleObjectMoveSegment } = createObjectMoveSegmentWorkflow({
   runMutation,
 });
 
+const { handleObjectMoveCircle } = createObjectMoveCircleWorkflow({
+  session,
+  getPointById,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updatePerpendicularBisectorPreview,
@@ -1957,47 +1967,11 @@ function handleObjectMove(id, type, pos, options = {}) {
 
   if (type === "circle") {
     const circleObj = getObjectById(id);
-    if (!circleObj || circleObj.type !== "circle" || !pos?.p1 || !pos?.p2) {
+    if (!circleObj) {
       return;
     }
-    const centerObj = getPointById(circleObj.pointIds?.[0]);
-    const throughObj = getPointById(circleObj.pointIds?.[1]);
-    if (!centerObj || !throughObj) {
+    if (handleObjectMoveCircle(id, type, circleObj, pos, transient)) {
       return;
-    }
-    const unchanged =
-      Math.abs(centerObj.x - pos.p1.x) < 0.0001 &&
-      Math.abs(centerObj.y - pos.p1.y) < 0.0001 &&
-      Math.abs(throughObj.x - pos.p2.x) < 0.0001 &&
-      Math.abs(throughObj.y - pos.p2.y) < 0.0001;
-    if (unchanged) {
-      if (!transient) {
-        commitTransientSnapshotIfPresent(id, "move-circle");
-      }
-      return;
-    }
-    if (transient) {
-      ensureTransientSnapshot(id);
-      centerObj.x = pos.p1.x;
-      centerObj.y = pos.p1.y;
-      throughObj.x = pos.p2.x;
-      throughObj.y = pos.p2.y;
-      updateConstrainedPointsLive();
-    } else {
-      if (session.transientDragSnapshots.has(id)) {
-        centerObj.x = pos.p1.x;
-        centerObj.y = pos.p1.y;
-        throughObj.x = pos.p2.x;
-        throughObj.y = pos.p2.y;
-        commitTransientSnapshotIfPresent(id, "move-circle");
-        return;
-      }
-      runMutation("move-circle", () => {
-        centerObj.x = pos.p1.x;
-        centerObj.y = pos.p1.y;
-        throughObj.x = pos.p2.x;
-        throughObj.y = pos.p2.y;
-      });
     }
     return;
   }
