@@ -49,6 +49,7 @@ import { createPerpendicularBisectorPlacementBoardClickWorkflow } from "./app/wo
 import { createAngleModeBoardClickWorkflow } from "./app/workflows/angleModeBoardClick.js";
 import { createPointInputLinearCircleCreateWorkflow } from "./app/workflows/pointInputLinearCircleCreate.js";
 import { createPointInputAngleCreateWorkflow } from "./app/workflows/pointInputAngleCreate.js";
+import { createPointInputTriangleCreateWorkflow } from "./app/workflows/pointInputTriangleCreate.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1547,74 +1548,8 @@ function addPointInput(pointId, skipMutation = false) {
     const style = defaultStyle();
     if (handlePointInputLinearCircleCreate(modeForCreate, pointsForCreate, style)) {
       // handled by linear/circle point-input creation workflow
-    } else if (modeForCreate === ToolMode.TRIANGLE) {
-      if (session.triangleVariant === "three-point") {
-        addTriangleEdges(pointsForCreate, style);
-      } else if (session.triangleVariant === "right") {
-        const pointRight = getPointById(pointsForCreate[0]);
-        const pointBase = getPointById(pointsForCreate[1]);
-        const cursorPoint = getPointById(pointsForCreate[2]);
-        if (!pointRight || !pointBase || !cursorPoint) {
-          return;
-        }
-        const apex = rightTriangleApexFromCursor(pointRight, pointBase, cursorPoint, {
-          forceIsosceles: session.pendingRightTriangleForceIso,
-        });
-        if (!apex) {
-          return;
-        }
-        cursorPoint.x = apex.x;
-        cursorPoint.y = apex.y;
-        cursorPoint.constraint = {
-          kind: "rightTriangleApex",
-          rightVertexId: pointsForCreate[0],
-          baseVertexId: pointsForCreate[1],
-          height: apex.height,
-        };
-        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
-        addAnnotation({
-          id: makeId("ang"),
-          type: "angle",
-          pointIds: ccwAnglePointIds(pointsForCreate[1], pointsForCreate[0], pointsForCreate[2]),
-          right: true,
-          arcCount: 1,
-          style,
-        });
-      } else if (session.triangleVariant === "isosceles") {
-        const pointA = getPointById(pointsForCreate[0]);
-        const pointB = getPointById(pointsForCreate[1]);
-        const cursorPoint = getPointById(pointsForCreate[2]);
-        if (!pointA || !pointB || !cursorPoint) {
-          return;
-        }
-        const apex = isoscelesApexFromCursor(pointA, pointB, cursorPoint);
-        if (!apex) {
-          return;
-        }
-        cursorPoint.x = apex.x;
-        cursorPoint.y = apex.y;
-        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
-      } else {
-        const pointA = getPointById(pointsForCreate[0]);
-        const pointB = getPointById(pointsForCreate[1]);
-        if (!pointA || !pointB) {
-          return;
-        }
-        const apex = triangleVerticesFromVariant(pointA, pointB);
-        if (!apex) {
-          return;
-        }
-        const apexId = makeId("pt");
-        addObject({
-          id: apexId,
-          type: "point",
-          x: apex.x,
-          y: apex.y,
-          name: "",
-          style,
-        });
-        addTriangleEdges([pointsForCreate[0], pointsForCreate[1], apexId], style);
-      }
+    } else if (handlePointInputTriangleCreate(modeForCreate, pointsForCreate, style)) {
+      // handled by triangle point-input creation workflow
     } else if (handlePointInputAngleCreate(modeForCreate, pointsForCreate, isRightAngle, style)) {
       // handled by angle point-input creation workflow
     }
@@ -1824,6 +1759,20 @@ const { handlePointInputAngleCreate } = createPointInputAngleCreateWorkflow({
   addAnnotation,
   makeId,
   store,
+});
+
+const { handlePointInputTriangleCreate } = createPointInputTriangleCreateWorkflow({
+  ToolMode,
+  session,
+  getPointById,
+  rightTriangleApexFromCursor,
+  isoscelesApexFromCursor,
+  triangleVerticesFromVariant,
+  addTriangleEdges,
+  addAnnotation,
+  addObject,
+  makeId,
+  ccwAnglePointIds,
 });
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({

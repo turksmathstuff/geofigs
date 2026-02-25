@@ -92,6 +92,7 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `3788dac` - Extract `handleBoardClick` angle-mode status/early-return guard to `src/app/workflows/angleModeBoardClick.js`
 - `179b2f0` - Extract `addPointInput` linear/circle create branches (`SEGMENT`/`LINE`/`RAY`/`CIRCLE`) to `src/app/workflows/pointInputLinearCircleCreate.js`
 - `d1af72c` - Extract `addPointInput` angle create branch to `src/app/workflows/pointInputAngleCreate.js`
+- (working tree) - Extract `addPointInput` triangle create branch to `src/app/workflows/pointInputTriangleCreate.js`
 
 ### Current Safe Boundary
 
@@ -101,13 +102,14 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `handleObjectMove` drag/undo batching logic is untouched (intentionally deferred).
 - `handleBoardClick` perpendicular-bisector placement and angle-mode guard now delegate to workflow modules (board-click branch order preserved).
 - Board preview updates, marquee workflow, and point-collection branches now delegate to workflow modules.
-- `addPointInput` linear/circle and angle creation branches now delegate to workflow modules; pending-point sequencing, mutation wrapping, and reset timing remain in `app.js`.
+- `addPointInput` linear/circle, triangle, and angle creation branches now delegate to workflow modules; pending-point sequencing, mutation wrapping, and reset timing remain in `app.js`.
 
 ### Next Recommended Safe Steps
 
-1. Extract the remaining `addPointInput` triangle creation branch as a dedicated workflow module (highest-risk remaining portion of `addPointInput`; preserve mutation/reset timing in `app.js`).
-2. Run a focused regression pass on triangle variants (three-point, right, isosceles, regular/equilateral variant path) including constrained apex behavior and right-angle annotation creation.
+1. Run a focused regression pass on triangle variants (three-point, right, isosceles, regular/equilateral variant path) including constrained apex behavior and right-angle annotation creation.
+2. Add a UI-exposed equilateral/regular triangle option (if still intended) so the existing variant path is reachable, then run a focused smoke check for that flow (preview + create + undo/redo).
 3. Continue deferring `handleObjectMove(...)` drag/undo batching extraction until the non-drag workflow families are complete.
+4. Resume extracting remaining non-drag object/board click workflow branches only if they still materially improve readability without risking branch-order regressions.
 
 ### Defer Until Later (Higher Risk)
 
