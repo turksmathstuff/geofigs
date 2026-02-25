@@ -94,11 +94,13 @@ Use this section as the continuity checkpoint if work pauses or moves to a new t
 - `d1af72c` - Extract `addPointInput` angle create branch to `src/app/workflows/pointInputAngleCreate.js`
 - (working tree) - Extract `addPointInput` triangle create branch to `src/app/workflows/pointInputTriangleCreate.js`
 - (working tree) - Move `LABEL` object-click branch into `src/app/workflows/objectClickModeBranches.js`
+- (working tree) - Extract object-click near-point redirect branch (linear/circle -> nearby point recursion) to `src/app/workflows/objectClickNearPointRedirect.js`
 
 ### Current Safe Boundary
 
 - `handleBoardClick`, `handleObjectClick`, `handleObjectMove` still exist in `app.js` as top-level entrypoints.
 - `handleObjectClick` dedupe logic remains in `app.js` (intentionally preserved).
+- `handleObjectClick` near-point redirect now delegates to a workflow module while preserving recursive re-entry through `handleObjectClick(...)`.
 - `handleObjectClick` construction-selection session branch now delegates to a workflow module (with original branch order and `deferUntilUp` behavior preserved).
 - `handleObjectMove` drag/undo batching logic is untouched (intentionally deferred).
 - `handleBoardClick` perpendicular-bisector placement and angle-mode guard now delegate to workflow modules (board-click branch order preserved).

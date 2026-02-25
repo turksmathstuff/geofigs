@@ -45,6 +45,7 @@ import { createPointCollectionBoardClickWorkflow } from "./app/workflows/pointCo
 import { createPointCollectionObjectClickWorkflow } from "./app/workflows/pointCollectionObjectClick.js";
 import { createObjectClickModeBranchesWorkflow } from "./app/workflows/objectClickModeBranches.js";
 import { createObjectClickConstructionSelectionWorkflow } from "./app/workflows/objectClickConstructionSelection.js";
+import { createObjectClickNearPointRedirectWorkflow } from "./app/workflows/objectClickNearPointRedirect.js";
 import { createPerpendicularBisectorPlacementBoardClickWorkflow } from "./app/workflows/perpendicularBisectorPlacementBoardClick.js";
 import { createAngleModeBoardClickWorkflow } from "./app/workflows/angleModeBoardClick.js";
 import { createPointInputLinearCircleCreateWorkflow } from "./app/workflows/pointInputLinearCircleCreate.js";
@@ -1618,11 +1619,9 @@ function handleObjectClick(id, type, evt) {
     }
     evt.__codexHandledObjectClicks.push(clickKey);
   }
-  if (["segment", "line", "ray", "parallel", "perpendicular", "circle"].includes(type)) {
-    const nearPoint = findNearbyVisiblePoint(boardController.getUserCoords(evt), 0.4);
-    if (nearPoint && nearPoint.id !== id) {
-      return handleObjectClick(nearPoint.id, "point", evt);
-    }
+  const nearPointRedirect = handleObjectClickNearPointRedirect(id, type, evt);
+  if (nearPointRedirect.matched) {
+    return nearPointRedirect.returnValue;
   }
 
   const modeBranchClick = handleObjectClickModeBranches(id);
@@ -1714,6 +1713,12 @@ const { handleObjectClickConstructionSelection } = createObjectClickConstruction
   store,
   renderCurrentDoc: (...args) => renderCurrentDoc(...args),
   maybeCompleteConstructionSelectionSession: (...args) => maybeCompleteConstructionSelectionSession(...args),
+});
+
+const { handleObjectClickNearPointRedirect } = createObjectClickNearPointRedirectWorkflow({
+  boardController,
+  findNearbyVisiblePoint,
+  handleObjectClick: (...args) => handleObjectClick(...args),
 });
 
 const { handlePerpendicularBisectorPlacementBoardClick } = createPerpendicularBisectorPlacementBoardClickWorkflow({
