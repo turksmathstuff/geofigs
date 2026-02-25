@@ -53,6 +53,7 @@ import { createPointInputAngleCreateWorkflow } from "./app/workflows/pointInputA
 import { createPointInputTriangleCreateWorkflow } from "./app/workflows/pointInputTriangleCreate.js";
 import { createObjectMoveAngleWorkflow } from "./app/workflows/objectMoveAngle.js";
 import { createObjectMoveRayVisibleResizeWorkflow } from "./app/workflows/objectMoveRayVisibleResize.js";
+import { createObjectMoveLineVisibleResizeWorkflow } from "./app/workflows/objectMoveLineVisibleResize.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1797,6 +1798,16 @@ const { handleObjectMoveRayVisibleResize } = createObjectMoveRayVisibleResizeWor
   runMutation,
 });
 
+const { handleObjectMoveLineVisibleResize } = createObjectMoveLineVisibleResizeWorkflow({
+  store,
+  session,
+  normalizedLineExtension,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updatePerpendicularBisectorPreview,
@@ -1917,37 +1928,8 @@ function handleObjectMove(id, type, pos, options = {}) {
       }
       return;
     }
-    if (pos && ("lineExtensionStart" in pos || "lineExtensionEnd" in pos)) {
-      const nextStart = normalizedLineExtension(pos.lineExtensionStart ?? lineObj.style?.lineExtensionStart);
-      const nextEnd = normalizedLineExtension(pos.lineExtensionEnd ?? lineObj.style?.lineExtensionEnd);
-      const prevStart = normalizedLineExtension(lineObj.style?.lineExtensionStart ?? store.doc.styles.lineExtensionStart);
-      const prevEnd = normalizedLineExtension(lineObj.style?.lineExtensionEnd ?? store.doc.styles.lineExtensionEnd);
-      if (Math.abs(nextStart - prevStart) < 0.0001 && Math.abs(nextEnd - prevEnd) < 0.0001) {
-        if (!transient) {
-          commitTransientSnapshotIfPresent(id, "resize-line-visible");
-        }
-        return;
-      }
-      if (transient) {
-        ensureTransientSnapshot(id);
-        lineObj.style = lineObj.style || {};
-        lineObj.style.lineExtensionStart = nextStart;
-        lineObj.style.lineExtensionEnd = nextEnd;
-        updateConstrainedPointsLive();
-      } else {
-        if (session.transientDragSnapshots.has(id)) {
-          lineObj.style = lineObj.style || {};
-          lineObj.style.lineExtensionStart = nextStart;
-          lineObj.style.lineExtensionEnd = nextEnd;
-          commitTransientSnapshotIfPresent(id, "resize-line-visible");
-          return;
-        }
-        runMutation("resize-line-visible", () => {
-          lineObj.style = lineObj.style || {};
-          lineObj.style.lineExtensionStart = nextStart;
-          lineObj.style.lineExtensionEnd = nextEnd;
-        });
-      }
+    if (handleObjectMoveLineVisibleResize(id, lineObj, pos, transient)) {
+      return;
     }
     return;
   }
