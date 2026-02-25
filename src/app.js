@@ -54,6 +54,7 @@ import { createPointInputTriangleCreateWorkflow } from "./app/workflows/pointInp
 import { createObjectMoveAngleWorkflow } from "./app/workflows/objectMoveAngle.js";
 import { createObjectMoveRayVisibleResizeWorkflow } from "./app/workflows/objectMoveRayVisibleResize.js";
 import { createObjectMoveLineVisibleResizeWorkflow } from "./app/workflows/objectMoveLineVisibleResize.js";
+import { createObjectMoveSegmentWorkflow } from "./app/workflows/objectMoveSegment.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -1808,6 +1809,15 @@ const { handleObjectMoveLineVisibleResize } = createObjectMoveLineVisibleResizeW
   runMutation,
 });
 
+const { handleObjectMoveSegment } = createObjectMoveSegmentWorkflow({
+  session,
+  getPointById,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  runMutation,
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updatePerpendicularBisectorPreview,
@@ -1936,50 +1946,11 @@ function handleObjectMove(id, type, pos, options = {}) {
 
   if (type === "segment") {
     const segObj = getObjectById(id);
-    if (!segObj || segObj.type !== "segment" || !pos?.p1 || !pos?.p2) {
+    if (!segObj) {
       return;
     }
-    if (segObj.construction === "perpendicularBisector") {
+    if (handleObjectMoveSegment(id, type, segObj, pos, transient)) {
       return;
-    }
-    const p1Obj = getPointById(segObj.pointIds?.[0]);
-    const p2Obj = getPointById(segObj.pointIds?.[1]);
-    if (!p1Obj || !p2Obj) {
-      return;
-    }
-    const unchanged =
-      Math.abs(p1Obj.x - pos.p1.x) < 0.0001 &&
-      Math.abs(p1Obj.y - pos.p1.y) < 0.0001 &&
-      Math.abs(p2Obj.x - pos.p2.x) < 0.0001 &&
-      Math.abs(p2Obj.y - pos.p2.y) < 0.0001;
-    if (unchanged) {
-      if (!transient) {
-        commitTransientSnapshotIfPresent(id, "move-segment");
-      }
-      return;
-    }
-    if (transient) {
-      ensureTransientSnapshot(id);
-      p1Obj.x = pos.p1.x;
-      p1Obj.y = pos.p1.y;
-      p2Obj.x = pos.p2.x;
-      p2Obj.y = pos.p2.y;
-      updateConstrainedPointsLive();
-    } else {
-      if (session.transientDragSnapshots.has(id)) {
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-        commitTransientSnapshotIfPresent(id, "move-segment");
-        return;
-      }
-      runMutation("move-segment", () => {
-        p1Obj.x = pos.p1.x;
-        p1Obj.y = pos.p1.y;
-        p2Obj.x = pos.p2.x;
-        p2Obj.y = pos.p2.y;
-      });
     }
     return;
   }
