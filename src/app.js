@@ -2056,6 +2056,34 @@ function showAllHidden() {
   });
 }
 
+function updatePointObjectsToggleButton() {
+  const btn = document.getElementById("togglePointObjects");
+  if (!btn) {
+    return;
+  }
+  btn.textContent = session.showPointObjects ? "Hide Points" : "Show Points";
+}
+
+function updateLineArrowsToggleButton() {
+  const btn = document.getElementById("toggleLineArrows");
+  if (!btn) {
+    return;
+  }
+  btn.textContent = session.showLineArrows ? "Hide Arrows" : "Show Arrows";
+}
+
+function togglePointObjectsVisibility() {
+  session.showPointObjects = !session.showPointObjects;
+  updatePointObjectsToggleButton();
+  renderCurrentDoc(false);
+}
+
+function toggleLineArrowsVisibility() {
+  session.showLineArrows = !session.showLineArrows;
+  updateLineArrowsToggleButton();
+  renderCurrentDoc(false);
+}
+
 function buildPointMap() {
   const map = new Map();
   for (const obj of store.doc.objects) {
@@ -2063,7 +2091,8 @@ function buildPointMap() {
       continue;
     }
     const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint";
-    const pt = obj.hidden
+    const hidePointObject = obj.hidden || !session.showPointObjects;
+    const pt = hidePointObject
       ? boardController.createSupportPoint(obj.x, obj.y)
       : boardController.createPoint(obj.id, obj.x, obj.y, {
           ...obj.style,
@@ -3342,6 +3371,8 @@ wireUi({
   deleteSelected,
   hideSelected,
   showAllHidden,
+  togglePointObjectsVisibility,
+  toggleLineArrowsVisibility,
   clearBoard,
   renderCurrentDoc,
   downloadSvg,
@@ -3354,6 +3385,8 @@ wireUi({
 startMarqueeSelection();
 updateModeUi();
 syncStyleInputsFromDoc();
+updatePointObjectsToggleButton();
+updateLineArrowsToggleButton();
 renderCurrentDoc();
 
 if (drawingHintEl) {

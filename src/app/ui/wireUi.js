@@ -185,10 +185,20 @@ function bindTransformControls({
   });
 }
 
-function bindSelectionActions({ doc, deleteSelected, hideSelected, showAllHidden, clearBoard }) {
+function bindSelectionActions({
+  doc,
+  deleteSelected,
+  hideSelected,
+  showAllHidden,
+  clearBoard,
+  togglePointObjectsVisibility,
+  toggleLineArrowsVisibility,
+}) {
   doc.getElementById("deleteSelected").addEventListener("click", deleteSelected);
   doc.getElementById("hideSelected").addEventListener("click", hideSelected);
   doc.getElementById("showAll").addEventListener("click", showAllHidden);
+  doc.getElementById("togglePointObjects").addEventListener("click", togglePointObjectsVisibility);
+  doc.getElementById("toggleLineArrows").addEventListener("click", toggleLineArrowsVisibility);
   doc.getElementById("clearBoard").addEventListener("click", clearBoard);
 }
 
