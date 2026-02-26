@@ -63,14 +63,14 @@
                 <button id="makeAngleBisectorTick3">Bisector 3 Ticks</button>
               </div>
             </details>
-            <div class="triangle-menu">
-              <button id="triangleMenuBtn" type="button">Triangle ▾</button>
-              <div id="triangleMenuPanel" class="triangle-menu-panel" hidden>
+            <details id="triangleMenuPanel" class="annotate-group">
+              <summary id="triangleMenuBtn">Triangle</summary>
+              <div class="annotate-subgrid">
                 <button type="button" data-triangle-mode="three-point">3-Point Triangle</button>
                 <button type="button" data-triangle-mode="right">Right Triangle</button>
                 <button type="button" data-triangle-mode="isosceles">Isosceles Triangle</button>
               </div>
-            </div>
+            </details>
             <details class="annotate-group">
               <summary>Congruent/Similar Triangles</summary>
               <div class="annotate-subgrid">
@@ -122,27 +122,30 @@
 
         <section>
           <h2>Style</h2>
-          <div class="form-row">
-            <label for="strokeColor">Color</label>
-            <input id="strokeColor" type="color" value="#000000" />
-            <button id="resetStrokeColor" type="button" class="mini-btn">Default</button>
-          </div>
-          <div class="form-row">
-            <label for="strokeWidth">Width</label>
-            <input id="strokeWidth" type="range" min="1" max="6" step="1" value="2" />
-            <button id="resetStrokeWidth" type="button" class="mini-btn">Default</button>
-          </div>
-          <div class="form-row">
-            <label for="lineStyle">Line</label>
-            <select id="lineStyle">
-              <option value="solid">Solid</option>
-              <option value="dashed">Dashed</option>
-            </select>
-          </div>
-          <div class="form-row checkbox-row">
-            <label for="examMode">Exam Mode</label>
-            <input id="examMode" type="checkbox" />
-          </div>
+          <details class="annotate-group">
+            <summary>Style Controls</summary>
+            <div class="form-row">
+              <label for="strokeColor">Color</label>
+              <input id="strokeColor" type="color" value="#000000" />
+              <button id="resetStrokeColor" type="button" class="mini-btn">Default</button>
+            </div>
+            <div class="form-row">
+              <label for="strokeWidth">Width</label>
+              <input id="strokeWidth" type="range" min="1" max="6" step="1" value="2" />
+              <button id="resetStrokeWidth" type="button" class="mini-btn">Default</button>
+            </div>
+            <div class="form-row">
+              <label for="lineStyle">Line</label>
+              <select id="lineStyle">
+                <option value="solid">Solid</option>
+                <option value="dashed">Dashed</option>
+              </select>
+            </div>
+            <div class="form-row checkbox-row">
+              <label for="examMode">Exam Mode</label>
+              <input id="examMode" type="checkbox" />
+            </div>
+          </details>
         </section>
 
         <section>
