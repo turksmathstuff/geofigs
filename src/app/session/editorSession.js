@@ -9,6 +9,8 @@ export function createEditorSession() {
     pendingAngleDecorator: "arc",
     activeAngleMarkPresetValue: null,
     triangleVariant: "three-point",
+    showPointObjects: true,
+    showLineArrows: true,
     pendingRightTriangleForceIso: false,
     marqueeState: null,
     transformSession: null,

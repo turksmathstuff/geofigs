@@ -855,6 +855,7 @@ export class BoardController {
   }
 
   createLine(id, p1, p2, style = {}) {
+    const showArrows = style.showArrows !== false;
     if (style.lineType === "ray") {
       const meta = {
         basePoint1: p1,
@@ -866,7 +867,7 @@ export class BoardController {
         strokeColor: style.strokeColor || "#111",
         strokeWidth: style.strokeWidth || 2,
         dash: style.dash || 0,
-        lastArrow: true,
+        lastArrow: showArrows,
       });
       const primary = this.registerElement(id, "ray", el, meta);
       this.attachLinearExtentHandles(id, "ray", p1, p2, meta);
@@ -885,8 +886,8 @@ export class BoardController {
         strokeColor: style.strokeColor || "#111",
         strokeWidth: style.strokeWidth || 2,
         dash: style.dash || 0,
-        firstArrow: true,
-        lastArrow: true,
+        firstArrow: showArrows,
+        lastArrow: showArrows,
       });
       const primary = this.registerElement(id, "line", el, meta);
       this.attachLinearExtentHandles(id, "line", p1, p2, meta);
@@ -1057,6 +1058,7 @@ export class BoardController {
   }
 
   createParallelLine(id, sourceLine, throughPoint, style = {}) {
+    const showArrows = style.showArrows !== false;
     const refLine = this.normalizeReferenceLine(sourceLine);
     const { baseA, baseB } = this.createDirectedBasePointsThroughPoint(throughPoint, refLine, false);
     const canvasExtents = this.canvasInsetLineExtents(throughPoint, baseA, baseB);
@@ -1070,8 +1072,8 @@ export class BoardController {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash ?? 0,
-      firstArrow: true,
-      lastArrow: true,
+      firstArrow: showArrows,
+      lastArrow: showArrows,
     });
     const primary = this.registerElement(id, "line", el, meta);
     this.attachLinearExtentHandles(id, "line", baseA, baseB, meta);
@@ -1079,6 +1081,7 @@ export class BoardController {
   }
 
   createPerpendicularLine(id, sourceLine, throughPoint, style = {}) {
+    const showArrows = style.showArrows !== false;
     const refLine = this.normalizeReferenceLine(sourceLine);
     const { baseA, baseB } = this.createDirectedBasePointsThroughPoint(throughPoint, refLine, true);
     const canvasExtents = this.canvasInsetLineExtents(throughPoint, baseA, baseB);
@@ -1092,8 +1095,8 @@ export class BoardController {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
       dash: style.dash ?? 0,
-      firstArrow: true,
-      lastArrow: true,
+      firstArrow: showArrows,
+      lastArrow: showArrows,
     });
     const primary = this.registerElement(id, "line", el, meta);
     this.attachLinearExtentHandles(id, "line", baseA, baseB, meta);

@@ -38,6 +38,7 @@ export function createRenderDoc(ctx) {
         if (p1 && p2) {
           boardController.createLine(obj.id, p1, p2, {
             ...style,
+            showArrows: session.showLineArrows,
             rayExtension: getRayExtensionForObject(obj),
             ...getLineExtentsForObject(obj),
             lineType: obj.lineType,
@@ -60,6 +61,7 @@ export function createRenderDoc(ctx) {
           if (!Object.prototype.hasOwnProperty.call(obj.style || {}, "lineExtensionEnd")) {
             delete parallelStyle.lineExtensionEnd;
           }
+          parallelStyle.showArrows = session.showLineArrows;
           boardController.createParallelLine(obj.id, source, through, parallelStyle);
         }
       } else if (obj.type === "perpendicular") {
@@ -73,6 +75,7 @@ export function createRenderDoc(ctx) {
           if (!Object.prototype.hasOwnProperty.call(obj.style || {}, "lineExtensionEnd")) {
             delete perpendicularStyle.lineExtensionEnd;
           }
+          perpendicularStyle.showArrows = session.showLineArrows;
           boardController.createPerpendicularLine(obj.id, source, through, perpendicularStyle);
         }
       } else if (obj.type === "label") {
