@@ -9,9 +9,6 @@ function bindModeButtons({ dom, setMode, setTriangleMode }) {
   triangleModeButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       setTriangleMode(btn.dataset.triangleMode);
-      if (triangleMenuPanel) {
-        triangleMenuPanel.open = false;
-      }
     });
   });
 }

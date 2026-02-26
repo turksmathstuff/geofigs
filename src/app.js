@@ -232,7 +232,7 @@ function maybeCompleteConstructionSelectionSession() {
 }
 
 function setTriangleMode(variant) {
-  const valid = ["three-point", "right", "isosceles"];
+  const valid = ["three-point", "right", "isosceles", "equilateral"];
   if (!valid.includes(variant)) {
     return;
   }
@@ -321,7 +321,8 @@ function applyPointConstraintToDraggedPosition(pointObj, pos) {
   if (
     pointObj.constraint.kind === "intersection" ||
     pointObj.constraint.kind === "midpoint" ||
-    pointObj.constraint.kind === "angleBisectorRay"
+    pointObj.constraint.kind === "angleBisectorRay" ||
+    pointObj.constraint.kind === "equilateralApex"
   ) {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
   }
@@ -996,6 +997,27 @@ function isoscelesApexFromCursor(pointA, pointB, cursor) {
   };
 }
 
+function equilateralApexFromCursor(pointA, pointB, cursor) {
+  const baseLen = distance(pointA, pointB);
+  if (baseLen < 0.0001) {
+    return null;
+  }
+  const midX = (pointA.x + pointB.x) / 2;
+  const midY = (pointA.y + pointB.y) / 2;
+  const vx = pointB.x - pointA.x;
+  const vy = pointB.y - pointA.y;
+  const perpX = -vy / baseLen;
+  const perpY = vx / baseLen;
+  const signedSide = (cursor.x - midX) * perpX + (cursor.y - midY) * perpY;
+  const side = signedSide < 0 ? -1 : 1;
+  const height = (Math.sqrt(3) / 2) * baseLen;
+  return {
+    x: midX + perpX * height * side,
+    y: midY + perpY * height * side,
+    side,
+  };
+}
+
 function getLinearDefinition(obj) {
   if (!obj) {
     return null;
@@ -1298,6 +1320,30 @@ function recomputeConstrainedPoints() {
       const height = Number.isFinite(obj.constraint.height) ? obj.constraint.height : baseLen * 0.8;
       obj.x = rightVertex.x + perpX * height;
       obj.y = rightVertex.y + perpY * height;
+      continue;
+    }
+    if (obj.constraint.kind === "equilateralApex") {
+      const [id1, id2] = obj.constraint.sourcePointIds || [];
+      const p1 = getPointById(id1);
+      const p2 = getPointById(id2);
+      if (!p1 || !p2) {
+        continue;
+      }
+      const baseLen = distance(p1, p2);
+      if (baseLen < 0.0001) {
+        continue;
+      }
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      const vx = p2.x - p1.x;
+      const vy = p2.y - p1.y;
+      const perpX = -vy / baseLen;
+      const perpY = vx / baseLen;
+      const side = Number(obj.constraint.side) < 0 ? -1 : 1;
+      const height = (Math.sqrt(3) / 2) * baseLen;
+      obj.x = midX + perpX * height * side;
+      obj.y = midY + perpY * height * side;
+      continue;
     }
   }
 }
@@ -1430,6 +1476,26 @@ function updateTrianglePreview(cursorCoords, evt) {
       return;
     }
     const p3 = isoscelesApexFromCursor(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords);
+    if (!p3) {
+      boardController.clearPreview();
+      return;
+    }
+    boardController.showPreviewTriangle(pointObjectFromCoords(p1), pointObjectFromCoords(p2), p3);
+    return;
+  }
+
+  if (session.triangleVariant === "equilateral") {
+    if (session.pendingPointIds.length < 2) {
+      boardController.clearPreview();
+      return;
+    }
+    const p1 = getPointById(session.pendingPointIds[0]);
+    const p2 = getPointById(session.pendingPointIds[1]);
+    if (!p1 || !p2) {
+      boardController.clearPreview();
+      return;
+    }
+    const p3 = equilateralApexFromCursor(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords);
     if (!p3) {
       boardController.clearPreview();
       return;
@@ -1776,6 +1842,7 @@ const { handlePointInputTriangleCreate } = createPointInputTriangleCreateWorkflo
   getPointById,
   rightTriangleApexFromCursor,
   isoscelesApexFromCursor,
+  equilateralApexFromCursor,
   triangleVerticesFromVariant,
   addTriangleEdges,
   addAnnotation,
@@ -1980,6 +2047,10 @@ function removeWithDependencies(selectedSet) {
         selectedSet.add(obj.id);
         changed = true;
       }
+      if (obj.constraint?.kind === "equilateralApex" && obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
     }
     for (const ann of [...store.doc.annotations]) {
       if (selectedSet.has(ann.id)) {
@@ -2105,6 +2176,7 @@ function buildPointMap() {
                 obj.constraint?.kind === "intersection" ||
                 obj.constraint?.kind === "midpoint" ||
                 obj.constraint?.kind === "angleBisectorRay" ||
+                obj.constraint?.kind === "equilateralApex" ||
                 obj.style?.fixed,
         });
     map.set(obj.id, pt);

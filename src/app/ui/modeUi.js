@@ -15,6 +15,9 @@ export function createModeUi({
       if (session.triangleVariant === "isosceles") {
         return "Isosceles Triangle";
       }
+      if (session.triangleVariant === "equilateral") {
+        return "Equilateral Triangle";
+      }
       return "3-Point Triangle";
     }
     if (mode === ToolMode.LABEL) {
@@ -32,6 +35,9 @@ export function createModeUi({
     }
     if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "right") {
       return "Right angle first, then base vertex, then height.";
+    }
+    if (session.currentMode === ToolMode.TRIANGLE && session.triangleVariant === "equilateral") {
+      return "Pick two base vertices, then click the side for the third vertex.";
     }
     if (session.currentMode === ToolMode.LABEL) {
       return "Click objects to add label. Click labeled objects to remove label.";
