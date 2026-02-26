@@ -5,6 +5,7 @@ export function createPointInputTriangleCreateWorkflow(ctx) {
     getPointById,
     rightTriangleApexFromCursor,
     isoscelesApexFromCursor,
+    equilateralApexFromCursor,
     triangleVerticesFromVariant,
     addTriangleEdges,
     addAnnotation,
@@ -69,6 +70,28 @@ export function createPointInputTriangleCreateWorkflow(ctx) {
       }
       cursorPoint.x = apex.x;
       cursorPoint.y = apex.y;
+      addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
+      return true;
+    }
+
+    if (session.triangleVariant === "equilateral") {
+      const pointA = getPointById(pointsForCreate[0]);
+      const pointB = getPointById(pointsForCreate[1]);
+      const cursorPoint = getPointById(pointsForCreate[2]);
+      if (!pointA || !pointB || !cursorPoint) {
+        return true;
+      }
+      const apex = equilateralApexFromCursor(pointA, pointB, cursorPoint);
+      if (!apex) {
+        return true;
+      }
+      cursorPoint.x = apex.x;
+      cursorPoint.y = apex.y;
+      cursorPoint.constraint = {
+        kind: "equilateralApex",
+        sourcePointIds: [pointsForCreate[0], pointsForCreate[1]],
+        side: apex.side,
+      };
       addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
       return true;
     }
