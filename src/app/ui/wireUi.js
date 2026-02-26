@@ -1,25 +1,18 @@
-function bindModeButtons({ dom, doc, setMode, setTriangleMode }) {
-  const { modeButtons, triangleMenuBtn, triangleMenuPanel, triangleModeButtons } = dom;
+function bindModeButtons({ dom, setMode, setTriangleMode }) {
+  const { modeButtons, triangleMenuPanel, triangleModeButtons } = dom;
   modeButtons.forEach((btn) => {
     btn.addEventListener("click", () => setMode(btn.dataset.mode));
   });
-  if (!triangleMenuBtn || !triangleMenuPanel) {
+  if (!triangleModeButtons?.length) {
     return;
   }
-  triangleMenuBtn.addEventListener("click", (evt) => {
-    evt.stopPropagation();
-    triangleMenuPanel.hidden = !triangleMenuPanel.hidden;
-  });
   triangleModeButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       setTriangleMode(btn.dataset.triangleMode);
-      triangleMenuPanel.hidden = true;
+      if (triangleMenuPanel) {
+        triangleMenuPanel.open = false;
+      }
     });
-  });
-  doc.addEventListener("click", (evt) => {
-    if (!triangleMenuPanel.hidden && !triangleMenuPanel.contains(evt.target) && evt.target !== triangleMenuBtn) {
-      triangleMenuPanel.hidden = true;
-    }
   });
 }
 
