@@ -99,6 +99,12 @@ const constructionSelectionButtonIds = [
   "makeAngleBisectorTick1",
   "makeAngleBisectorTick2",
   "makeAngleBisectorTick3",
+  "makeRegularPolygonPlain",
+  "makeRegularPolygonTicks",
+  "makeRegularPolygonArcTicks",
+  "makeRegularPolygonPlainCenter",
+  "makeRegularPolygonTicksCenter",
+  "makeRegularPolygonArcTicksCenter",
   "makeCongruentTriangle",
   "makeSimilarTriangle",
   "transformSelectedTriangle",
@@ -322,7 +328,9 @@ function applyPointConstraintToDraggedPosition(pointObj, pos) {
     pointObj.constraint.kind === "intersection" ||
     pointObj.constraint.kind === "midpoint" ||
     pointObj.constraint.kind === "angleBisectorRay" ||
-    pointObj.constraint.kind === "equilateralApex"
+    pointObj.constraint.kind === "equilateralApex" ||
+    pointObj.constraint.kind === "regularPolygonVertex" ||
+    pointObj.constraint.kind === "regularPolygonCenter"
   ) {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
   }
@@ -1345,6 +1353,33 @@ function recomputeConstrainedPoints() {
       obj.y = midY + perpY * height * side;
       continue;
     }
+    if (obj.constraint.kind === "regularPolygonVertex") {
+      const [id1, id2] = obj.constraint.sourcePointIds || [];
+      const p1 = getPointById(id1);
+      const p2 = getPointById(id2);
+      const sideCount = Number(obj.constraint.sideCount);
+      const vertexIndex = Number(obj.constraint.vertexIndex);
+      const next = regularPolygonVertexPoint(p1, p2, sideCount, vertexIndex);
+      if (!next) {
+        continue;
+      }
+      obj.x = next.x;
+      obj.y = next.y;
+      continue;
+    }
+    if (obj.constraint.kind === "regularPolygonCenter") {
+      const [id1, id2] = obj.constraint.sourcePointIds || [];
+      const p1 = getPointById(id1);
+      const p2 = getPointById(id2);
+      const sideCount = Number(obj.constraint.sideCount);
+      const next = regularPolygonCenterFromEdge(p1, p2, sideCount);
+      if (!next) {
+        continue;
+      }
+      obj.x = next.x;
+      obj.y = next.y;
+      continue;
+    }
   }
 }
 
@@ -2051,6 +2086,20 @@ function removeWithDependencies(selectedSet) {
         selectedSet.add(obj.id);
         changed = true;
       }
+      if (
+        obj.constraint?.kind === "regularPolygonVertex" &&
+        obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))
+      ) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
+      if (
+        obj.constraint?.kind === "regularPolygonCenter" &&
+        obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))
+      ) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
     }
     for (const ann of [...store.doc.annotations]) {
       if (selectedSet.has(ann.id)) {
@@ -2177,6 +2226,8 @@ function buildPointMap() {
                 obj.constraint?.kind === "midpoint" ||
                 obj.constraint?.kind === "angleBisectorRay" ||
                 obj.constraint?.kind === "equilateralApex" ||
+                obj.constraint?.kind === "regularPolygonVertex" ||
+                obj.constraint?.kind === "regularPolygonCenter" ||
                 obj.style?.fixed,
         });
     map.set(obj.id, pt);
@@ -2891,6 +2942,81 @@ function midpointSelectionEndpoints() {
   return null;
 }
 
+function promptRegularPolygonSideCount() {
+  const input = prompt("Number of sides (n):", "5");
+  if (input === null) {
+    return null;
+  }
+  const n = Number(input.trim());
+  if (!Number.isInteger(n) || n < 3 || n > 24) {
+    alert("Enter an integer number of sides from 3 to 24.");
+    return null;
+  }
+  return n;
+}
+
+function regularPolygonVerticesFromEdge(pointA, pointB, sideCount) {
+  const dx = pointB.x - pointA.x;
+  const dy = pointB.y - pointA.y;
+  const sideLength = Math.hypot(dx, dy);
+  if (sideLength < 1e-9 || sideCount < 3) {
+    return null;
+  }
+  const turn = (2 * Math.PI) / sideCount;
+  const cosTurn = Math.cos(turn);
+  const sinTurn = Math.sin(turn);
+  const vertices = [{ x: pointA.x, y: pointA.y }, { x: pointB.x, y: pointB.y }];
+  let edgeX = dx;
+  let edgeY = dy;
+  while (vertices.length < sideCount) {
+    const prev = vertices[vertices.length - 1];
+    const nextX = prev.x + edgeX * cosTurn - edgeY * sinTurn;
+    const nextY = prev.y + edgeX * sinTurn + edgeY * cosTurn;
+    vertices.push({ x: nextX, y: nextY });
+    const rotX = edgeX * cosTurn - edgeY * sinTurn;
+    const rotY = edgeX * sinTurn + edgeY * cosTurn;
+    edgeX = rotX;
+    edgeY = rotY;
+  }
+  return vertices;
+}
+
+function regularPolygonCenterFromEdge(pointA, pointB, sideCount) {
+  const dx = pointB.x - pointA.x;
+  const dy = pointB.y - pointA.y;
+  const sideLength = Math.hypot(dx, dy);
+  if (sideLength < 1e-9 || sideCount < 3) {
+    return null;
+  }
+  const apothem = sideLength / (2 * Math.tan(Math.PI / sideCount));
+  const midX = (pointA.x + pointB.x) / 2;
+  const midY = (pointA.y + pointB.y) / 2;
+  const ux = dx / sideLength;
+  const uy = dy / sideLength;
+  return {
+    x: midX - uy * apothem,
+    y: midY + ux * apothem,
+  };
+}
+
+function regularPolygonVertexPoint(pointA, pointB, sideCount, vertexIndex) {
+  if (!pointA || !pointB || sideCount < 3) {
+    return null;
+  }
+  const index = Number(vertexIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= sideCount) {
+    return null;
+  }
+  if (index === 0) {
+    return { x: pointA.x, y: pointA.y };
+  }
+  if (index === 1) {
+    return { x: pointB.x, y: pointB.y };
+  }
+  const vertices = regularPolygonVerticesFromEdge(pointA, pointB, sideCount);
+  return vertices?.[index] || null;
+}
+
 function angleBisectorSelectionPointIds() {
   const selectedPoints = selectedOfTypes(["point"]);
   if (selectedPoints.length === 3) {
@@ -3055,6 +3181,131 @@ function createPerpendicularBisectorVariant(options = {}, runtime = {}) {
   return true;
 }
 
+function addRegularPolygonVariant(options = {}, runtime = {}) {
+  const quiet = !!runtime.quiet;
+  const endpoints = midpointSelectionEndpoints();
+  if (!endpoints) {
+    if (!quiet) {
+      alert("Select exactly one segment or exactly two points.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+  const [pointAId, pointBId] = endpoints;
+  if (!pointAId || !pointBId || pointAId === pointBId) {
+    if (!quiet) {
+      alert("Select two distinct endpoints.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+  const pointA = getPointById(pointAId);
+  const pointB = getPointById(pointBId);
+  if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
+    if (!quiet) {
+      alert("Selected endpoints must be distinct points.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+
+  const sideCount = promptRegularPolygonSideCount();
+  if (sideCount === null) {
+    return false;
+  }
+  const vertices = regularPolygonVerticesFromEdge(pointA, pointB, sideCount);
+  if (!vertices) {
+    return false;
+  }
+  const center = options.withCenter ? regularPolygonCenterFromEdge(pointA, pointB, sideCount) : null;
+  const style = defaultStyle();
+
+  runMutation(`regular-polygon-${sideCount}`, () => {
+    const pointIds = [pointAId, pointBId];
+    for (let i = 2; i < sideCount; i += 1) {
+      const vertex = vertices[i];
+      const vertexId = makeId("pt");
+      addObject({
+        id: vertexId,
+        type: "point",
+        x: vertex.x,
+        y: vertex.y,
+        name: "",
+        constraint: {
+          kind: "regularPolygonVertex",
+          sourcePointIds: [pointAId, pointBId],
+          sideCount,
+          vertexIndex: i,
+        },
+        style: { ...style },
+      });
+      pointIds.push(vertexId);
+    }
+
+    for (let i = 0; i < sideCount; i += 1) {
+      addObject({
+        id: makeId("seg"),
+        type: "segment",
+        pointIds: [pointIds[i], pointIds[(i + 1) % sideCount]],
+        style: { ...style },
+      });
+    }
+
+    if (options.withTickMarks) {
+      const groupId = makeId("cg");
+      for (let i = 0; i < sideCount; i += 1) {
+        addAnnotation({
+          id: makeId("tick"),
+          type: "tickPoints",
+          groupId,
+          pointIds: [pointIds[i], pointIds[(i + 1) % sideCount]],
+          tickCount: 1,
+          style: { ...style },
+        });
+      }
+    }
+
+    if (options.withSingleTickArcs) {
+      const groupId = makeId("rpa");
+      for (let i = 0; i < sideCount; i += 1) {
+        const prevId = pointIds[(i - 1 + sideCount) % sideCount];
+        const vertexId = pointIds[i];
+        const nextId = pointIds[(i + 1) % sideCount];
+        addAnnotation({
+          id: makeId("ang"),
+          type: "angle",
+          groupId,
+          pointIds: [prevId, vertexId, nextId],
+          right: false,
+          arcCount: 1,
+          decorator: "arcTick",
+          tickCount: 1,
+          style: { ...style },
+        });
+      }
+    }
+
+    if (center) {
+      addObject({
+        id: makeId("pt"),
+        type: "point",
+        x: center.x,
+        y: center.y,
+        name: "",
+        constraint: {
+          kind: "regularPolygonCenter",
+          sourcePointIds: [pointAId, pointBId],
+          sideCount,
+        },
+        style: { ...style },
+      });
+    }
+
+    store.clearSelection();
+  });
+  return true;
+}
+
 function launchParallelOrPerpendicular(kind, buttonId = null) {
   if (createParallelOrPerpendicular(kind, { quiet: true })) {
     return;
@@ -3113,6 +3364,42 @@ function launchPerpendicularBisectorVariant(options = {}) {
     buttonId: options.buttonId || null,
     instructions: "Select exactly one segment or exactly two points.",
     tryCreate: () => createPerpendicularBisectorVariant(options, { quiet: true }),
+  });
+}
+
+function launchRegularPolygonVariant(options = {}) {
+  if (addRegularPolygonVariant(options, { quiet: true })) {
+    return;
+  }
+  const kindSuffix = options.withTickMarks
+    ? options.withCenter
+      ? "-ticks-center"
+      : "-ticks"
+    : options.withSingleTickArcs
+      ? options.withCenter
+        ? "-arctick-center"
+        : "-arctick"
+      : options.withCenter
+        ? "-center"
+        : "";
+  const labelSuffix =
+    options.withTickMarks && options.withCenter
+      ? " + Ticks + Center"
+      : options.withSingleTickArcs && options.withCenter
+        ? " + Arc Tick + Center"
+        : options.withTickMarks
+          ? " + Ticks"
+          : options.withSingleTickArcs
+            ? " + Arc Tick"
+            : options.withCenter
+              ? " + Center"
+              : "";
+  startConstructionSelectionSession({
+    kind: `regular-polygon${kindSuffix}`,
+    label: `Regular Polygon${labelSuffix}`,
+    buttonId: options.buttonId || null,
+    instructions: "Select exactly one segment or exactly two points.",
+    tryCreate: () => addRegularPolygonVariant(options, { quiet: true }),
   });
 }
 
@@ -3424,6 +3711,7 @@ wireUi({
   launchMidpoint,
   launchPerpendicularBisectorVariant,
   launchAngleBisector,
+  launchRegularPolygonVariant,
   launchParallelMarks,
   launchSideMeasure,
   launchAngleMeasure,

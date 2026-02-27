@@ -19,6 +19,7 @@ function bindConstructionButtons({
   launchMidpoint,
   launchPerpendicularBisectorVariant,
   launchAngleBisector,
+  launchRegularPolygonVariant,
   launchParallelMarks,
   launchSideMeasure,
   launchAngleMeasure,
@@ -56,6 +57,32 @@ function bindConstructionButtons({
   doc.getElementById("makeAngleBisectorTick1").addEventListener("click", () => launchAngleBisector(1, "makeAngleBisectorTick1"));
   doc.getElementById("makeAngleBisectorTick2").addEventListener("click", () => launchAngleBisector(2, "makeAngleBisectorTick2"));
   doc.getElementById("makeAngleBisectorTick3").addEventListener("click", () => launchAngleBisector(3, "makeAngleBisectorTick3"));
+  doc.getElementById("makeRegularPolygonPlain").addEventListener("click", () =>
+    launchRegularPolygonVariant({ buttonId: "makeRegularPolygonPlain" })
+  );
+  doc.getElementById("makeRegularPolygonTicks").addEventListener("click", () =>
+    launchRegularPolygonVariant({ withTickMarks: true, buttonId: "makeRegularPolygonTicks" })
+  );
+  doc.getElementById("makeRegularPolygonArcTicks").addEventListener("click", () =>
+    launchRegularPolygonVariant({ withSingleTickArcs: true, buttonId: "makeRegularPolygonArcTicks" })
+  );
+  doc.getElementById("makeRegularPolygonPlainCenter").addEventListener("click", () =>
+    launchRegularPolygonVariant({ withCenter: true, buttonId: "makeRegularPolygonPlainCenter" })
+  );
+  doc.getElementById("makeRegularPolygonTicksCenter").addEventListener("click", () =>
+    launchRegularPolygonVariant({
+      withTickMarks: true,
+      withCenter: true,
+      buttonId: "makeRegularPolygonTicksCenter",
+    })
+  );
+  doc.getElementById("makeRegularPolygonArcTicksCenter").addEventListener("click", () =>
+    launchRegularPolygonVariant({
+      withSingleTickArcs: true,
+      withCenter: true,
+      buttonId: "makeRegularPolygonArcTicksCenter",
+    })
+  );
   doc.getElementById("markParallel1").addEventListener("click", () => launchParallelMarks(1, "markParallel1"));
   doc.getElementById("markParallel2").addEventListener("click", () => launchParallelMarks(2, "markParallel2"));
   doc.getElementById("markParallel3").addEventListener("click", () => launchParallelMarks(3, "markParallel3"));
