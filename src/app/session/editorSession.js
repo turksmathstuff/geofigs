@@ -18,5 +18,6 @@ export function createEditorSession() {
     perpendicularBisectorPlacement: null,
     constructionSelectionSession: null,
     transientDragSnapshots: new Map(),
+    exportPointHighlightsBlack: false,
   };
 }
