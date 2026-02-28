@@ -2235,12 +2235,17 @@ function buildPointMap() {
     }
     const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint";
     const isPolygonControlPoint = polygonControlIds.has(obj.id);
+    const pointHighlightColor = session.exportPointHighlightsBlack
+      ? "#000000"
+      : isPolygonControlPoint
+        ? defaultRegularPolygonControlPointColor()
+        : obj.style?.strokeColor;
     const hidePointObject = obj.hidden || !session.showPointObjects;
     const pt = hidePointObject
       ? boardController.createSupportPoint(obj.x, obj.y)
       : boardController.createPoint(obj.id, obj.x, obj.y, {
           ...obj.style,
-          strokeColor: isPolygonControlPoint ? defaultRegularPolygonControlPointColor() : obj.style?.strokeColor,
+          strokeColor: pointHighlightColor,
           size: obj.constraint ? 4 : obj.style?.size,
           layer: obj.constraint ? 10 : obj.style?.layer,
           fixed:
@@ -3691,33 +3696,13 @@ async function downloadPng() {
 }
 
 function withExportIntersectionPointBlack(fn) {
-  const changedPoints = [];
-  const polygonControlIds = regularPolygonControlPointIds();
-  for (const obj of store.doc.objects) {
-    if (obj.type !== "point" || (!obj.constraint && !polygonControlIds.has(obj.id))) {
-      continue;
-    }
-    const style = obj.style || (obj.style = {});
-    changedPoints.push({ obj, prev: style.strokeColor });
-    style.strokeColor = "#000000";
-  }
-  if (changedPoints.length) {
-    renderCurrentDoc(false);
-  }
+  session.exportPointHighlightsBlack = true;
+  renderCurrentDoc(false);
   try {
     return fn();
   } finally {
-    for (const { obj, prev } of changedPoints) {
-      obj.style = obj.style || {};
-      if (prev === undefined) {
-        delete obj.style.strokeColor;
-      } else {
-        obj.style.strokeColor = prev;
-      }
-    }
-    if (changedPoints.length) {
-      renderCurrentDoc(false);
-    }
+    session.exportPointHighlightsBlack = false;
+    renderCurrentDoc(false);
   }
 }
 
