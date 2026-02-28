@@ -154,6 +154,10 @@ function defaultIntersectionPointColor() {
   return store.doc.styles.examMode ? "#000000" : "#ff0033";
 }
 
+function defaultRegularPolygonControlPointColor() {
+  return defaultIntersectionPointColor();
+}
+
 function defaultAttachedPointColor() {
   return store.doc.styles.examMode ? "#000000" : "#00c7b7";
 }
@@ -1401,6 +1405,22 @@ function syncConstrainedPointsToBoard() {
   }
 }
 
+function syncPointIdsToBoard(pointIds = []) {
+  let changed = false;
+  for (const id of pointIds) {
+    const obj = getPointById(id);
+    const el = boardController.getElement(id);
+    if (!obj || !el?.setPosition) {
+      continue;
+    }
+    el.setPosition(JXG.COORDS_BY_USER, [obj.x, obj.y]);
+    changed = true;
+  }
+  if (changed) {
+    boardController.update();
+  }
+}
+
 function syncFollowLabelsToBoard() {
   let changed = false;
   for (const obj of store.doc.objects) {
@@ -1920,6 +1940,7 @@ const { handleObjectMoveSegment } = createObjectMoveSegmentWorkflow({
   getPointById,
   ensureTransientSnapshot,
   commitTransientSnapshotIfPresent,
+  syncPointIdsToBoard,
   updateConstrainedPointsLive,
   runMutation,
 });
@@ -1961,6 +1982,7 @@ const { handleObjectMovePointLabel } = createObjectMovePointLabelWorkflow({
   labelFollowBaseAnchor,
   ensureTransientSnapshot,
   commitTransientSnapshotIfPresent,
+  syncPointIdsToBoard,
   updateConstrainedPointsLive,
   recomputeConstrainedPoints,
   runMutation,
@@ -2206,16 +2228,19 @@ function toggleLineArrowsVisibility() {
 
 function buildPointMap() {
   const map = new Map();
+  const polygonControlIds = regularPolygonControlPointIds();
   for (const obj of store.doc.objects) {
     if (obj.type !== "point") {
       continue;
     }
     const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint";
+    const isPolygonControlPoint = polygonControlIds.has(obj.id);
     const hidePointObject = obj.hidden || !session.showPointObjects;
     const pt = hidePointObject
       ? boardController.createSupportPoint(obj.x, obj.y)
       : boardController.createPoint(obj.id, obj.x, obj.y, {
           ...obj.style,
+          strokeColor: isPolygonControlPoint ? defaultRegularPolygonControlPointColor() : obj.style?.strokeColor,
           size: obj.constraint ? 4 : obj.style?.size,
           layer: obj.constraint ? 10 : obj.style?.layer,
           fixed:
@@ -2226,8 +2251,6 @@ function buildPointMap() {
                 obj.constraint?.kind === "midpoint" ||
                 obj.constraint?.kind === "angleBisectorRay" ||
                 obj.constraint?.kind === "equilateralApex" ||
-                obj.constraint?.kind === "regularPolygonVertex" ||
-                obj.constraint?.kind === "regularPolygonCenter" ||
                 obj.style?.fixed,
         });
     map.set(obj.id, pt);
@@ -3017,6 +3040,24 @@ function regularPolygonVertexPoint(pointA, pointB, sideCount, vertexIndex) {
   return vertices?.[index] || null;
 }
 
+function regularPolygonControlPointIds() {
+  const ids = new Set();
+  for (const obj of store.doc.objects) {
+    if (obj.type !== "point" || !obj.constraint) {
+      continue;
+    }
+    if (obj.constraint.kind !== "regularPolygonVertex" && obj.constraint.kind !== "regularPolygonCenter") {
+      continue;
+    }
+    for (const id of obj.constraint.sourcePointIds || []) {
+      if (id) {
+        ids.add(id);
+      }
+    }
+  }
+  return ids;
+}
+
 function angleBisectorSelectionPointIds() {
   const selectedPoints = selectedOfTypes(["point"]);
   if (selectedPoints.length === 3) {
@@ -3247,6 +3288,8 @@ function addRegularPolygonVariant(options = {}, runtime = {}) {
         id: makeId("seg"),
         type: "segment",
         pointIds: [pointIds[i], pointIds[(i + 1) % sideCount]],
+        construction: "regularPolygon",
+        constructionSourcePointIds: [pointAId, pointBId],
         style: { ...style },
       });
     }
@@ -3649,8 +3692,9 @@ async function downloadPng() {
 
 function withExportIntersectionPointBlack(fn) {
   const changedPoints = [];
+  const polygonControlIds = regularPolygonControlPointIds();
   for (const obj of store.doc.objects) {
-    if (obj.type !== "point" || !obj.constraint) {
+    if (obj.type !== "point" || (!obj.constraint && !polygonControlIds.has(obj.id))) {
       continue;
     }
     const style = obj.style || (obj.style = {});
