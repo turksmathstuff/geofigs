@@ -1316,8 +1316,43 @@ export class BoardController {
       fixed: false,
       draggable: true,
       display: "internal",
+      parse: false,
     });
-    return this.registerElement(id, "label", el);
+    el?.rendNode?.setAttribute?.("data-geo-label-id", id);
+    return this.registerElement(id, "label", el, { text, style });
+  }
+
+  collectLabelExports() {
+    const out = [];
+    for (const hit of this.elements.values()) {
+      if (hit.type !== "label" || !hit.meta?.text) {
+        continue;
+      }
+      const node = hit.el?.rendNode;
+      if (!node?.getBBox) {
+        continue;
+      }
+      let box;
+      try {
+        box = node.getBBox();
+      } catch (_err) {
+        continue;
+      }
+      if (!box) {
+        continue;
+      }
+      out.push({
+        id: node.getAttribute("data-geo-label-id") || "",
+        text: hit.meta.text,
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        fontSize: hit.meta.style?.fontSize || 20,
+        color: hit.meta.style?.strokeColor || "#111",
+      });
+    }
+    return out;
   }
 
   exportBoardSvg() {
