@@ -139,7 +139,8 @@ const boardController = new BoardController(
   (coords, evt) => handleBoardClick(coords, evt),
   (id, type, evt) => handleObjectClick(id, type, evt),
   (coords, evt) => handleBoardMove(coords, evt),
-  (id, type, pos, options) => handleObjectMove(id, type, pos, options)
+  (id, type, pos, options) => handleObjectMove(id, type, pos, options),
+  (id, type, evt) => handleObjectDoubleClick(id, type, evt)
 );
 boardController.init();
 
@@ -1722,6 +1723,11 @@ function handleBoardClick(coords, evt) {
 
   const snappedCoords = getPointInputCoords(coords, evt);
 
+  if (session.currentMode === ToolMode.ADD_LABEL) {
+    addManualLabelAtCoords(coords);
+    return;
+  }
+
   if (handlePointModeBoardClick(snappedCoords)) {
     return;
   }
@@ -1782,6 +1788,14 @@ function handleObjectClick(id, type, evt) {
   }
 }
 
+function handleObjectDoubleClick(id, type, evt) {
+  if (type !== "label") {
+    return false;
+  }
+  editLabelText(id);
+  return true;
+}
+
 const { startMarqueeSelection } = createMarqueeSelectionWorkflow({
   store,
   session,
@@ -1840,6 +1854,7 @@ const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow(
   ToolMode,
   store,
   deleteSelected,
+  addManualLabelForTarget,
   toggleAutoLabelForObject,
 });
 
@@ -3627,40 +3642,50 @@ function launchAngleMeasure(buttonId) {
   });
 }
 
-function promptLabel() {
-  openLabelModal().then((text) => {
-    if (!text) {
-      return;
-    }
-    const selectedTargetId =
-      selectedOfTypes(["point", "segment", "line", "circle", "parallel", "perpendicular"])[0] || null;
-    runMutation("add-label", () => {
-      if (selectedTargetId) {
-        const target = getObjectById(selectedTargetId);
-        if (!target) {
-          return;
-        }
-        const anchor = autoLabelAnchorForObject(target);
-        addObject({
-          id: makeId("label"),
-          type: "label",
-          x: anchor.x,
-          y: anchor.y,
-          text,
-          targetId: target.id,
-          follow: followLabelForTargetObject(target),
-          style: defaultStyle(),
-        });
-      } else {
-        addObject({
-          id: makeId("label"),
-          type: "label",
-          x: 0,
-          y: 0,
-          text,
-          style: defaultStyle(),
-        });
-      }
+function isManualLabelTargetType(type) {
+  return ["point", "segment", "line", "circle", "parallel", "perpendicular"].includes(type);
+}
+
+async function addManualLabelAtCoords(coords) {
+  if (!coords) {
+    return;
+  }
+  const text = await openLabelModal();
+  if (!text) {
+    return;
+  }
+  runMutation("add-label", () => {
+    addObject({
+      id: makeId("label"),
+      type: "label",
+      x: coords.x,
+      y: coords.y,
+      text,
+      style: defaultStyle(),
+    });
+  });
+}
+
+async function addManualLabelForTarget(targetId) {
+  const target = getObjectById(targetId);
+  if (!target || !isManualLabelTargetType(target.type)) {
+    return;
+  }
+  const text = await openLabelModal();
+  if (!text) {
+    return;
+  }
+  runMutation("add-label", () => {
+    const anchor = autoLabelAnchorForObject(target);
+    addObject({
+      id: makeId("label"),
+      type: "label",
+      x: anchor.x,
+      y: anchor.y,
+      text,
+      targetId: target.id,
+      follow: followLabelForTargetObject(target),
+      style: defaultStyle(),
     });
   });
 }
@@ -3673,6 +3698,20 @@ function normalizeManualLabelText(text) {
     .replace(/\^o\b/g, "°");
 }
 
+async function editLabelText(labelId) {
+  const label = getObjectById(labelId);
+  if (!label || label.type !== "label") {
+    return;
+  }
+  const text = await openLabelModal(label.text || "");
+  if (!text || text === label.text) {
+    return;
+  }
+  runMutation("edit-label", () => {
+    label.text = text;
+  });
+}
+
 function closeLabelModal(value = "") {
   if (!labelModalEl || !labelModalResolve) {
     return;
@@ -3683,14 +3722,14 @@ function closeLabelModal(value = "") {
   resolve(value);
 }
 
-function openLabelModal() {
+function openLabelModal(initialValue = "") {
   if (!labelModalEl || !labelModalInputEl) {
     return Promise.resolve("");
   }
   if (labelModalResolve) {
     closeLabelModal("");
   }
-  labelModalInputEl.value = "";
+  labelModalInputEl.value = String(initialValue ?? "");
   labelModalEl.hidden = false;
   queueMicrotask(() => {
     labelModalInputEl.focus();
@@ -3706,6 +3745,14 @@ function autoLabelPoints() {
     setMode(ToolMode.SELECT);
   } else {
     setMode(ToolMode.LABEL);
+  }
+}
+
+function toggleManualLabelMode() {
+  if (session.currentMode === ToolMode.ADD_LABEL) {
+    setMode(ToolMode.SELECT);
+  } else {
+    setMode(ToolMode.ADD_LABEL);
   }
 }
 
@@ -3790,7 +3837,7 @@ wireUi({
   launchAngleMeasure,
   setActiveAngleMarkPreset,
   addAngleFromSelection,
-  promptLabel,
+  toggleManualLabelMode,
   autoLabelPoints,
   launchParallelOrPerpendicular,
   launchTriangleCopy,

@@ -23,7 +23,7 @@ function bindConstructionButtons({
   launchParallelMarks,
   launchSideMeasure,
   launchAngleMeasure,
-  promptLabel,
+  toggleManualLabelMode,
   autoLabelPoints,
   launchParallelOrPerpendicular,
   launchTriangleCopy,
@@ -89,7 +89,7 @@ function bindConstructionButtons({
   doc.getElementById("addSideMeasure").addEventListener("click", () => launchSideMeasure("addSideMeasure"));
   doc.getElementById("addAngleMeasure").addEventListener("click", () => launchAngleMeasure("addAngleMeasure"));
 
-  doc.getElementById("addLabel").addEventListener("click", promptLabel);
+  doc.getElementById("addLabel").addEventListener("click", toggleManualLabelMode);
   doc.getElementById("autoLabel").addEventListener("click", autoLabelPoints);
 
   doc.getElementById("makeParallel").addEventListener("click", () => launchParallelOrPerpendicular("parallel", "makeParallel"));
