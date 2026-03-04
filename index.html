@@ -209,6 +209,19 @@
 
       <section class="canvas-wrap">
         <div id="drawingHint" class="drawing-hint" hidden>Select points counterclockwise.</div>
+        <div id="labelModal" class="app-modal" hidden>
+          <div id="labelModalBackdrop" class="app-modal-backdrop"></div>
+          <form id="labelModalDialog" class="app-modal-dialog" aria-labelledby="labelModalTitle">
+            <h3 id="labelModalTitle">Add Label</h3>
+            <label class="app-modal-label" for="labelModalInput">Label text</label>
+            <input id="labelModalInput" type="text" autocomplete="off" />
+            <p class="app-modal-help">Examples: `sqrt(x+3)`, `x^2`, `A_1`, `x^o` for degrees.</p>
+            <div class="app-modal-actions">
+              <button id="labelModalCancel" type="button">Cancel</button>
+              <button id="labelModalSubmit" type="submit">Add Label</button>
+            </div>
+          </form>
+        </div>
         <div id="transformPanel" class="transform-panel" hidden>
           <div class="transform-header">
             <strong id="transformTitle">Rotate/Slide Triangle</strong>

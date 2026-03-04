@@ -14,6 +14,12 @@ export function createRenderDoc(ctx) {
   } = ctx;
 
   return function renderCurrentDoc(applySelection = true) {
+    const normalizeLabelText = (text) =>
+      String(text ?? "")
+        .replace(/<sup>\s*o\s*<\/sup>/gi, "°")
+        .replace(/\^\(o\)/g, "°")
+        .replace(/\^o\b/g, "°");
+
     recomputeConstrainedPoints();
     boardController.resetBoard();
     const points = buildPointMap();
@@ -80,7 +86,7 @@ export function createRenderDoc(ctx) {
         }
       } else if (obj.type === "label") {
         syncFollowLabelPosition(obj);
-        boardController.createText(obj.id, obj.x, obj.y, obj.text, style);
+        boardController.createText(obj.id, obj.x, obj.y, normalizeLabelText(obj.text), style);
       }
     }
 

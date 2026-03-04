@@ -6,7 +6,7 @@ import {
   cloneFigureDoc,
   validateFigureDoc,
 } from "./state/figureDoc.js";
-import { exportSVG, triggerDownload } from "./export/exportSvg.js";
+import { exportSVG, replaceExportLabels, triggerDownload } from "./export/exportSvg.js";
 import { exportPNG, downloadBlob } from "./export/exportPng.js";
 import { makeId } from "./utils/ids.js";
 import { timestampForFile } from "./utils/time.js";
@@ -67,6 +67,11 @@ const dom = createDomRefs(document);
 const {
   statusEl,
   drawingHintEl,
+  labelModalEl,
+  labelModalBackdropEl,
+  labelModalDialogEl,
+  labelModalInputEl,
+  labelModalCancelEl,
   autoLabelBtn,
   boardEl,
   transformPanelEl,
@@ -84,6 +89,7 @@ const {
   triangleModeButtons,
   angleMarkPresetButtons,
 } = dom;
+let labelModalResolve = null;
 const constructionSelectionButtonIds = [
   "makeMidpoint",
   "makeMidpointTick1",
@@ -3622,40 +3628,76 @@ function launchAngleMeasure(buttonId) {
 }
 
 function promptLabel() {
-  const text = prompt("Label text:");
-  if (!text) {
+  openLabelModal().then((text) => {
+    if (!text) {
+      return;
+    }
+    const selectedTargetId =
+      selectedOfTypes(["point", "segment", "line", "circle", "parallel", "perpendicular"])[0] || null;
+    runMutation("add-label", () => {
+      if (selectedTargetId) {
+        const target = getObjectById(selectedTargetId);
+        if (!target) {
+          return;
+        }
+        const anchor = autoLabelAnchorForObject(target);
+        addObject({
+          id: makeId("label"),
+          type: "label",
+          x: anchor.x,
+          y: anchor.y,
+          text,
+          targetId: target.id,
+          follow: followLabelForTargetObject(target),
+          style: defaultStyle(),
+        });
+      } else {
+        addObject({
+          id: makeId("label"),
+          type: "label",
+          x: 0,
+          y: 0,
+          text,
+          style: defaultStyle(),
+        });
+      }
+    });
+  });
+}
+
+function normalizeManualLabelText(text) {
+  return String(text ?? "")
+    .trim()
+    .replace(/<sup>\s*o\s*<\/sup>/gi, "°")
+    .replace(/\^\(o\)/g, "°")
+    .replace(/\^o\b/g, "°");
+}
+
+function closeLabelModal(value = "") {
+  if (!labelModalEl || !labelModalResolve) {
     return;
   }
+  labelModalEl.hidden = true;
+  const resolve = labelModalResolve;
+  labelModalResolve = null;
+  resolve(value);
+}
 
-  const selectedTargetId =
-    selectedOfTypes(["point", "segment", "line", "circle", "parallel", "perpendicular"])[0] || null;
-  runMutation("add-label", () => {
-    if (selectedTargetId) {
-      const target = getObjectById(selectedTargetId);
-      if (!target) {
-        return;
-      }
-      const anchor = autoLabelAnchorForObject(target);
-      addObject({
-        id: makeId("label"),
-        type: "label",
-        x: anchor.x,
-        y: anchor.y,
-        text,
-        targetId: target.id,
-        follow: followLabelForTargetObject(target),
-        style: defaultStyle(),
-      });
-    } else {
-      addObject({
-        id: makeId("label"),
-        type: "label",
-        x: 0,
-        y: 0,
-        text,
-        style: defaultStyle(),
-      });
-    }
+function openLabelModal() {
+  if (!labelModalEl || !labelModalInputEl) {
+    return Promise.resolve("");
+  }
+  if (labelModalResolve) {
+    closeLabelModal("");
+  }
+  labelModalInputEl.value = "";
+  labelModalEl.hidden = false;
+  queueMicrotask(() => {
+    labelModalInputEl.focus();
+    labelModalInputEl.select();
+  });
+  return new Promise((resolve) => {
+    labelModalResolve = resolve;
   });
 }
 
@@ -3680,7 +3722,8 @@ async function downloadSvg() {
   const background = document.getElementById("bgMode").value;
   const tight = document.getElementById("tightSvg").checked;
   const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
-  const svg = exportSVG(raw, { background, tight });
+  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports());
+  const svg = exportSVG(withLabels, { background, tight });
   const name = `figure-${timestampForFile()}.svg`;
   triggerDownload(name, svg, "image/svg+xml");
 }
@@ -3689,7 +3732,8 @@ async function downloadPng() {
   const background = document.getElementById("bgMode").value;
   const scale = Number(document.getElementById("pngScale").value);
   const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
-  const svg = exportSVG(raw, { background, tight: true });
+  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports());
+  const svg = exportSVG(withLabels, { background, tight: true });
   const blob = await exportPNG(svg, { background, scale });
   const name = `figure-${timestampForFile()}.png`;
   downloadBlob(name, blob);
@@ -3788,3 +3832,25 @@ if (drawingHintEl) {
     drawingHintEl.hidden = !text;
   });
 }
+
+if (labelModalBackdropEl) {
+  labelModalBackdropEl.addEventListener("click", () => closeLabelModal(""));
+}
+
+if (labelModalCancelEl) {
+  labelModalCancelEl.addEventListener("click", () => closeLabelModal(""));
+}
+
+if (labelModalDialogEl) {
+  labelModalDialogEl.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    closeLabelModal(normalizeManualLabelText(labelModalInputEl?.value || ""));
+  });
+}
+
+document.addEventListener("keydown", (evt) => {
+  if (evt.key === "Escape" && labelModalResolve) {
+    evt.preventDefault();
+    closeLabelModal("");
+  }
+});
