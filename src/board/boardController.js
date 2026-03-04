@@ -1,10 +1,11 @@
 export class BoardController {
-  constructor(containerId, onBoardClick, onObjectClick, onBoardMove, onObjectMove) {
+  constructor(containerId, onBoardClick, onObjectClick, onBoardMove, onObjectMove, onObjectDoubleClick = null) {
     this.containerId = containerId;
     this.onBoardClick = onBoardClick;
     this.onObjectClick = onObjectClick;
     this.onBoardMove = onBoardMove;
     this.onObjectMove = onObjectMove;
+    this.onObjectDoubleClick = onObjectDoubleClick;
     this.board = null;
     this.elements = new Map();
     this.suppressNextBoardDown = false;
@@ -778,6 +779,19 @@ export class BoardController {
       dragStartLinearPoints = null;
       dragStartCirclePoints = null;
     });
+    if (type === "label" && el?.rendNode?.addEventListener) {
+      el.rendNode.addEventListener("dblclick", (evt) => {
+        if (!this.onObjectDoubleClick) {
+          return;
+        }
+        const consumed = this.onObjectDoubleClick(logicalId, type, evt, meta);
+        if (consumed !== false) {
+          this.suppressNextBoardDown = true;
+          evt.stopPropagation();
+          evt.preventDefault();
+        }
+      });
+    }
     return el;
   }
 

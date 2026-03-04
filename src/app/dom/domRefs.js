@@ -7,6 +7,7 @@ export function createDomRefs(doc) {
     labelModalDialogEl: doc.getElementById("labelModalDialog"),
     labelModalInputEl: doc.getElementById("labelModalInput"),
     labelModalCancelEl: doc.getElementById("labelModalCancel"),
+    addLabelBtn: doc.getElementById("addLabel"),
     autoLabelBtn: doc.getElementById("autoLabel"),
     boardEl: doc.getElementById("jxgbox"),
     transformPanelEl: doc.getElementById("transformPanel"),

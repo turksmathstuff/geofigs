@@ -20,6 +20,9 @@ export function createModeUi({
       }
       return "3-Point Triangle";
     }
+    if (mode === ToolMode.ADD_LABEL) {
+      return "Add Label";
+    }
     if (mode === ToolMode.LABEL) {
       return "Auto Label";
     }
@@ -41,6 +44,9 @@ export function createModeUi({
     }
     if (session.currentMode === ToolMode.LABEL) {
       return "Click objects to add label. Click labeled objects to remove label.";
+    }
+    if (session.currentMode === ToolMode.ADD_LABEL) {
+      return "Click an object to add a linked label, or click empty space for a free label.";
     }
     if (session.currentMode === ToolMode.SELECT) {
       return "Hold Shift to select more than one object. Drag to box-select.";
@@ -73,6 +79,9 @@ export function createModeUi({
     dom.triangleModeButtons.forEach((btn) => {
       btn.classList.toggle("active", session.currentMode === ToolMode.TRIANGLE && btn.dataset.triangleMode === session.triangleVariant);
     });
+    if (dom.addLabelBtn) {
+      dom.addLabelBtn.classList.toggle("active", session.currentMode === ToolMode.ADD_LABEL);
+    }
     if (dom.autoLabelBtn) {
       dom.autoLabelBtn.classList.toggle("active", session.currentMode === ToolMode.LABEL);
     }
