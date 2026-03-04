@@ -44,6 +44,7 @@ import { createPointPlacementClickWorkflow } from "./app/workflows/pointPlacemen
 import { createPointCollectionBoardClickWorkflow } from "./app/workflows/pointCollectionBoardClick.js";
 import { createPointCollectionObjectClickWorkflow } from "./app/workflows/pointCollectionObjectClick.js";
 import { createObjectClickModeBranchesWorkflow } from "./app/workflows/objectClickModeBranches.js";
+import { createLabelManagementWorkflow } from "./app/workflows/labelManagementWorkflow.js";
 import { createObjectClickConstructionSelectionWorkflow } from "./app/workflows/objectClickConstructionSelection.js";
 import { createObjectClickNearPointRedirectWorkflow } from "./app/workflows/objectClickNearPointRedirect.js";
 import { createPerpendicularBisectorPlacementBoardClickWorkflow } from "./app/workflows/perpendicularBisectorPlacementBoardClick.js";
@@ -1897,6 +1898,21 @@ const { handlePointCollectionObjectClick } = createPointCollectionObjectClickWor
   addPointInput,
 });
 
+const { addManualLabelAtCoords, addManualLabelForTarget, toggleManualLabelMode } =
+  createLabelManagementWorkflow({
+    session,
+    ToolMode,
+    runMutation,
+    openLabelModal,
+    getObjectById,
+    autoLabelAnchorForObject,
+    followLabelForTargetObject,
+    setMode,
+    makeId,
+    addObject,
+    defaultStyle,
+  });
+
 const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow({
   session,
   ToolMode,
@@ -3690,53 +3706,6 @@ function launchAngleMeasure(buttonId) {
   });
 }
 
-function isManualLabelTargetType(type) {
-  return ["point", "segment", "line", "circle", "parallel", "perpendicular"].includes(type);
-}
-
-async function addManualLabelAtCoords(coords) {
-  if (!coords) {
-    return;
-  }
-  const text = await openLabelModal();
-  if (!text) {
-    return;
-  }
-  runMutation("add-label", () => {
-    addObject({
-      id: makeId("label"),
-      type: "label",
-      x: coords.x,
-      y: coords.y,
-      text,
-      style: defaultStyle(),
-    });
-  });
-}
-
-async function addManualLabelForTarget(targetId) {
-  const target = getObjectById(targetId);
-  if (!target || !isManualLabelTargetType(target.type)) {
-    return;
-  }
-  const text = await openLabelModal();
-  if (!text) {
-    return;
-  }
-  runMutation("add-label", () => {
-    const anchor = autoLabelAnchorForObject(target);
-    addObject({
-      id: makeId("label"),
-      type: "label",
-      x: anchor.x,
-      y: anchor.y,
-      text,
-      targetId: target.id,
-      follow: followLabelForTargetObject(target),
-      style: defaultStyle(),
-    });
-  });
-}
 
 function normalizeManualLabelText(text) {
   return String(text ?? "")
@@ -3796,13 +3765,6 @@ function autoLabelPoints() {
   }
 }
 
-function toggleManualLabelMode() {
-  if (session.currentMode === ToolMode.ADD_LABEL) {
-    setMode(ToolMode.SELECT);
-  } else {
-    setMode(ToolMode.ADD_LABEL);
-  }
-}
 
 function clearBoard() {
   runMutation("clear-board", () => {
