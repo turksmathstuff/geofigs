@@ -783,8 +783,56 @@ function labelBaseAnchorForObject(obj) {
   return { x: 0, y: 0 };
 }
 
+function lineLikeLabelOffsetFromPoints(p1, p2, normalDistance = 0.34, tangentBias = 0.08) {
+  if (!p1 || !p2) {
+    return { x: 0.4, y: 0.4 };
+  }
+  const dx = Number(p2.x ?? 0) - Number(p1.x ?? 0);
+  const dy = Number(p2.y ?? 0) - Number(p1.y ?? 0);
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = dx / length;
+  const uy = dy / length;
+  let nx = -uy;
+  let ny = ux;
+
+  // Prefer the upward-facing normal so default labels land just off the object.
+  if (ny < 0 || (Math.abs(ny) < 1e-6 && nx < 0)) {
+    nx *= -1;
+    ny *= -1;
+  }
+
+  return {
+    x: nx * normalDistance + ux * tangentBias,
+    y: ny * normalDistance + uy * tangentBias,
+  };
+}
+
 function defaultLabelOffsetForObject(obj) {
-  return obj?.type === "point" ? { x: 0.45, y: 0.45 } : { x: 0.4, y: 0.4 };
+  if (!obj) {
+    return { x: 0.4, y: 0.4 };
+  }
+  if (obj.type === "point") {
+    return { x: 0.42, y: 0.38 };
+  }
+  if (Array.isArray(obj.pointIds) && obj.pointIds.length >= 2) {
+    const p1 = getPointById(obj.pointIds[0]);
+    const p2 = getPointById(obj.pointIds[1]);
+    return lineLikeLabelOffsetFromPoints(p1, p2);
+  }
+  if (obj.type === "circle" && Array.isArray(obj.pointIds) && obj.pointIds.length >= 2) {
+    const center = getPointById(obj.pointIds[0]);
+    const through = getPointById(obj.pointIds[1]);
+    if (center && through) {
+      const dx = Number(through.x ?? 0) - Number(center.x ?? 0);
+      const dy = Number(through.y ?? 0) - Number(center.y ?? 0);
+      const length = Math.hypot(dx, dy) || 1;
+      return {
+        x: (dx / length) * 0.28,
+        y: (dy / length) * 0.28,
+      };
+    }
+  }
+  return { x: 0.4, y: 0.4 };
 }
 
 function autoLabelAnchorForObject(obj) {
