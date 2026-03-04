@@ -2,6 +2,12 @@ export function createDomRefs(doc) {
   return {
     statusEl: doc.getElementById("statusText"),
     drawingHintEl: doc.getElementById("drawingHint"),
+    labelModalEl: doc.getElementById("labelModal"),
+    labelModalBackdropEl: doc.getElementById("labelModalBackdrop"),
+    labelModalDialogEl: doc.getElementById("labelModalDialog"),
+    labelModalInputEl: doc.getElementById("labelModalInput"),
+    labelModalCancelEl: doc.getElementById("labelModalCancel"),
+    addLabelBtn: doc.getElementById("addLabel"),
     autoLabelBtn: doc.getElementById("autoLabel"),
     boardEl: doc.getElementById("jxgbox"),
     transformPanelEl: doc.getElementById("transformPanel"),

@@ -1,3 +1,5 @@
+import { buildExportLabelGroup } from "./exportLabelSvg.js";
+
 function parseViewBox(viewBoxText) {
   if (!viewBoxText) {
     return null;
@@ -11,6 +13,25 @@ function parseViewBox(viewBoxText) {
     return null;
   }
   return { x: values[0], y: values[1], width: values[2], height: values[3] };
+}
+
+export function replaceExportLabels(svgString, labels = []) {
+  if (!labels.length) {
+    return svgString;
+  }
+  const xml = new DOMParser().parseFromString(svgString, "image/svg+xml");
+  if (xml.querySelector("parsererror")) {
+    return svgString;
+  }
+  const svg = xml.documentElement;
+  for (const label of labels) {
+    if (label.id) {
+      const original = svg.querySelector(`[data-geo-label-id="${CSS.escape(label.id)}"]`);
+      original?.remove();
+    }
+    svg.appendChild(buildExportLabelGroup(xml, label));
+  }
+  return new XMLSerializer().serializeToString(xml);
 }
 
 function getFallbackBounds(svg, options) {
