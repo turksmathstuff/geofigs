@@ -6,7 +6,7 @@ import {
   cloneFigureDoc,
   validateFigureDoc,
 } from "./state/figureDoc.js";
-import { exportSVG, triggerDownload } from "./export/exportSvg.js";
+import { exportSVG, replaceExportLabels, triggerDownload } from "./export/exportSvg.js";
 import { exportPNG, downloadBlob } from "./export/exportPng.js";
 import { makeId } from "./utils/ids.js";
 import { timestampForFile } from "./utils/time.js";
@@ -67,6 +67,11 @@ const dom = createDomRefs(document);
 const {
   statusEl,
   drawingHintEl,
+  labelModalEl,
+  labelModalBackdropEl,
+  labelModalDialogEl,
+  labelModalInputEl,
+  labelModalCancelEl,
   autoLabelBtn,
   boardEl,
   transformPanelEl,
@@ -84,6 +89,7 @@ const {
   triangleModeButtons,
   angleMarkPresetButtons,
 } = dom;
+let labelModalResolve = null;
 const constructionSelectionButtonIds = [
   "makeMidpoint",
   "makeMidpointTick1",
@@ -133,7 +139,8 @@ const boardController = new BoardController(
   (coords, evt) => handleBoardClick(coords, evt),
   (id, type, evt) => handleObjectClick(id, type, evt),
   (coords, evt) => handleBoardMove(coords, evt),
-  (id, type, pos, options) => handleObjectMove(id, type, pos, options)
+  (id, type, pos, options) => handleObjectMove(id, type, pos, options),
+  (id, type, evt) => handleObjectDoubleClick(id, type, evt)
 );
 boardController.init();
 
@@ -776,8 +783,56 @@ function labelBaseAnchorForObject(obj) {
   return { x: 0, y: 0 };
 }
 
+function lineLikeLabelOffsetFromPoints(p1, p2, normalDistance = 0.34, tangentBias = 0.08) {
+  if (!p1 || !p2) {
+    return { x: 0.4, y: 0.4 };
+  }
+  const dx = Number(p2.x ?? 0) - Number(p1.x ?? 0);
+  const dy = Number(p2.y ?? 0) - Number(p1.y ?? 0);
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = dx / length;
+  const uy = dy / length;
+  let nx = -uy;
+  let ny = ux;
+
+  // Prefer the upward-facing normal so default labels land just off the object.
+  if (ny < 0 || (Math.abs(ny) < 1e-6 && nx < 0)) {
+    nx *= -1;
+    ny *= -1;
+  }
+
+  return {
+    x: nx * normalDistance + ux * tangentBias,
+    y: ny * normalDistance + uy * tangentBias,
+  };
+}
+
 function defaultLabelOffsetForObject(obj) {
-  return obj?.type === "point" ? { x: 0.45, y: 0.45 } : { x: 0.4, y: 0.4 };
+  if (!obj) {
+    return { x: 0.4, y: 0.4 };
+  }
+  if (obj.type === "point") {
+    return { x: 0.42, y: 0.38 };
+  }
+  if (Array.isArray(obj.pointIds) && obj.pointIds.length >= 2) {
+    const p1 = getPointById(obj.pointIds[0]);
+    const p2 = getPointById(obj.pointIds[1]);
+    return lineLikeLabelOffsetFromPoints(p1, p2);
+  }
+  if (obj.type === "circle" && Array.isArray(obj.pointIds) && obj.pointIds.length >= 2) {
+    const center = getPointById(obj.pointIds[0]);
+    const through = getPointById(obj.pointIds[1]);
+    if (center && through) {
+      const dx = Number(through.x ?? 0) - Number(center.x ?? 0);
+      const dy = Number(through.y ?? 0) - Number(center.y ?? 0);
+      const length = Math.hypot(dx, dy) || 1;
+      return {
+        x: (dx / length) * 0.28,
+        y: (dy / length) * 0.28,
+      };
+    }
+  }
+  return { x: 0.4, y: 0.4 };
 }
 
 function autoLabelAnchorForObject(obj) {
@@ -1716,6 +1771,11 @@ function handleBoardClick(coords, evt) {
 
   const snappedCoords = getPointInputCoords(coords, evt);
 
+  if (session.currentMode === ToolMode.ADD_LABEL) {
+    addManualLabelAtCoords(coords);
+    return;
+  }
+
   if (handlePointModeBoardClick(snappedCoords)) {
     return;
   }
@@ -1776,6 +1836,14 @@ function handleObjectClick(id, type, evt) {
   }
 }
 
+function handleObjectDoubleClick(id, type, evt) {
+  if (type !== "label") {
+    return false;
+  }
+  editLabelText(id);
+  return true;
+}
+
 const { startMarqueeSelection } = createMarqueeSelectionWorkflow({
   store,
   session,
@@ -1834,6 +1902,7 @@ const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow(
   ToolMode,
   store,
   deleteSelected,
+  addManualLabelForTarget,
   toggleAutoLabelForObject,
 });
 
@@ -3621,41 +3690,101 @@ function launchAngleMeasure(buttonId) {
   });
 }
 
-function promptLabel() {
-  const text = prompt("Label text:");
+function isManualLabelTargetType(type) {
+  return ["point", "segment", "line", "circle", "parallel", "perpendicular"].includes(type);
+}
+
+async function addManualLabelAtCoords(coords) {
+  if (!coords) {
+    return;
+  }
+  const text = await openLabelModal();
   if (!text) {
     return;
   }
-
-  const selectedTargetId =
-    selectedOfTypes(["point", "segment", "line", "circle", "parallel", "perpendicular"])[0] || null;
   runMutation("add-label", () => {
-    if (selectedTargetId) {
-      const target = getObjectById(selectedTargetId);
-      if (!target) {
-        return;
-      }
-      const anchor = autoLabelAnchorForObject(target);
-      addObject({
-        id: makeId("label"),
-        type: "label",
-        x: anchor.x,
-        y: anchor.y,
-        text,
-        targetId: target.id,
-        follow: followLabelForTargetObject(target),
-        style: defaultStyle(),
-      });
-    } else {
-      addObject({
-        id: makeId("label"),
-        type: "label",
-        x: 0,
-        y: 0,
-        text,
-        style: defaultStyle(),
-      });
-    }
+    addObject({
+      id: makeId("label"),
+      type: "label",
+      x: coords.x,
+      y: coords.y,
+      text,
+      style: defaultStyle(),
+    });
+  });
+}
+
+async function addManualLabelForTarget(targetId) {
+  const target = getObjectById(targetId);
+  if (!target || !isManualLabelTargetType(target.type)) {
+    return;
+  }
+  const text = await openLabelModal();
+  if (!text) {
+    return;
+  }
+  runMutation("add-label", () => {
+    const anchor = autoLabelAnchorForObject(target);
+    addObject({
+      id: makeId("label"),
+      type: "label",
+      x: anchor.x,
+      y: anchor.y,
+      text,
+      targetId: target.id,
+      follow: followLabelForTargetObject(target),
+      style: defaultStyle(),
+    });
+  });
+}
+
+function normalizeManualLabelText(text) {
+  return String(text ?? "")
+    .trim()
+    .replace(/<sup>\s*o\s*<\/sup>/gi, "°")
+    .replace(/\^\(o\)/g, "°")
+    .replace(/\^o\b/g, "°");
+}
+
+async function editLabelText(labelId) {
+  const label = getObjectById(labelId);
+  if (!label || label.type !== "label") {
+    return;
+  }
+  const text = await openLabelModal(label.text || "");
+  if (!text || text === label.text) {
+    return;
+  }
+  runMutation("edit-label", () => {
+    label.text = text;
+  });
+}
+
+function closeLabelModal(value = "") {
+  if (!labelModalEl || !labelModalResolve) {
+    return;
+  }
+  labelModalEl.hidden = true;
+  const resolve = labelModalResolve;
+  labelModalResolve = null;
+  resolve(value);
+}
+
+function openLabelModal(initialValue = "") {
+  if (!labelModalEl || !labelModalInputEl) {
+    return Promise.resolve("");
+  }
+  if (labelModalResolve) {
+    closeLabelModal("");
+  }
+  labelModalInputEl.value = String(initialValue ?? "");
+  labelModalEl.hidden = false;
+  queueMicrotask(() => {
+    labelModalInputEl.focus();
+    labelModalInputEl.select();
+  });
+  return new Promise((resolve) => {
+    labelModalResolve = resolve;
   });
 }
 
@@ -3664,6 +3793,14 @@ function autoLabelPoints() {
     setMode(ToolMode.SELECT);
   } else {
     setMode(ToolMode.LABEL);
+  }
+}
+
+function toggleManualLabelMode() {
+  if (session.currentMode === ToolMode.ADD_LABEL) {
+    setMode(ToolMode.SELECT);
+  } else {
+    setMode(ToolMode.ADD_LABEL);
   }
 }
 
@@ -3680,7 +3817,8 @@ async function downloadSvg() {
   const background = document.getElementById("bgMode").value;
   const tight = document.getElementById("tightSvg").checked;
   const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
-  const svg = exportSVG(raw, { background, tight });
+  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports());
+  const svg = exportSVG(withLabels, { background, tight });
   const name = `figure-${timestampForFile()}.svg`;
   triggerDownload(name, svg, "image/svg+xml");
 }
@@ -3689,7 +3827,8 @@ async function downloadPng() {
   const background = document.getElementById("bgMode").value;
   const scale = Number(document.getElementById("pngScale").value);
   const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
-  const svg = exportSVG(raw, { background, tight: true });
+  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports());
+  const svg = exportSVG(withLabels, { background, tight: true });
   const blob = await exportPNG(svg, { background, scale });
   const name = `figure-${timestampForFile()}.png`;
   downloadBlob(name, blob);
@@ -3746,7 +3885,7 @@ wireUi({
   launchAngleMeasure,
   setActiveAngleMarkPreset,
   addAngleFromSelection,
-  promptLabel,
+  toggleManualLabelMode,
   autoLabelPoints,
   launchParallelOrPerpendicular,
   launchTriangleCopy,
@@ -3788,3 +3927,25 @@ if (drawingHintEl) {
     drawingHintEl.hidden = !text;
   });
 }
+
+if (labelModalBackdropEl) {
+  labelModalBackdropEl.addEventListener("click", () => closeLabelModal(""));
+}
+
+if (labelModalCancelEl) {
+  labelModalCancelEl.addEventListener("click", () => closeLabelModal(""));
+}
+
+if (labelModalDialogEl) {
+  labelModalDialogEl.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    closeLabelModal(normalizeManualLabelText(labelModalInputEl?.value || ""));
+  });
+}
+
+document.addEventListener("keydown", (evt) => {
+  if (evt.key === "Escape" && labelModalResolve) {
+    evt.preventDefault();
+    closeLabelModal("");
+  }
+});

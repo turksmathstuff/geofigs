@@ -8,6 +8,7 @@ export const ToolMode = Object.freeze({
   CIRCLE: "circle",
   ANGLE: "angle",
   CONGRUENCY: "congruency",
+  ADD_LABEL: "add-label",
   LABEL: "label",
   DELETE: "delete",
 });
