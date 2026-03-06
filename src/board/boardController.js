@@ -1336,7 +1336,7 @@ export class BoardController {
     return this.registerElement(id, "label", el, { text, style });
   }
 
-  collectLabelExports() {
+  collectLabelExports(fontScale = 1) {
     const out = [];
     for (const hit of this.elements.values()) {
       if (hit.type !== "label" || !hit.meta?.text) {
@@ -1355,6 +1355,7 @@ export class BoardController {
       if (!box) {
         continue;
       }
+      const scale = Math.max(0.1, Number(fontScale) || 1);
       out.push({
         id: node.getAttribute("data-geo-label-id") || "",
         text: hit.meta.text,
@@ -1362,7 +1363,7 @@ export class BoardController {
         y: box.y,
         width: box.width,
         height: box.height,
-        fontSize: hit.meta.style?.fontSize || 20,
+        fontSize: (hit.meta.style?.fontSize || 20) * scale,
         color: hit.meta.style?.strokeColor || "#111",
       });
     }
