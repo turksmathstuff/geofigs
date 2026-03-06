@@ -4,3 +4,5 @@ Thumbs.db
 *.tmp
 .vscode/
 .idea/
+guide.md
+guide.pdf
