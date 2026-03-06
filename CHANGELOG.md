@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 ### Added
+- Export preview modal: "Preview Export" button renders the figure as SVG in a full-screen overlay before downloading, with Download SVG and Download PNG actions inside.
+- Label Size export control (1×–2.5×, default 1.5×): scales label font size in exported SVG/PNG so labels remain readable when images are resized in documents.
+- Point Size export control (0.5×–1.5×, default 1×): scales point radius at export time without affecting the live board.
+
+### Changed
+- Export label placement is now center-anchored: scaled labels stay visually centered on their original position rather than drifting right/down.
+- Export settings consolidated into a shared `readExportSettings()` helper.
+
+### Fixed
+- _None yet._
+
+## [2026-03-06] - v1.2.0
+### Added
 - Construct tools:
   - `Midpoint` plus midpoint tick variants (`1/2/3`).
   - `Angle Bisector` plus tick-decorated variants (`1/2/3`).
@@ -16,6 +29,8 @@ All notable changes to this project are documented in this file.
 - Triangle transform actions in Construct:
   - `Congruent △` duplicates a selected triangle, rotates it slightly, and moves it.
   - `Similar △` duplicates a selected triangle as a larger copy, rotates it slightly, and moves it.
+- `Equilateral Triangle` construction mode.
+- Regular polygon construction variants with locked derived points.
 - Drag-to-select marquee in `Select` mode (with Shift-additive multi-select).
 - Interactive selected-triangle transform controls:
   - `Move △` now uses draggable X/Y sliders with live preview.
@@ -24,6 +39,7 @@ All notable changes to this project are documented in this file.
 - Hide/show workflow for export cleanup:
   - `Hide Selected`
   - `Show All`
+- Export visibility toggles for point markers and arrowheads.
 - Interaction behavior reference guide in `INTERACTION_BEHAVIOR_REFERENCE.md`.
 - Constrained intersection points (created with the `Point` tool near intersections) that stay attached to source geometry.
 - Circle + line/segment/ray intersection snapping for constrained intersection points.
@@ -39,7 +55,11 @@ All notable changes to this project are documented in this file.
 - Triangle transform naming updated to `Rotate/Slide Triangle` in both menu button and transform popup title.
 - Construct pane reordered (Parallel/Ray grouping and requested tool order) and triangle transform labels renamed to `Congruent/Similar Triangles` with panel title `Slide/Rotate Triangle`.
 - Triangle transform UI consolidated: `Congruent △`, `Similar △`, and unified `Transform △` are grouped in one collapsible menu; transform panel now combines rotation (top) and move sliders (bottom).
+- Style and triangle menus are collapsible in the toolbar.
 - Default label font size increased (new and migrated docs now use larger label text).
+- Label add/edit interaction flow was refined, including improved default label placement.
+- Label toolbar action naming was clarified (`Add Label`).
+- In-tool construction selection flow was improved for triangle copy/transform and decorator workflows.
 - Triangle-aware auto-labeling: segment labels use the lowercase of the opposite labeled vertex when available (A opposite side a).
 - Point-name labels are now draggable (implemented as linked label objects, with migration from legacy fixed point names).
 - Auto Label now targets clicked objects only (toggle mode), instead of labeling all points at once.
@@ -73,6 +93,7 @@ All notable changes to this project are documented in this file.
 - Label dragging in `Select` mode is preserved (single-click drag on labels no longer gets interrupted by selection rerender).
 - Parallel/perpendicular construction selection is more forgiving (extra selected items no longer block creation as long as a point and line-like source are selected).
 - Constructed parallel/perpendicular lines now participate in intersection snapping and constrained intersection-point updates.
+- Regular polygon export now preserves control-point colors correctly.
 
 ## [2026-02-21] - Improve geometry UX, labeling flow, and export reliability
 ### Added
