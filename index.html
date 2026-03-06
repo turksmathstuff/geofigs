@@ -18,7 +18,7 @@
     <header class="topbar">
       <div class="topbar-title">
         <h1>Geometry Figure Generator</h1>
-        <span class="app-version" aria-label="Application version">v1.1</span>
+        <span class="app-version" aria-label="Application version">v1.2</span>
       </div>
       <div class="status" id="statusText">Mode: Select</div>
     </header>
@@ -175,6 +175,15 @@
             <select id="bgMode">
               <option value="transparent" selected>Transparent</option>
               <option value="white">White</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="exportLabelScale">Label Size</label>
+            <select id="exportLabelScale">
+              <option value="1">1× (screen size)</option>
+              <option value="1.5" selected>1.5×</option>
+              <option value="2">2×</option>
+              <option value="3">3×</option>
             </select>
           </div>
           <div class="form-row checkbox-row">

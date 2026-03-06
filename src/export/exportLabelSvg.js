@@ -313,8 +313,12 @@ export function buildExportLabelGroup(doc, label) {
   const layout = layoutNode(tree, fontSize);
   const group = doc.createElementNS(SVG_NS, "g");
   group.setAttribute("data-export-label-id", label.id || "");
-  const originX = label.x;
-  const originY = label.y;
+  // Anchor on the center of the original bounding box so scaled labels stay
+  // visually centered on their original position rather than drifting.
+  const cx = label.x + (label.width || 0) / 2;
+  const cy = label.y + (label.height || 0) / 2;
+  const originX = cx - layout.width / 2;
+  const originY = cy - (layout.ascent + layout.descent) / 2;
   renderLayout(doc, group, layout, originX, originY, fontSize, color);
   return group;
 }

@@ -3778,8 +3778,9 @@ function clearBoard() {
 async function downloadSvg() {
   const background = document.getElementById("bgMode").value;
   const tight = document.getElementById("tightSvg").checked;
+  const fontScale = Number(document.getElementById("exportLabelScale").value) || 1;
   const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
-  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports());
+  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
   const svg = exportSVG(withLabels, { background, tight });
   const name = `figure-${timestampForFile()}.svg`;
   triggerDownload(name, svg, "image/svg+xml");
@@ -3788,8 +3789,9 @@ async function downloadSvg() {
 async function downloadPng() {
   const background = document.getElementById("bgMode").value;
   const scale = Number(document.getElementById("pngScale").value);
+  const fontScale = Number(document.getElementById("exportLabelScale").value) || 1;
   const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
-  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports());
+  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
   const svg = exportSVG(withLabels, { background, tight: true });
   const blob = await exportPNG(svg, { background, scale });
   const name = `figure-${timestampForFile()}.png`;
