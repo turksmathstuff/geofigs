@@ -180,10 +180,20 @@
           <div class="form-row">
             <label for="exportLabelScale">Label Size</label>
             <select id="exportLabelScale">
-              <option value="1">1× (screen size)</option>
-              <option value="1.5" selected>1.5×</option>
-              <option value="2">2×</option>
-              <option value="3">3×</option>
+              <option value="1">1x (screen size)</option>
+              <option value="1.5" selected>1.5x</option>
+              <option value="2">2x</option>
+              <option value="2.5">2.5x</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="exportPointScale">Point Size</label>
+            <select id="exportPointScale">
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1" selected>1x (screen size)</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
             </select>
           </div>
           <div class="form-row checkbox-row">
@@ -191,6 +201,7 @@
             <input id="tightSvg" type="checkbox" checked />
           </div>
           <div class="grid-buttons">
+            <button id="previewExportBtn" style="grid-column: span 2;">Preview Export</button>
             <button id="downloadSvg">Download SVG</button>
             <button id="downloadPng">Download PNG</button>
             <button id="togglePointObjects">Hide Points</button>
@@ -265,6 +276,23 @@
         <div id="jxgbox" class="jxgbox" aria-label="Geometry board"></div>
       </section>
     </main>
+
+    <div id="exportPreviewModal" class="export-preview-modal" hidden>
+      <div id="exportPreviewBackdrop" class="export-preview-backdrop"></div>
+      <div class="export-preview-dialog">
+        <div class="export-preview-header">
+          <h3>Export Preview</h3>
+          <button id="closeExportPreview" class="mini-btn">✕</button>
+        </div>
+        <div class="export-preview-content" id="exportPreviewContent"></div>
+        <div class="export-preview-actions">
+          <button id="previewDownloadSvg">Download SVG</button>
+          <button id="previewDownloadPng">Download PNG</button>
+          <button id="cancelExportPreview">Close</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       if (window.location.protocol === "file:") {
         const warning = document.getElementById("protocolWarning");

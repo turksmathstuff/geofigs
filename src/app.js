@@ -2331,7 +2331,9 @@ function buildPointMap() {
       : boardController.createPoint(obj.id, obj.x, obj.y, {
           ...obj.style,
           strokeColor: pointHighlightColor,
-          size: obj.constraint ? 4 : obj.style?.size,
+          size: session.exportPointScale != null
+            ? (obj.constraint ? 4 : (obj.style?.size ?? 3)) * session.exportPointScale
+            : obj.constraint ? 4 : obj.style?.size,
           layer: obj.constraint ? 10 : obj.style?.layer,
           fixed:
             isPerpBisectorEndpoint
@@ -3775,11 +3777,19 @@ function clearBoard() {
   });
 }
 
+function readExportSettings() {
+  return {
+    background: document.getElementById("bgMode").value,
+    fontScale: Number(document.getElementById("exportLabelScale").value) || 1,
+    pointScale: Number(document.getElementById("exportPointScale").value) || 1,
+    tight: document.getElementById("tightSvg").checked,
+    pngScale: Number(document.getElementById("pngScale").value),
+  };
+}
+
 async function downloadSvg() {
-  const background = document.getElementById("bgMode").value;
-  const tight = document.getElementById("tightSvg").checked;
-  const fontScale = Number(document.getElementById("exportLabelScale").value) || 1;
-  const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
+  const { background, fontScale, pointScale, tight } = readExportSettings();
+  const raw = withExportSettings({ pointScale }, () => boardController.exportBoardSvg());
   const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
   const svg = exportSVG(withLabels, { background, tight });
   const name = `figure-${timestampForFile()}.svg`;
@@ -3787,24 +3797,34 @@ async function downloadSvg() {
 }
 
 async function downloadPng() {
-  const background = document.getElementById("bgMode").value;
-  const scale = Number(document.getElementById("pngScale").value);
-  const fontScale = Number(document.getElementById("exportLabelScale").value) || 1;
-  const raw = withExportIntersectionPointBlack(() => boardController.exportBoardSvg());
+  const { background, fontScale, pointScale, pngScale } = readExportSettings();
+  const raw = withExportSettings({ pointScale }, () => boardController.exportBoardSvg());
   const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
   const svg = exportSVG(withLabels, { background, tight: true });
-  const blob = await exportPNG(svg, { background, scale });
+  const blob = await exportPNG(svg, { background, scale: pngScale });
   const name = `figure-${timestampForFile()}.png`;
   downloadBlob(name, blob);
 }
 
-function withExportIntersectionPointBlack(fn) {
+async function previewExport() {
+  const { background, fontScale, pointScale, tight } = readExportSettings();
+  const raw = withExportSettings({ pointScale }, () => boardController.exportBoardSvg());
+  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
+  const svg = exportSVG(withLabels, { background, tight });
+  const content = document.getElementById("exportPreviewContent");
+  content.innerHTML = svg;
+  document.getElementById("exportPreviewModal").removeAttribute("hidden");
+}
+
+function withExportSettings({ pointScale } = {}, fn) {
   session.exportPointHighlightsBlack = true;
+  session.exportPointScale = pointScale ?? null;
   renderCurrentDoc(false);
   try {
     return fn();
   } finally {
     session.exportPointHighlightsBlack = false;
+    session.exportPointScale = null;
     renderCurrentDoc(false);
   }
 }
@@ -3869,6 +3889,7 @@ wireUi({
   renderCurrentDoc,
   downloadSvg,
   downloadPng,
+  previewExport,
   saveDoc,
   openDocFromFile,
   applyStyleToSelection,

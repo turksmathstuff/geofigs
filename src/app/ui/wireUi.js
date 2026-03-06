@@ -231,13 +231,26 @@ function bindUndoRedoActions({ doc, store, renderCurrentDoc }) {
   });
 }
 
-function bindExportActions({ doc, downloadSvg, downloadPng }) {
+function bindExportActions({ doc, downloadSvg, downloadPng, previewExport }) {
+  doc.getElementById("previewExportBtn").addEventListener("click", () => {
+    previewExport().catch((err) => alert(err.message));
+  });
   doc.getElementById("downloadSvg").addEventListener("click", () => {
     downloadSvg().catch((err) => alert(err.message));
   });
   doc.getElementById("downloadPng").addEventListener("click", () => {
     downloadPng().catch((err) => alert(err.message));
   });
+  doc.getElementById("previewDownloadSvg").addEventListener("click", () => {
+    downloadSvg().catch((err) => alert(err.message));
+  });
+  doc.getElementById("previewDownloadPng").addEventListener("click", () => {
+    downloadPng().catch((err) => alert(err.message));
+  });
+  const closePreview = () => doc.getElementById("exportPreviewModal").setAttribute("hidden", "");
+  doc.getElementById("closeExportPreview").addEventListener("click", closePreview);
+  doc.getElementById("cancelExportPreview").addEventListener("click", closePreview);
+  doc.getElementById("exportPreviewBackdrop").addEventListener("click", closePreview);
 }
 
 function bindFileActions({ doc, saveDoc, openDocFromFile }) {
