@@ -112,6 +112,7 @@ function bindCircleButtons({
   launchInscribedQuad,
   launchInscribedNGon,
   launchTangentToCircle,
+  launchTangentAtCirclePoint,
   launchArcTicks,
 }) {
   doc.getElementById("makeInscribedCircle").addEventListener("click", () =>
@@ -134,6 +135,9 @@ function bindCircleButtons({
   );
   doc.getElementById("makeTangentToCircle").addEventListener("click", () =>
     launchTangentToCircle("makeTangentToCircle")
+  );
+  doc.getElementById("makeTangentAtCirclePoint").addEventListener("click", () =>
+    launchTangentAtCirclePoint("makeTangentAtCirclePoint")
   );
   doc.getElementById("addArcTick1").addEventListener("click", () => launchArcTicks(1, "addArcTick1"));
   doc.getElementById("addArcTick2").addEventListener("click", () => launchArcTicks(2, "addArcTick2"));

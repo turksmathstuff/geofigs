@@ -41,6 +41,9 @@ export function createModeUi({
       if (n === 0) return "Hover a tangent line to highlight it, then click to commit. Click empty space or Esc to cancel.";
       return "Click the other tangent to also commit it, or click empty space to finish. Esc cancels all.";
     }
+    if (session.tangentAtPointPlacement) {
+      return "Move cursor to set tangent length and direction, then click to place.";
+    }
     if (session.constructionSelectionSession) {
       return `${session.constructionSelectionSession.instructions} Press Esc to cancel.`;
     }
@@ -87,7 +90,10 @@ export function createModeUi({
 
   function updateModeUi() {
     const activeConstructionButtonId =
-      session.constructionSelectionSession?.buttonId || session.perpendicularBisectorPlacement?.buttonId || null;
+      session.constructionSelectionSession?.buttonId ||
+      session.perpendicularBisectorPlacement?.buttonId ||
+      session.tangentAtPointPlacement?.buttonId ||
+      null;
     dom.modeButtons.forEach((btn) => {
       const isSelectButton = btn.dataset.mode === ToolMode.SELECT;
       const isModeActive = btn.dataset.mode === session.currentMode;

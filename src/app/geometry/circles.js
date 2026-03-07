@@ -69,6 +69,19 @@ export function computeTangentPoints(source, circleCenter, circleRadius) {
   ];
 }
 
+// Returns the endpoint of a tangent-at-point segment.
+// source: point on the circle; center: circle center
+// side: +1 or -1 (tangent direction); distance: segment length from source
+export function computeTangentAtPointPosition(source, center, side, distance) {
+  const len = Math.hypot(source.x - center.x, source.y - center.y);
+  if (len < 1e-9) return null;
+  const tx = -(source.y - center.y) / len;
+  const ty = (source.x - center.x) / len;
+  const s = side >= 0 ? 1 : -1;
+  const d = Math.max(0.2, Number(distance) || 1);
+  return { x: source.x + tx * d * s, y: source.y + ty * d * s };
+}
+
 // Returns true if the CCW arc from angleStart to angleCursor (around center) is the
 // major arc (span > π), i.e. should swap start/end to render the minor side.
 export function arcCSENeedsSwap(centerX, centerY, startX, startY, cursorX, cursorY) {

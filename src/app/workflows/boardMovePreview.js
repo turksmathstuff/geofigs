@@ -2,6 +2,7 @@ export function createBoardMovePreviewWorkflow(ctx) {
   const {
     getPointInputCoords,
     updateTangentPickPreview,
+    updateTangentAtPointPreview,
     updatePerpendicularBisectorPreview,
     updateLinearPreview,
     updateCirclePreview,
@@ -14,6 +15,9 @@ export function createBoardMovePreviewWorkflow(ctx) {
   function handleBoardMove(coords, evt) {
     const adjusted = getPointInputCoords(coords, evt);
     if (updateTangentPickPreview?.(adjusted)) {
+      return;
+    }
+    if (updateTangentAtPointPreview?.(adjusted)) {
       return;
     }
     if (updatePerpendicularBisectorPreview(adjusted)) {
