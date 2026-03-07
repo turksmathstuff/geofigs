@@ -1,3 +1,5 @@
+const ARC_GLOW_COLORS = ["#93c5fd", "#fdba74", "#c4b5fd", "#f9a8d4", "#6ee7b7"];
+
 export class BoardController {
   constructor(containerId, onBoardClick, onObjectClick, onBoardMove, onObjectMove, onObjectDoubleClick = null) {
     this.containerId = containerId;
@@ -10,6 +12,7 @@ export class BoardController {
     this.elements = new Map();
     this.suppressNextBoardDown = false;
     this.previewElements = [];
+    this.arcGlowIndex = 0;
   }
 
   init() {
@@ -61,6 +64,7 @@ export class BoardController {
     this.board.removeObject(this.board.objectsList.slice());
     this.elements.clear();
     this.previewElements = [];
+    this.arcGlowIndex = 0;
     this.board.fullUpdate();
   }
 
@@ -1376,5 +1380,395 @@ export class BoardController {
 
   update() {
     this.board.fullUpdate();
+  }
+
+  // ── Arcs ─────────────────────────────────────────────────────────────────
+
+  createArc3Pt(id, p1, p2, p3, swapStartEnd, style = {}) {
+    // Center is the circumcenter of p1, p2, p3 (recomputed dynamically)
+    const center = this.createFunctionalSupportPoint(
+      () => {
+        const ax = p1.X(), ay = p1.Y(), bx = p2.X(), by = p2.Y(), cx = p3.X(), cy = p3.Y();
+        const D = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+        if (Math.abs(D) < 1e-12) return (ax + bx + cx) / 3;
+        return ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / D;
+      },
+      () => {
+        const ax = p1.X(), ay = p1.Y(), bx = p2.X(), by = p2.Y(), cx = p3.X(), cy = p3.Y();
+        const D = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+        if (Math.abs(D) < 1e-12) return (ay + by + cy) / 3;
+        return ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / D;
+      }
+    );
+    const [from, to] = swapStartEnd ? [p3, p1] : [p1, p3];
+    const glowColor = ARC_GLOW_COLORS[this.arcGlowIndex % ARC_GLOW_COLORS.length];
+    this.arcGlowIndex += 1;
+    const glowArc3pt = this.board.create("arc", [center, from, to], {
+      strokeColor: glowColor,
+      strokeWidth: (style.strokeWidth || 2) + 12,
+      strokeOpacity: 0.4,
+      dash: 0,
+      fillOpacity: 0,
+      highlight: false,
+      fixed: true,
+      withLabel: false,
+      name: "",
+    });
+    if (glowArc3pt.rendNode) glowArc3pt.rendNode.setAttribute("data-arc-glow", "true");
+    const arc = this.board.create("arc", [center, from, to], {
+      strokeColor: style.strokeColor || "#111",
+      strokeWidth: style.strokeWidth || 2,
+      dash: style.dash || 0,
+      fillOpacity: 0,
+      highlight: false,
+    });
+    return this.registerElement(id, "arc", arc);
+  }
+
+  createArcCSE(id, center, start, end, swapStartEnd, style = {}) {
+    const [from, to] = swapStartEnd ? [end, start] : [start, end];
+    const glowColor = ARC_GLOW_COLORS[this.arcGlowIndex % ARC_GLOW_COLORS.length];
+    this.arcGlowIndex += 1;
+    const glowArcCSE = this.board.create("arc", [center, from, to], {
+      strokeColor: glowColor,
+      strokeWidth: (style.strokeWidth || 2) + 12,
+      strokeOpacity: 0.4,
+      dash: 0,
+      fillOpacity: 0,
+      highlight: false,
+      fixed: true,
+      withLabel: false,
+      name: "",
+    });
+    if (glowArcCSE.rendNode) glowArcCSE.rendNode.setAttribute("data-arc-glow", "true");
+    const arc = this.board.create("arc", [center, from, to], {
+      strokeColor: style.strokeColor || "#111",
+      strokeWidth: style.strokeWidth || 2,
+      dash: style.dash || 0,
+      fillOpacity: 0,
+      highlight: false,
+    });
+    return this.registerElement(id, "arc", arc);
+  }
+
+  // ── Inscribed / Circumscribed Circles ────────────────────────────────────
+
+  createInscribedCircle(id, p1, p2, p3, showCenter, style = {}) {
+    const incX = () => {
+      const a = Math.hypot(p2.X() - p3.X(), p2.Y() - p3.Y());
+      const b = Math.hypot(p1.X() - p3.X(), p1.Y() - p3.Y());
+      const c = Math.hypot(p1.X() - p2.X(), p1.Y() - p2.Y());
+      const sum = a + b + c;
+      return sum < 1e-12 ? p1.X() : (a * p1.X() + b * p2.X() + c * p3.X()) / sum;
+    };
+    const incY = () => {
+      const a = Math.hypot(p2.X() - p3.X(), p2.Y() - p3.Y());
+      const b = Math.hypot(p1.X() - p3.X(), p1.Y() - p3.Y());
+      const c = Math.hypot(p1.X() - p2.X(), p1.Y() - p2.Y());
+      const sum = a + b + c;
+      return sum < 1e-12 ? p1.Y() : (a * p1.Y() + b * p2.Y() + c * p3.Y()) / sum;
+    };
+    const ir = () => {
+      const a = Math.hypot(p2.X() - p3.X(), p2.Y() - p3.Y());
+      const b = Math.hypot(p1.X() - p3.X(), p1.Y() - p3.Y());
+      const c = Math.hypot(p1.X() - p2.X(), p1.Y() - p2.Y());
+      const s = (a + b + c) / 2;
+      if (s < 1e-12) return 0.1;
+      const area = Math.abs((p2.X() - p1.X()) * (p3.Y() - p1.Y()) - (p3.X() - p1.X()) * (p2.Y() - p1.Y())) / 2;
+      return area / s;
+    };
+    const color = style.strokeColor || "#111";
+    const center = this.board.create("point", [incX, incY], {
+      fixed: true,
+      visible: showCenter,
+      name: "",
+      withLabel: false,
+      size: 3,
+      strokeColor: color,
+      fillColor: color,
+      highlight: false,
+    });
+    const radiusPt = this.createFunctionalSupportPoint(() => incX() + ir(), () => incY());
+    const circle = this.board.create("circle", [center, radiusPt], {
+      strokeColor: color,
+      strokeWidth: style.strokeWidth || 2,
+      dash: style.dash || 0,
+      fillOpacity: 0,
+      highlight: false,
+    });
+    return this.registerElement(id, "inscribed-circle", circle);
+  }
+
+  createCircumscribedCircle(id, p1, p2, p3, showCenter, style = {}) {
+    const ccX = () => {
+      const ax = p1.X(), ay = p1.Y(), bx = p2.X(), by = p2.Y(), cx = p3.X(), cy = p3.Y();
+      const D = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+      if (Math.abs(D) < 1e-12) return (ax + bx + cx) / 3;
+      return ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / D;
+    };
+    const ccY = () => {
+      const ax = p1.X(), ay = p1.Y(), bx = p2.X(), by = p2.Y(), cx = p3.X(), cy = p3.Y();
+      const D = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+      if (Math.abs(D) < 1e-12) return (ay + by + cy) / 3;
+      return ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / D;
+    };
+    const color = style.strokeColor || "#111";
+    const center = this.board.create("point", [ccX, ccY], {
+      fixed: true,
+      visible: showCenter,
+      name: "",
+      withLabel: false,
+      size: 3,
+      strokeColor: color,
+      fillColor: color,
+      highlight: false,
+    });
+    // p1 lies on the circumcircle, so use it directly for the radius
+    const circle = this.board.create("circle", [center, p1], {
+      strokeColor: color,
+      strokeWidth: style.strokeWidth || 2,
+      dash: style.dash || 0,
+      fillOpacity: 0,
+      highlight: false,
+    });
+    return this.registerElement(id, "circumscribed-circle", circle);
+  }
+
+  // ── Inscribed Polygon ─────────────────────────────────────────────────────
+
+  createInscribedPolygon(id, circleHit, n, handleAngles, style = {}, options = {}, vertexIds = [], handleIds = []) {
+    const showHandles = options.showHandles !== false;
+    const jxgCircle = circleHit.el || circleHit;
+
+    const getCx = () => jxgCircle.center.X();
+    const getCy = () => jxgCircle.center.Y();
+    const getCr = () => Math.hypot(
+      jxgCircle.center.X() - jxgCircle.point2.X(),
+      jxgCircle.center.Y() - jxgCircle.point2.Y()
+    );
+
+    const handles = handleAngles.map((angle, i) => {
+      const handle = this.board.create("glider", [
+        getCx() + getCr() * Math.cos(angle),
+        getCy() + getCr() * Math.sin(angle),
+        jxgCircle,
+      ], {
+        name: "",
+        withLabel: false,
+        size: 5,
+        strokeColor: "#e57373",
+        fillColor: "#e57373",
+        visible: showHandles,
+        highlight: false,
+      });
+      const hid = handleIds[i];
+      if (hid) {
+        if (handle.rendNode) handle.rendNode.setAttribute("data-ghost-point", "true");
+        this.registerElement(hid, "point", handle);
+      }
+      return handle;
+    });
+
+    const vertices = handles.map((hi, i) => {
+      const hj = handles[(i + 1) % n];
+      const xFn = () => {
+        const t1 = Math.atan2(hi.Y() - getCy(), hi.X() - getCx());
+        const t2 = Math.atan2(hj.Y() - getCy(), hj.X() - getCx());
+        const det = Math.sin(t2 - t1);
+        if (Math.abs(det) < 1e-10) return (hi.X() + hj.X()) / 2;
+        const r = getCr(), ccx = getCx(), ccy = getCy();
+        const r1 = r + Math.cos(t1) * ccx + Math.sin(t1) * ccy;
+        const r2 = r + Math.cos(t2) * ccx + Math.sin(t2) * ccy;
+        return (r1 * Math.sin(t2) - r2 * Math.sin(t1)) / det;
+      };
+      const yFn = () => {
+        const t1 = Math.atan2(hi.Y() - getCy(), hi.X() - getCx());
+        const t2 = Math.atan2(hj.Y() - getCy(), hj.X() - getCx());
+        const det = Math.sin(t2 - t1);
+        if (Math.abs(det) < 1e-10) return (hi.Y() + hj.Y()) / 2;
+        const r = getCr(), ccx = getCx(), ccy = getCy();
+        const r1 = r + Math.cos(t1) * ccx + Math.sin(t1) * ccy;
+        const r2 = r + Math.cos(t2) * ccx + Math.sin(t2) * ccy;
+        return (r2 * Math.cos(t1) - r1 * Math.cos(t2)) / det;
+      };
+      const vid = vertexIds[i];
+      if (vid) {
+        const vpt = this.board.create("point", [xFn, yFn], {
+          name: "", withLabel: false,
+          size: 4,
+          strokeColor: "#60a5fa",
+          fillColor: "#60a5fa",
+          highlight: false,
+        });
+        if (vpt.rendNode) vpt.rendNode.setAttribute("data-ghost-point", "true");
+        this.registerElement(vid, "point", vpt);
+        return vpt;
+      }
+      return this.createFunctionalSupportPoint(xFn, yFn);
+    });
+
+    const sides = vertices.map((v, i) => {
+      const next = vertices[(i + 1) % n];
+      return this.board.create("segment", [v, next], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: style.dash || 0,
+        fillOpacity: 0,
+        highlight: false,
+      });
+    });
+
+    const getHandleAngles = () => handles.map((h) => Math.atan2(h.Y() - getCy(), h.X() - getCx()));
+
+    handles.forEach((handle) => {
+      handle.on("drag", () => {
+        if (this.onObjectMove) {
+          this.onObjectMove(id, "inscribed-polygon", { handleAngles: getHandleAngles() }, { transient: true });
+        }
+      });
+      handle.on("up", () => {
+        this.suppressNextBoardDown = true;
+        if (this.onObjectMove) {
+          this.onObjectMove(id, "inscribed-polygon", { handleAngles: getHandleAngles() }, { transient: false });
+        }
+      });
+    });
+
+    return this.registerElement(id, "inscribed-polygon", sides[0]);
+  }
+
+  // ── Arc Tick Marks ────────────────────────────────────────────────────────
+
+  createArcTickMark(id, arcHit, tickCount, style = {}, initialTickLen = 0.45, options = {}) {
+    const arc = arcHit.el || arcHit;
+    let tickLen = initialTickLen > 0 ? initialTickLen : 0.45;
+    const count = Math.max(1, Math.min(3, tickCount));
+    const showHandle = options.showHandle !== false;
+
+    const cx = () => arc.center.X();
+    const cy = () => arc.center.Y();
+    const r = () => Math.hypot(arc.point2.X() - arc.center.X(), arc.point2.Y() - arc.center.Y());
+    const startA = () => Math.atan2(arc.point2.Y() - arc.center.Y(), arc.point2.X() - arc.center.X());
+    const endA = () => Math.atan2(arc.point3.Y() - arc.center.Y(), arc.point3.X() - arc.center.X());
+    const span = () => (((endA() - startA()) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const spread = () => Math.min(Math.PI / 10, Math.max(Math.PI / 36, span() / 6));
+    const centerA = () => startA() + span() / 2;
+
+    const offsets =
+      count === 1 ? [0] :
+      count === 2 ? [-spread() * 0.75, spread() * 0.75] :
+      [-spread(), 0, spread()];
+
+    const ticks = [];
+    for (const offset of offsets) {
+      const midA = () => startA() + span() / 2 + offset;
+      const inner = this.createFunctionalSupportPoint(
+        () => cx() + (r() - tickLen / 2) * Math.cos(midA()),
+        () => cy() + (r() - tickLen / 2) * Math.sin(midA())
+      );
+      const outer = this.createFunctionalSupportPoint(
+        () => cx() + (r() + tickLen / 2) * Math.cos(midA()),
+        () => cy() + (r() + tickLen / 2) * Math.sin(midA())
+      );
+      ticks.push(this.board.create("segment", [inner, outer], {
+        strokeColor: style.strokeColor || "#111",
+        strokeWidth: style.strokeWidth || 2,
+        dash: 0,
+        highlight: false,
+      }));
+    }
+
+    if (showHandle) {
+      const initHX = cx() + (r() + tickLen / 2) * Math.cos(centerA());
+      const initHY = cy() + (r() + tickLen / 2) * Math.sin(centerA());
+      const handle = this.board.create("point", [initHX, initHY], {
+        size: 4,
+        face: "square",
+        strokeColor: "#9ca3af",
+        fillColor: "#9ca3af",
+        fillOpacity: 0.85,
+        withLabel: false,
+        name: "",
+        fixed: false,
+        highlight: true,
+        cursor: "grab",
+      });
+      handle.on("down", () => {
+        this.suppressNextBoardDown = true;
+        this.onObjectMove?.(id, "arcTick", null, { transient: true });
+      });
+      handle.on("drag", () => {
+        const dist = Math.hypot(handle.X() - cx(), handle.Y() - cy());
+        tickLen = Math.max(0.1, Math.min(2.5, 2 * (dist - r())));
+        this.board.update();
+        this.onObjectMove?.(id, "arcTick", { tickLen }, { transient: true });
+      });
+      handle.on("up", () => {
+        this.onObjectMove?.(id, "arcTick", { tickLen }, { commit: true });
+      });
+    }
+
+    return this.registerElement(id, "arcTick", ticks[0]);
+  }
+
+  // ── Arc Previews ──────────────────────────────────────────────────────────
+
+  showPreviewArc3Pt(p1, p2, cursor) {
+    this.clearPreview();
+    const attrs = { strokeColor: "#9ca3af", strokeWidth: 2, dash: 2, fixed: true, highlight: false, fillOpacity: 0 };
+    const pa = this.board.create("point", [p1.x, p1.y], { visible: false, fixed: true, name: "" });
+    const pb = this.board.create("point", [p2.x, p2.y], { visible: false, fixed: true, name: "" });
+    const pc = this.board.create("point", [cursor.x, cursor.y], { visible: false, fixed: true, name: "" });
+
+    const { computeCircumcenter: cc, arc3ptNeedsSwap: needsSwap } = this._circleGeomHelpers();
+    const ctr = cc({ x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }, { x: cursor.x, y: cursor.y });
+    const swap = needsSwap({ x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }, { x: cursor.x, y: cursor.y });
+
+    const centerPt = this.board.create("point", [ctr.x, ctr.y], { visible: false, fixed: true, name: "" });
+    const [from, to] = swap ? [pc, pa] : [pa, pc];
+    const arc = this.board.create("arc", [centerPt, from, to], attrs);
+    this.previewElements = [arc, pa, pb, pc, centerPt];
+    this.disablePreviewHitTesting(this.previewElements);
+    this.board.update();
+  }
+
+  showPreviewArcCSE(center, start, snappedEnd, swapStartEnd) {
+    this.clearPreview();
+    const attrs = { strokeColor: "#9ca3af", strokeWidth: 2, dash: 2, fixed: true, highlight: false, fillOpacity: 0 };
+    const pc = this.board.create("point", [center.x, center.y], { visible: false, fixed: true, name: "" });
+    const ps = this.board.create("point", [start.x, start.y], { visible: false, fixed: true, name: "" });
+    const pe = this.board.create("point", [snappedEnd.x, snappedEnd.y], { visible: false, fixed: true, name: "" });
+    const [from, to] = swapStartEnd ? [pe, ps] : [ps, pe];
+    const arc = this.board.create("arc", [pc, from, to], attrs);
+    this.previewElements = [arc, pc, ps, pe];
+    this.disablePreviewHitTesting(this.previewElements);
+    this.board.update();
+  }
+
+  _circleGeomHelpers() {
+    return {
+      computeCircumcenter(p1, p2, p3) {
+        const ax = p1.x, ay = p1.y, bx = p2.x, by = p2.y, cx = p3.x, cy = p3.y;
+        const D = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+        if (Math.abs(D) < 1e-12) return { x: (ax + bx + cx) / 3, y: (ay + by + cy) / 3 };
+        return {
+          x: ((ax*ax+ay*ay)*(by-cy) + (bx*bx+by*by)*(cy-ay) + (cx*cx+cy*cy)*(ay-by)) / D,
+          y: ((ax*ax+ay*ay)*(cx-bx) + (bx*bx+by*by)*(ax-cx) + (cx*cx+cy*cy)*(bx-ax)) / D,
+        };
+      },
+      arc3ptNeedsSwap(p1, p2, p3) {
+        const ax = p1.x, ay = p1.y, bx = p2.x, by = p2.y, cx = p3.x, cy = p3.y;
+        const D = 2 * (ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));
+        const ccx = Math.abs(D) < 1e-12 ? (ax+bx+cx)/3
+          : ((ax*ax+ay*ay)*(by-cy)+(bx*bx+by*by)*(cy-ay)+(cx*cx+cy*cy)*(ay-by))/D;
+        const ccy = Math.abs(D) < 1e-12 ? (ay+by+cy)/3
+          : ((ax*ax+ay*ay)*(cx-bx)+(bx*bx+by*by)*(ax-cx)+(cx*cx+cy*cy)*(bx-ax))/D;
+        const norm = (a) => ((a % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+        const t1 = norm(Math.atan2(ay-ccy, ax-ccx));
+        const t2 = norm(Math.atan2(by-ccy, bx-ccx));
+        const t3 = norm(Math.atan2(cy-ccy, cx-ccx));
+        return norm(t2 - t1) >= norm(t3 - t1);
+      },
+    };
   }
 }
