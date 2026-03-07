@@ -105,6 +105,37 @@ function bindConstructionButtons({
   );
 }
 
+function bindCircleButtons({
+  doc,
+  launchInscribedCircle,
+  launchCircumscribedCircle,
+  launchInscribedQuad,
+  launchInscribedNGon,
+  launchArcTicks,
+}) {
+  doc.getElementById("makeInscribedCircle").addEventListener("click", () =>
+    launchInscribedCircle(false, "makeInscribedCircle")
+  );
+  doc.getElementById("makeInscribedCircleCenter").addEventListener("click", () =>
+    launchInscribedCircle(true, "makeInscribedCircleCenter")
+  );
+  doc.getElementById("makeCircumscribedCircle").addEventListener("click", () =>
+    launchCircumscribedCircle(false, "makeCircumscribedCircle")
+  );
+  doc.getElementById("makeCircumscribedCircleCenter").addEventListener("click", () =>
+    launchCircumscribedCircle(true, "makeCircumscribedCircleCenter")
+  );
+  doc.getElementById("makeInscribedQuad").addEventListener("click", () =>
+    launchInscribedQuad("makeInscribedQuad")
+  );
+  doc.getElementById("makeInscribedNGon").addEventListener("click", () =>
+    launchInscribedNGon("makeInscribedNGon")
+  );
+  doc.getElementById("addArcTick1").addEventListener("click", () => launchArcTicks(1, "addArcTick1"));
+  doc.getElementById("addArcTick2").addEventListener("click", () => launchArcTicks(2, "addArcTick2"));
+  doc.getElementById("addArcTick3").addEventListener("click", () => launchArcTicks(3, "addArcTick3"));
+}
+
 function bindAngleMarkButtons({ dom, doc, session, ToolMode, setMode, setActiveAngleMarkPreset, addAngleFromSelection }) {
   const { angleMarkPresetButtons } = dom;
   angleMarkPresetButtons.forEach((btn) => {
@@ -341,6 +372,7 @@ function bindKeyboardShortcuts({ win, store, session, setMode, ToolMode, renderC
 export function wireUi(deps) {
   bindModeButtons(deps);
   bindConstructionButtons(deps);
+  bindCircleButtons(deps);
   bindAngleMarkButtons(deps);
   bindTransformControls(deps);
   bindSelectionActions(deps);
