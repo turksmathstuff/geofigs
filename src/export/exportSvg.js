@@ -118,7 +118,7 @@ export function exportSVG(svgString, options = {}) {
   const parser = new DOMParser();
   const xml = parser.parseFromString(svgString, "image/svg+xml");
   const svg = xml.documentElement;
-  for (const el of svg.querySelectorAll("[data-arc-glow], [data-ghost-point], [data-tangent-point]")) {
+  for (const el of svg.querySelectorAll("[data-arc-glow], [data-ghost-point], [data-circle-through-point]")) {
     el.remove();
   }
   const fallbackBounds = getFallbackBounds(svg, options);

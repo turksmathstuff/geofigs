@@ -211,6 +211,9 @@ function setMode(mode) {
   session.perpendicularBisectorPlacement = null;
   session.tangentAtPointPlacement = null;
   session.constructionSelectionSession = null;
+  if (session.tangentPickState?.staged?.length > 0) {
+    finalizeTangentPickSession();
+  }
   session.tangentPickState = null;
   session.currentMode = mode;
   session.pendingPointIds = [];
@@ -2641,6 +2644,7 @@ function buildPointMap() {
   const map = new Map();
   const polygonControlIds = regularPolygonControlPointIds();
   const arcControlIds = arc3ptControlPointIds();
+  const circleRadiusIds = circleRadiusPointIds();
   for (const obj of store.doc.objects) {
     if (obj.type !== "point") {
       continue;
@@ -2650,10 +2654,12 @@ function buildPointMap() {
     }
     if (obj.tangentPoint) {
       const hideTangentPoint = obj.hidden || !session.showPointObjects;
+      const tangentPointColor = session.exportPointHighlightsBlack ? "#000000" : "#c026d3";
       const pt = hideTangentPoint
         ? boardController.createSupportPoint(obj.x, obj.y)
         : boardController.createPoint(obj.id, obj.x, obj.y, {
-            strokeColor: obj.style?.strokeColor || defaultStyle().strokeColor,
+            strokeColor: tangentPointColor,
+            fillColor: tangentPointColor,
             size: 4,
             layer: 10,
             fixed: true,
@@ -2668,13 +2674,16 @@ function buildPointMap() {
       obj.constraint?.kind === "tangentAtPointEndpoint";
     const isPolygonControlPoint = polygonControlIds.has(obj.id);
     const isArcControlPoint = arcControlIds.has(obj.id);
+    const isCircleRadiusPoint = circleRadiusIds.has(obj.id);
     const pointHighlightColor = session.exportPointHighlightsBlack
       ? "#000000"
       : isPolygonControlPoint
         ? defaultRegularPolygonControlPointColor()
         : isArcControlPoint
           ? "#e57373"
-          : obj.style?.strokeColor;
+          : isCircleRadiusPoint
+            ? "#ea580c"
+            : obj.style?.strokeColor;
     const hidePointObject = obj.hidden || !session.showPointObjects ||
       (session.exportPointHighlightsBlack && isArcControlPoint);
     const pt = hidePointObject
@@ -2697,6 +2706,9 @@ function buildPointMap() {
                 obj.constraint?.kind === "circleTangentPoint" ||
                 obj.style?.fixed,
         });
+    if (isCircleRadiusPoint && !hidePointObject && !obj.name && pt?.rendNode) {
+      pt.rendNode.setAttribute("data-circle-through-point", "true");
+    }
     map.set(obj.id, pt);
   }
   return map;
@@ -3482,6 +3494,16 @@ function regularPolygonVertexPoint(pointA, pointB, sideCount, vertexIndex) {
   }
   const vertices = regularPolygonVerticesFromEdge(pointA, pointB, sideCount);
   return vertices?.[index] || null;
+}
+
+function circleRadiusPointIds() {
+  const ids = new Set();
+  for (const obj of store.doc.objects) {
+    if (obj.type === "circle" && obj.pointIds?.length >= 2) {
+      ids.add(obj.pointIds[1]);
+    }
+  }
+  return ids;
 }
 
 function arc3ptControlPointIds() {
