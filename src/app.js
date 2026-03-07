@@ -9,6 +9,8 @@ import {
 import { exportSVG, replaceExportLabels, triggerDownload } from "./export/exportSvg.js";
 import { exportPNG, downloadBlob } from "./export/exportPng.js";
 import { initPreviewLabelDrag } from "./export/previewLabelDrag.js";
+import { arc3ptNeedsSwap, arcCSENeedsSwap, computeIncenter, computeInradius, computeCircumcenter } from "./app/geometry/circles.js";
+import { createCircleToolWorkflow } from "./app/workflows/circleToolWorkflow.js";
 import { makeId } from "./utils/ids.js";
 import { timestampForFile } from "./utils/time.js";
 import {
@@ -74,6 +76,11 @@ const {
   labelModalDialogEl,
   labelModalInputEl,
   labelModalCancelEl,
+  nGonModalEl,
+  nGonModalBackdropEl,
+  nGonModalDialogEl,
+  nGonModalInputEl,
+  nGonModalCancelEl,
   autoLabelBtn,
   boardEl,
   transformPanelEl,
@@ -92,6 +99,7 @@ const {
   angleMarkPresetButtons,
 } = dom;
 let labelModalResolve = null;
+let nGonModalResolve = null;
 const constructionSelectionButtonIds = [
   "makeMidpoint",
   "makeMidpointTick1",
@@ -124,6 +132,15 @@ const constructionSelectionButtonIds = [
   "markParallel3",
   "addSideMeasure",
   "addAngleMeasure",
+  "makeInscribedCircle",
+  "makeInscribedCircleCenter",
+  "makeCircumscribedCircle",
+  "makeCircumscribedCircleCenter",
+  "makeInscribedQuad",
+  "makeInscribedNGon",
+  "addArcTick1",
+  "addArcTick2",
+  "addArcTick3",
 ];
 
 const { modeLabel, canvasHintText, updateModeUi } = createModeUi({
@@ -272,6 +289,12 @@ function pointNeeds(mode) {
   if (mode === ToolMode.CIRCLE) {
     return 2;
   }
+  if (mode === ToolMode.ARC_3PT) {
+    return 3;
+  }
+  if (mode === ToolMode.ARC_CSE) {
+    return 3;
+  }
   return 0;
 }
 
@@ -281,7 +304,12 @@ function getObjectById(id) {
 
 function getPointById(id) {
   const o = getObjectById(id);
-  return o && o.type === "point" ? o : null;
+  if (!o || o.type !== "point") return null;
+  if (o.ghostVertex) {
+    const el = boardController.getElement(id);
+    if (el) return { ...o, x: el.X(), y: el.Y() };
+  }
+  return o;
 }
 
 function findNearbyVisiblePoint(coords, threshold = 0.55) {
@@ -294,7 +322,12 @@ function findNearbyVisiblePoint(coords, threshold = 0.55) {
     if (obj.type !== "point" || obj.hidden) {
       continue;
     }
-    const d = distance(coords, obj);
+    let px = obj.x, py = obj.y;
+    if (obj.ghostVertex) {
+      const el = boardController.getElement(obj.id);
+      if (el) { px = el.X(); py = el.Y(); }
+    }
+    const d = Math.hypot(coords.x - px, coords.y - py);
     if (d < threshold && d < bestDist) {
       best = obj;
       bestDist = d;
@@ -1146,24 +1179,60 @@ function getLinearDefinition(obj) {
 }
 
 function getCircleDefinition(obj) {
-  if (!obj || obj.type !== "circle" || !Array.isArray(obj.pointIds) || obj.pointIds.length < 2) {
+  if (!obj || !Array.isArray(obj.pointIds)) {
     return null;
   }
-  const center = getPointById(obj.pointIds[0]);
-  const through = getPointById(obj.pointIds[1]);
-  if (!center || !through) {
-    return null;
+  if (obj.type === "circle" && obj.pointIds.length >= 2) {
+    const center = getPointById(obj.pointIds[0]);
+    const through = getPointById(obj.pointIds[1]);
+    if (!center || !through) {
+      return null;
+    }
+    const radius = distance(center, through);
+    if (!Number.isFinite(radius) || radius < 1e-9) {
+      return null;
+    }
+    return { id: obj.id, kind: "circle", center, radius };
   }
-  const radius = distance(center, through);
-  if (!Number.isFinite(radius) || radius < 1e-9) {
-    return null;
+  if ((obj.type === "inscribed-circle" || obj.type === "circumscribed-circle") && obj.pointIds.length >= 3) {
+    const p1 = getPointById(obj.pointIds[0]);
+    const p2 = getPointById(obj.pointIds[1]);
+    const p3 = getPointById(obj.pointIds[2]);
+    if (!p1 || !p2 || !p3) {
+      return null;
+    }
+    let center, radius;
+    if (obj.type === "inscribed-circle") {
+      center = computeIncenter(p1, p2, p3);
+      radius = computeInradius(p1, p2, p3);
+    } else {
+      center = computeCircumcenter(p1, p2, p3);
+      radius = distance(center, p1);
+    }
+    if (!Number.isFinite(radius) || radius < 1e-9) {
+      return null;
+    }
+    return { id: obj.id, kind: "circle", center, radius };
   }
-  return {
-    id: obj.id,
-    kind: "circle",
-    center,
-    radius,
-  };
+  if (obj.type === "arc-cse" && obj.pointIds.length >= 2) {
+    const center = getPointById(obj.pointIds[0]);
+    const start = getPointById(obj.pointIds[1]);
+    if (!center || !start) return null;
+    const radius = distance(center, start);
+    if (!Number.isFinite(radius) || radius < 1e-9) return null;
+    return { id: obj.id, kind: "circle", center, radius };
+  }
+  if (obj.type === "arc-3pt" && obj.pointIds.length >= 3) {
+    const p1 = getPointById(obj.pointIds[0]);
+    const p2 = getPointById(obj.pointIds[1]);
+    const p3 = getPointById(obj.pointIds[2]);
+    if (!p1 || !p2 || !p3) return null;
+    const center = computeCircumcenter(p1, p2, p3);
+    const radius = distance(center, p1);
+    if (!Number.isFinite(radius) || radius < 1e-9) return null;
+    return { id: obj.id, kind: "circle", center, radius };
+  }
+  return null;
 }
 
 function getIntersectionDefinition(obj) {
@@ -1646,6 +1715,55 @@ function updateCirclePreview(cursorCoords) {
   return true;
 }
 
+function updateArc3PtPreview(cursorCoords) {
+  if (session.currentMode !== ToolMode.ARC_3PT) {
+    return false;
+  }
+  if (session.pendingPointIds.length < 2) {
+    boardController.clearPreview();
+    return true;
+  }
+  const p1 = getPointById(session.pendingPointIds[0]);
+  const p2 = getPointById(session.pendingPointIds[1]);
+  if (!p1 || !p2) {
+    boardController.clearPreview();
+    return true;
+  }
+  boardController.showPreviewArc3Pt(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords);
+  return true;
+}
+
+function updateArcCSEPreview(cursorCoords) {
+  if (session.currentMode !== ToolMode.ARC_CSE) {
+    return false;
+  }
+  if (session.pendingPointIds.length < 1) {
+    boardController.clearPreview();
+    return true;
+  }
+  const center = getPointById(session.pendingPointIds[0]);
+  if (!center) {
+    boardController.clearPreview();
+    return true;
+  }
+  if (session.pendingPointIds.length < 2) {
+    boardController.showPreviewCircle(pointObjectFromCoords(center), cursorCoords);
+    return true;
+  }
+  const start = getPointById(session.pendingPointIds[1]);
+  if (!start) {
+    boardController.clearPreview();
+    return true;
+  }
+  const r = Math.hypot(start.x - center.x, start.y - center.y);
+  const angle = Math.atan2(cursorCoords.y - center.y, cursorCoords.x - center.x);
+  const snappedEnd = { x: center.x + r * Math.cos(angle), y: center.y + r * Math.sin(angle) };
+  const swap = arcCSENeedsSwap(center.x, center.y, start.x, start.y, cursorCoords.x, cursorCoords.y);
+  session.arcCSESwapStartEnd = swap;
+  boardController.showPreviewArcCSE(pointObjectFromCoords(center), pointObjectFromCoords(start), snappedEnd, swap);
+  return true;
+}
+
 function updateAnglePreview(cursorCoords) {
   if (session.currentMode !== ToolMode.ANGLE) {
     return false;
@@ -1739,6 +1857,8 @@ function addPointInput(pointId, skipMutation = false) {
       // handled by triangle point-input creation workflow
     } else if (handlePointInputAngleCreate(modeForCreate, pointsForCreate, isRightAngle, style)) {
       // handled by angle point-input creation workflow
+    } else if (handlePointInputArcCreate(modeForCreate, pointsForCreate, style)) {
+      // handled by arc point-input creation workflow
     }
   };
 
@@ -1784,6 +1904,23 @@ function handleBoardClick(coords, evt) {
 
   if (handleAngleModeBoardClick()) {
     return;
+  }
+
+  // For ARC_CSE 3rd click: snap end point to circle radius from center
+  if (session.currentMode === ToolMode.ARC_CSE && session.pendingPointIds.length === 2) {
+    const center = getPointById(session.pendingPointIds[0]);
+    const start = getPointById(session.pendingPointIds[1]);
+    if (center && start) {
+      const r = Math.hypot(start.x - center.x, start.y - center.y);
+      const angle = Math.atan2(snappedCoords.y - center.y, snappedCoords.x - center.x);
+      const snapped = { x: center.x + r * Math.cos(angle), y: center.y + r * Math.sin(angle) };
+      session.arcCSESwapStartEnd = arcCSENeedsSwap(center.x, center.y, start.x, start.y, snappedCoords.x, snappedCoords.y);
+      runMutation("create-inline-point", () => {
+        const ptId = maybeCreatePoint(snapped);
+        addPointInput(ptId, true);
+      });
+      return;
+    }
   }
 
   if (handlePointCollectionBoardClick(snappedCoords, evt)) {
@@ -1977,6 +2114,15 @@ const { handlePointInputAngleCreate } = createPointInputAngleCreateWorkflow({
   store,
 });
 
+const { handlePointInputArcCreate } = createCircleToolWorkflow({
+  ToolMode,
+  session,
+  addObject,
+  makeId,
+  store,
+  getPointById,
+});
+
 const { handlePointInputTriangleCreate } = createPointInputTriangleCreateWorkflow({
   ToolMode,
   session,
@@ -2081,10 +2227,52 @@ const { handleBoardMove } = createBoardMovePreviewWorkflow({
   updateCirclePreview,
   updateAnglePreview,
   updateTrianglePreview,
+  updateArc3PtPreview,
+  updateArcCSEPreview,
 });
 
 function handleObjectMove(id, type, pos, options = {}) {
   const transient = !!options?.transient;
+
+  if (type === "inscribed-polygon") {
+    const polyObj = getObjectById(id);
+    if (!polyObj || polyObj.type !== "inscribed-polygon") return;
+    if (transient) {
+      ensureTransientSnapshot();
+      polyObj.handleAngles = pos.handleAngles;
+      // Sync ghost stub positions from live JSXGraph elements
+      for (const vid of (polyObj.vertexIds || [])) {
+        const el = boardController.getElement(vid);
+        const stub = getObjectById(vid);
+        if (el && stub) { stub.x = el.X(); stub.y = el.Y(); }
+      }
+      for (const hid of (polyObj.handleIds || [])) {
+        const el = boardController.getElement(hid);
+        const stub = getObjectById(hid);
+        if (el && stub) { stub.x = el.X(); stub.y = el.Y(); }
+      }
+    } else {
+      commitTransientSnapshotIfPresent();
+    }
+    return;
+  }
+
+  if (type === "arcTick") {
+    const ann = store.doc.annotations.find((a) => a.id === id);
+    if (!ann) return;
+    if (options?.transient) {
+      ensureTransientSnapshot(id);
+      return;
+    }
+    if (options?.commit) {
+      ann.tickLen = pos.tickLen;
+      if (!commitTransientSnapshotIfPresent(id, "arc-tick-resize")) {
+        renderCurrentDoc();
+      }
+    }
+    return;
+  }
+
   if (handleObjectMoveAngle(id, type, pos, transient)) {
     return;
   }
@@ -2149,6 +2337,17 @@ function removeWithDependencies(selectedSet) {
     changed = false;
     for (const obj of [...store.doc.objects]) {
       if (selectedSet.has(obj.id)) {
+        // Cascade down: deleting a polygon also deletes its ghost vertex/handle stubs
+        if (obj.type === "inscribed-polygon") {
+          for (const vid of [...(obj.vertexIds || []), ...(obj.handleIds || [])]) {
+            if (!selectedSet.has(vid)) { selectedSet.add(vid); changed = true; }
+          }
+        }
+        // Cascade up: deleting a ghost vertex also deletes its parent polygon
+        if (obj.ghostVertex && obj.polygonId && !selectedSet.has(obj.polygonId)) {
+          selectedSet.add(obj.polygonId);
+          changed = true;
+        }
         continue;
       }
       if (obj.pointIds && obj.pointIds.some((pid) => selectedSet.has(pid))) {
@@ -2315,18 +2514,26 @@ function toggleLineArrowsVisibility() {
 function buildPointMap() {
   const map = new Map();
   const polygonControlIds = regularPolygonControlPointIds();
+  const arcControlIds = arc3ptControlPointIds();
   for (const obj of store.doc.objects) {
     if (obj.type !== "point") {
       continue;
     }
+    if (obj.ghostVertex) {
+      continue; // populated from inscribed-polygon rendering in renderDoc
+    }
     const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint";
     const isPolygonControlPoint = polygonControlIds.has(obj.id);
+    const isArcControlPoint = arcControlIds.has(obj.id);
     const pointHighlightColor = session.exportPointHighlightsBlack
       ? "#000000"
       : isPolygonControlPoint
         ? defaultRegularPolygonControlPointColor()
-        : obj.style?.strokeColor;
-    const hidePointObject = obj.hidden || !session.showPointObjects;
+        : isArcControlPoint
+          ? "#e57373"
+          : obj.style?.strokeColor;
+    const hidePointObject = obj.hidden || !session.showPointObjects ||
+      (session.exportPointHighlightsBlack && isArcControlPoint);
     const pt = hidePointObject
       ? boardController.createSupportPoint(obj.x, obj.y)
       : boardController.createPoint(obj.id, obj.x, obj.y, {
@@ -3133,6 +3340,16 @@ function regularPolygonVertexPoint(pointA, pointB, sideCount, vertexIndex) {
   return vertices?.[index] || null;
 }
 
+function arc3ptControlPointIds() {
+  const ids = new Set();
+  for (const obj of store.doc.objects) {
+    if (obj.type === "arc-3pt" && obj.pointIds?.length >= 3) {
+      ids.add(obj.pointIds[1]);
+    }
+  }
+  return ids;
+}
+
 function regularPolygonControlPointIds() {
   const ids = new Set();
   for (const obj of store.doc.objects) {
@@ -3455,6 +3672,211 @@ function launchParallelOrPerpendicular(kind, buttonId = null) {
   });
 }
 
+// ── Inscribed / Circumscribed Circles ───────────────────────────────────────
+
+function addInscribedCircle(withCenter, options = {}) {
+  const quiet = !!options.quiet;
+  const pointIds = findTriangleFromSelection();
+  if (!pointIds) {
+    if (!quiet) {
+      alert("Select 3 triangle vertices or the 3 sides first.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+  runMutation(withCenter ? "inscribed-circle-center" : "inscribed-circle", () => {
+    addObject({
+      id: makeId("ic"),
+      type: "inscribed-circle",
+      pointIds,
+      showCenter: withCenter,
+      style: defaultStyle(),
+    });
+    store.clearSelection();
+  });
+  return true;
+}
+
+function launchInscribedCircle(withCenter, buttonId) {
+  if (addInscribedCircle(withCenter, { quiet: true })) return;
+  const label = withCenter ? "Inscribed + Incenter" : "Inscribed";
+  startConstructionSelectionSession({
+    kind: `inscribed-circle-${withCenter ? "center" : "plain"}`,
+    label,
+    buttonId,
+    instructions: "Select 3 triangle vertices or the 3 sides.",
+    tryCreate: () => addInscribedCircle(withCenter, { quiet: true }),
+  });
+}
+
+function addCircumscribedCircle(withCenter, options = {}) {
+  const quiet = !!options.quiet;
+  const pointIds = findTriangleFromSelection();
+  if (!pointIds) {
+    if (!quiet) {
+      alert("Select 3 triangle vertices or the 3 sides first.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+  runMutation(withCenter ? "circumscribed-circle-center" : "circumscribed-circle", () => {
+    addObject({
+      id: makeId("cc"),
+      type: "circumscribed-circle",
+      pointIds,
+      showCenter: withCenter,
+      style: defaultStyle(),
+    });
+    store.clearSelection();
+  });
+  return true;
+}
+
+function launchCircumscribedCircle(withCenter, buttonId) {
+  if (addCircumscribedCircle(withCenter, { quiet: true })) return;
+  const label = withCenter ? "Circumscribed + Circumcenter" : "Circumscribed";
+  startConstructionSelectionSession({
+    kind: `circumscribed-circle-${withCenter ? "center" : "plain"}`,
+    label,
+    buttonId,
+    instructions: "Select 3 triangle vertices or the 3 sides.",
+    tryCreate: () => addCircumscribedCircle(withCenter, { quiet: true }),
+  });
+}
+
+// ── Inscribed Polygon ────────────────────────────────────────────────────────
+
+function computeInscribedPolygonVertex(cx, cy, cr, t1, t2) {
+  const det = Math.sin(t2 - t1);
+  if (Math.abs(det) < 1e-10) {
+    return { x: cx + cr * (Math.cos(t1) + Math.cos(t2)) / 2, y: cy + cr * (Math.sin(t1) + Math.sin(t2)) / 2 };
+  }
+  const r1 = cr + Math.cos(t1) * cx + Math.sin(t1) * cy;
+  const r2 = cr + Math.cos(t2) * cx + Math.sin(t2) * cy;
+  return {
+    x: (r1 * Math.sin(t2) - r2 * Math.sin(t1)) / det,
+    y: (r2 * Math.cos(t1) - r1 * Math.cos(t2)) / det,
+  };
+}
+
+function addInscribedPolygon(n, options = {}) {
+  const quiet = !!options.quiet;
+  const selectedCircles = selectedOfTypes(["circle"]);
+  if (selectedCircles.length !== 1) {
+    if (!quiet) {
+      alert("Select exactly one circle first.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+  const circleId = selectedCircles[0];
+  const sides = Math.max(3, Math.round(n));
+  const TWO_PI = 2 * Math.PI;
+  const handleAngles = Array.from({ length: sides }, (_, i) => (i * TWO_PI) / sides);
+  const polyId = makeId("ip");
+  const vertexIds = Array.from({ length: sides }, () => makeId("ipv"));
+  const handleIds = Array.from({ length: sides }, () => makeId("iph"));
+  const circleObj = getObjectById(circleId);
+  const centerPt = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
+  const throughPt = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
+  const cx = centerPt?.x ?? 0, cy = centerPt?.y ?? 0;
+  const cr = centerPt && throughPt ? Math.hypot(throughPt.x - cx, throughPt.y - cy) : 1;
+  runMutation(`inscribed-polygon-${sides}`, () => {
+    addObject({
+      id: polyId,
+      type: "inscribed-polygon",
+      circleId,
+      n: sides,
+      handleAngles,
+      vertexIds,
+      handleIds,
+      style: defaultStyle(),
+    });
+    for (let i = 0; i < sides; i++) {
+      const { x, y } = computeInscribedPolygonVertex(cx, cy, cr, handleAngles[i], handleAngles[(i + 1) % sides]);
+      addObject({
+        id: vertexIds[i],
+        type: "point",
+        x, y,
+        ghostVertex: true,
+        polygonId: polyId,
+        style: { ...defaultStyle(), strokeColor: "#60a5fa" },
+      });
+      const hx = cx + cr * Math.cos(handleAngles[i]);
+      const hy = cy + cr * Math.sin(handleAngles[i]);
+      addObject({
+        id: handleIds[i],
+        type: "point",
+        x: hx, y: hy,
+        ghostVertex: true,
+        polygonId: polyId,
+        style: { ...defaultStyle(), strokeColor: "#e57373" },
+      });
+    }
+    store.clearSelection();
+  });
+  return true;
+}
+
+function launchInscribedPolygon(n, buttonId) {
+  if (addInscribedPolygon(n, { quiet: true })) return;
+  const label = n === 4 ? "Circle Inscribed in Quad" : `Circle Inscribed in ${n}-gon`;
+  startConstructionSelectionSession({
+    kind: `inscribed-polygon-${n}`,
+    label,
+    buttonId,
+    instructions: "Select a circle.",
+    tryCreate: () => addInscribedPolygon(n, { quiet: true }),
+  });
+}
+
+function launchInscribedQuad(buttonId) {
+  launchInscribedPolygon(4, buttonId);
+}
+
+async function launchInscribedNGon(buttonId) {
+  const n = await openNGonModal();
+  if (n === null) return;
+  launchInscribedPolygon(n, buttonId);
+}
+
+// ── Arc Ticks ────────────────────────────────────────────────────────────────
+
+function addArcTicks(tickCount, options = {}) {
+  const quiet = !!options.quiet;
+  const selectedArcs = selectedOfTypes(["arc-3pt", "arc-cse"]);
+  if (!selectedArcs.length) {
+    if (!quiet) setMode(ToolMode.SELECT);
+    return false;
+  }
+  const groupId = makeId("atg");
+  runMutation(`arc-tick-${tickCount}`, () => {
+    for (const arcId of selectedArcs) {
+      addAnnotation({
+        id: makeId("atk"),
+        type: "arcTick",
+        groupId,
+        arcId,
+        tickCount,
+        style: defaultStyle(),
+      });
+    }
+    store.clearSelection();
+  });
+  return true;
+}
+
+function launchArcTicks(tickCount, buttonId) {
+  if (addArcTicks(tickCount, { quiet: true })) return;
+  startConstructionSelectionSession({
+    kind: `arc-ticks-${tickCount}`,
+    label: `Arc Ticks (${tickCount})`,
+    buttonId,
+    instructions: "Select one or more arcs.",
+    tryCreate: () => addArcTicks(tickCount, { quiet: true }),
+  });
+}
+
 function launchMidpoint(tickCount = 0, buttonId = null) {
   if (addMidpoint(tickCount, { quiet: true })) {
     return;
@@ -3732,6 +4154,28 @@ async function editLabelText(labelId) {
   });
 }
 
+function closeNGonModal(n = null) {
+  if (!nGonModalEl || !nGonModalResolve) return;
+  nGonModalEl.hidden = true;
+  const resolve = nGonModalResolve;
+  nGonModalResolve = null;
+  resolve(n);
+}
+
+function openNGonModal() {
+  if (!nGonModalEl || !nGonModalInputEl) return Promise.resolve(null);
+  if (nGonModalResolve) closeNGonModal(null);
+  nGonModalInputEl.value = "5";
+  nGonModalEl.hidden = false;
+  queueMicrotask(() => {
+    nGonModalInputEl.focus();
+    nGonModalInputEl.select();
+  });
+  return new Promise((resolve) => {
+    nGonModalResolve = resolve;
+  });
+}
+
 function closeLabelModal(value = "") {
   if (!labelModalEl || !labelModalResolve) {
     return;
@@ -3935,6 +4379,11 @@ wireUi({
   openDocFromFile,
   applyStyleToSelection,
   runMutation,
+  launchInscribedCircle,
+  launchCircumscribedCircle,
+  launchInscribedQuad,
+  launchInscribedNGon,
+  launchArcTicks,
 });
 startMarqueeSelection();
 updateModeUi();
@@ -3969,9 +4418,30 @@ if (labelModalDialogEl) {
   });
 }
 
+if (nGonModalBackdropEl) {
+  nGonModalBackdropEl.addEventListener("click", () => closeNGonModal(null));
+}
+
+if (nGonModalCancelEl) {
+  nGonModalCancelEl.addEventListener("click", () => closeNGonModal(null));
+}
+
+if (nGonModalDialogEl) {
+  nGonModalDialogEl.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    const raw = Number(nGonModalInputEl?.value);
+    const n = Number.isInteger(raw) && raw >= 3 && raw <= 20 ? raw : null;
+    closeNGonModal(n);
+  });
+}
+
 document.addEventListener("keydown", (evt) => {
   if (evt.key === "Escape" && labelModalResolve) {
     evt.preventDefault();
     closeLabelModal("");
+  }
+  if (evt.key === "Escape" && nGonModalResolve) {
+    evt.preventDefault();
+    closeNGonModal(null);
   }
 });

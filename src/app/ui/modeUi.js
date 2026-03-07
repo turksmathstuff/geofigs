@@ -26,6 +26,12 @@ export function createModeUi({
     if (mode === ToolMode.LABEL) {
       return "Auto Label";
     }
+    if (mode === ToolMode.ARC_3PT) {
+      return "Arc: 3 Pts On";
+    }
+    if (mode === ToolMode.ARC_CSE) {
+      return "Arc: Ctr–Start–End";
+    }
     return mode.charAt(0).toUpperCase() + mode.slice(1);
   }
 
@@ -53,6 +59,15 @@ export function createModeUi({
     }
     if ([ToolMode.SEGMENT, ToolMode.LINE, ToolMode.RAY, ToolMode.TRIANGLE].includes(session.currentMode)) {
       return "Hold Shift to move horizontal/vertical.";
+    }
+    if (session.currentMode === ToolMode.ARC_3PT) {
+      return "Click start point, a point on the arc, then end point.";
+    }
+    if (session.currentMode === ToolMode.ARC_CSE) {
+      const n = session.pendingPointIds?.length ?? 0;
+      if (n === 0) return "Click center point.";
+      if (n === 1) return "Click start point (sets radius).";
+      return "Move toward minor or major arc, then click to set end.";
     }
     return "";
   }

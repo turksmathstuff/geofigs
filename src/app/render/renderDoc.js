@@ -87,6 +87,48 @@ export function createRenderDoc(ctx) {
       } else if (obj.type === "label") {
         syncFollowLabelPosition(obj);
         boardController.createText(obj.id, obj.x, obj.y, normalizeLabelText(obj.text), style);
+      } else if (obj.type === "arc-3pt") {
+        const p1 = points.get(obj.pointIds[0]);
+        const p2 = points.get(obj.pointIds[1]);
+        const p3 = points.get(obj.pointIds[2]);
+        if (p1 && p2 && p3) {
+          boardController.createArc3Pt(obj.id, p1, p2, p3, obj.swapStartEnd, style);
+        }
+      } else if (obj.type === "arc-cse") {
+        const center = points.get(obj.pointIds[0]);
+        const start = points.get(obj.pointIds[1]);
+        const end = points.get(obj.pointIds[2]);
+        if (center && start && end) {
+          boardController.createArcCSE(obj.id, center, start, end, obj.swapStartEnd, style);
+        }
+      } else if (obj.type === "inscribed-circle") {
+        const p1 = points.get(obj.pointIds[0]);
+        const p2 = points.get(obj.pointIds[1]);
+        const p3 = points.get(obj.pointIds[2]);
+        if (p1 && p2 && p3) {
+          boardController.createInscribedCircle(obj.id, p1, p2, p3, !!obj.showCenter, style);
+        }
+      } else if (obj.type === "circumscribed-circle") {
+        const p1 = points.get(obj.pointIds[0]);
+        const p2 = points.get(obj.pointIds[1]);
+        const p3 = points.get(obj.pointIds[2]);
+        if (p1 && p2 && p3) {
+          boardController.createCircumscribedCircle(obj.id, p1, p2, p3, !!obj.showCenter, style);
+        }
+      } else if (obj.type === "inscribed-polygon") {
+        const circleEl = boardController.getElement(obj.circleId);
+        if (circleEl) {
+          boardController.createInscribedPolygon(
+            obj.id, circleEl, obj.n, obj.handleAngles || [], style,
+            { showHandles: !session.exportPointHighlightsBlack },
+            obj.vertexIds || [],
+            obj.handleIds || []
+          );
+          for (const gid of [...(obj.vertexIds || []), ...(obj.handleIds || [])]) {
+            const el = boardController.getElement(gid);
+            if (el) points.set(gid, el);
+          }
+        }
       }
     }
 
@@ -155,6 +197,13 @@ export function createRenderDoc(ctx) {
               }
             }
           }
+        }
+      } else if (ann.type === "arcTick") {
+        const arcEl = boardController.getElement(ann.arcId);
+        if (arcEl) {
+          boardController.createArcTickMark(ann.id, arcEl, ann.tickCount, style, ann.tickLen,
+            { showHandle: !session.exportPointHighlightsBlack }
+          );
         }
       }
     }
