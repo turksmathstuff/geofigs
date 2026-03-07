@@ -282,6 +282,11 @@ function bindExportActions({ doc, downloadSvg, downloadPng, previewExport, downl
   doc.getElementById("closeExportPreview").addEventListener("click", closePreview);
   doc.getElementById("cancelExportPreview").addEventListener("click", closePreview);
   doc.getElementById("exportPreviewBackdrop").addEventListener("click", closePreview);
+  doc.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape" && !doc.getElementById("exportPreviewModal").hasAttribute("hidden")) {
+      closePreview();
+    }
+  });
 }
 
 function bindFileActions({ doc, saveDoc, openDocFromFile }) {

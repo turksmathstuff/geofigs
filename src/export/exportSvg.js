@@ -118,6 +118,9 @@ export function exportSVG(svgString, options = {}) {
   const parser = new DOMParser();
   const xml = parser.parseFromString(svgString, "image/svg+xml");
   const svg = xml.documentElement;
+  for (const el of svg.querySelectorAll("[data-arc-glow], [data-ghost-point]")) {
+    el.remove();
+  }
   const fallbackBounds = getFallbackBounds(svg, options);
   const baseBounds = options.tight
     ? computeTightBounds(new XMLSerializer().serializeToString(svg), fallbackBounds)

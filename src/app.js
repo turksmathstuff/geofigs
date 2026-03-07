@@ -76,6 +76,11 @@ const {
   labelModalDialogEl,
   labelModalInputEl,
   labelModalCancelEl,
+  nGonModalEl,
+  nGonModalBackdropEl,
+  nGonModalDialogEl,
+  nGonModalInputEl,
+  nGonModalCancelEl,
   autoLabelBtn,
   boardEl,
   transformPanelEl,
@@ -94,6 +99,7 @@ const {
   angleMarkPresetButtons,
 } = dom;
 let labelModalResolve = null;
+let nGonModalResolve = null;
 const constructionSelectionButtonIds = [
   "makeMidpoint",
   "makeMidpointTick1",
@@ -298,7 +304,12 @@ function getObjectById(id) {
 
 function getPointById(id) {
   const o = getObjectById(id);
-  return o && o.type === "point" ? o : null;
+  if (!o || o.type !== "point") return null;
+  if (o.ghostVertex) {
+    const el = boardController.getElement(id);
+    if (el) return { ...o, x: el.X(), y: el.Y() };
+  }
+  return o;
 }
 
 function findNearbyVisiblePoint(coords, threshold = 0.55) {
@@ -311,7 +322,12 @@ function findNearbyVisiblePoint(coords, threshold = 0.55) {
     if (obj.type !== "point" || obj.hidden) {
       continue;
     }
-    const d = distance(coords, obj);
+    let px = obj.x, py = obj.y;
+    if (obj.ghostVertex) {
+      const el = boardController.getElement(obj.id);
+      if (el) { px = el.X(); py = el.Y(); }
+    }
+    const d = Math.hypot(coords.x - px, coords.y - py);
     if (d < threshold && d < bestDist) {
       best = obj;
       bestDist = d;
@@ -2224,6 +2240,17 @@ function handleObjectMove(id, type, pos, options = {}) {
     if (transient) {
       ensureTransientSnapshot();
       polyObj.handleAngles = pos.handleAngles;
+      // Sync ghost stub positions from live JSXGraph elements
+      for (const vid of (polyObj.vertexIds || [])) {
+        const el = boardController.getElement(vid);
+        const stub = getObjectById(vid);
+        if (el && stub) { stub.x = el.X(); stub.y = el.Y(); }
+      }
+      for (const hid of (polyObj.handleIds || [])) {
+        const el = boardController.getElement(hid);
+        const stub = getObjectById(hid);
+        if (el && stub) { stub.x = el.X(); stub.y = el.Y(); }
+      }
     } else {
       commitTransientSnapshotIfPresent();
     }
@@ -2310,6 +2337,17 @@ function removeWithDependencies(selectedSet) {
     changed = false;
     for (const obj of [...store.doc.objects]) {
       if (selectedSet.has(obj.id)) {
+        // Cascade down: deleting a polygon also deletes its ghost vertex/handle stubs
+        if (obj.type === "inscribed-polygon") {
+          for (const vid of [...(obj.vertexIds || []), ...(obj.handleIds || [])]) {
+            if (!selectedSet.has(vid)) { selectedSet.add(vid); changed = true; }
+          }
+        }
+        // Cascade up: deleting a ghost vertex also deletes its parent polygon
+        if (obj.ghostVertex && obj.polygonId && !selectedSet.has(obj.polygonId)) {
+          selectedSet.add(obj.polygonId);
+          changed = true;
+        }
         continue;
       }
       if (obj.pointIds && obj.pointIds.some((pid) => selectedSet.has(pid))) {
@@ -2480,6 +2518,9 @@ function buildPointMap() {
   for (const obj of store.doc.objects) {
     if (obj.type !== "point") {
       continue;
+    }
+    if (obj.ghostVertex) {
+      continue; // populated from inscribed-polygon rendering in renderDoc
     }
     const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint";
     const isPolygonControlPoint = polygonControlIds.has(obj.id);
@@ -3705,6 +3746,19 @@ function launchCircumscribedCircle(withCenter, buttonId) {
 
 // ── Inscribed Polygon ────────────────────────────────────────────────────────
 
+function computeInscribedPolygonVertex(cx, cy, cr, t1, t2) {
+  const det = Math.sin(t2 - t1);
+  if (Math.abs(det) < 1e-10) {
+    return { x: cx + cr * (Math.cos(t1) + Math.cos(t2)) / 2, y: cy + cr * (Math.sin(t1) + Math.sin(t2)) / 2 };
+  }
+  const r1 = cr + Math.cos(t1) * cx + Math.sin(t1) * cy;
+  const r2 = cr + Math.cos(t2) * cx + Math.sin(t2) * cy;
+  return {
+    x: (r1 * Math.sin(t2) - r2 * Math.sin(t1)) / det,
+    y: (r2 * Math.cos(t1) - r1 * Math.cos(t2)) / det,
+  };
+}
+
 function addInscribedPolygon(n, options = {}) {
   const quiet = !!options.quiet;
   const selectedCircles = selectedOfTypes(["circle"]);
@@ -3719,15 +3773,46 @@ function addInscribedPolygon(n, options = {}) {
   const sides = Math.max(3, Math.round(n));
   const TWO_PI = 2 * Math.PI;
   const handleAngles = Array.from({ length: sides }, (_, i) => (i * TWO_PI) / sides);
+  const polyId = makeId("ip");
+  const vertexIds = Array.from({ length: sides }, () => makeId("ipv"));
+  const handleIds = Array.from({ length: sides }, () => makeId("iph"));
+  const circleObj = getObjectById(circleId);
+  const centerPt = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
+  const throughPt = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
+  const cx = centerPt?.x ?? 0, cy = centerPt?.y ?? 0;
+  const cr = centerPt && throughPt ? Math.hypot(throughPt.x - cx, throughPt.y - cy) : 1;
   runMutation(`inscribed-polygon-${sides}`, () => {
     addObject({
-      id: makeId("ip"),
+      id: polyId,
       type: "inscribed-polygon",
       circleId,
       n: sides,
       handleAngles,
+      vertexIds,
+      handleIds,
       style: defaultStyle(),
     });
+    for (let i = 0; i < sides; i++) {
+      const { x, y } = computeInscribedPolygonVertex(cx, cy, cr, handleAngles[i], handleAngles[(i + 1) % sides]);
+      addObject({
+        id: vertexIds[i],
+        type: "point",
+        x, y,
+        ghostVertex: true,
+        polygonId: polyId,
+        style: { ...defaultStyle(), strokeColor: "#60a5fa" },
+      });
+      const hx = cx + cr * Math.cos(handleAngles[i]);
+      const hy = cy + cr * Math.sin(handleAngles[i]);
+      addObject({
+        id: handleIds[i],
+        type: "point",
+        x: hx, y: hy,
+        ghostVertex: true,
+        polygonId: polyId,
+        style: { ...defaultStyle(), strokeColor: "#e57373" },
+      });
+    }
     store.clearSelection();
   });
   return true;
@@ -3735,7 +3820,7 @@ function addInscribedPolygon(n, options = {}) {
 
 function launchInscribedPolygon(n, buttonId) {
   if (addInscribedPolygon(n, { quiet: true })) return;
-  const label = n === 4 ? "Inscribed Quad" : `Inscribed ${n}-gon`;
+  const label = n === 4 ? "Circle Inscribed in Quad" : `Circle Inscribed in ${n}-gon`;
   startConstructionSelectionSession({
     kind: `inscribed-polygon-${n}`,
     label,
@@ -3749,9 +3834,9 @@ function launchInscribedQuad(buttonId) {
   launchInscribedPolygon(4, buttonId);
 }
 
-function launchInscribedNGon(buttonId) {
-  const input = document.getElementById("nGonInput");
-  const n = input ? Math.max(3, Math.min(20, Number(input.value) || 5)) : 5;
+async function launchInscribedNGon(buttonId) {
+  const n = await openNGonModal();
+  if (n === null) return;
   launchInscribedPolygon(n, buttonId);
 }
 
@@ -4069,6 +4154,28 @@ async function editLabelText(labelId) {
   });
 }
 
+function closeNGonModal(n = null) {
+  if (!nGonModalEl || !nGonModalResolve) return;
+  nGonModalEl.hidden = true;
+  const resolve = nGonModalResolve;
+  nGonModalResolve = null;
+  resolve(n);
+}
+
+function openNGonModal() {
+  if (!nGonModalEl || !nGonModalInputEl) return Promise.resolve(null);
+  if (nGonModalResolve) closeNGonModal(null);
+  nGonModalInputEl.value = "5";
+  nGonModalEl.hidden = false;
+  queueMicrotask(() => {
+    nGonModalInputEl.focus();
+    nGonModalInputEl.select();
+  });
+  return new Promise((resolve) => {
+    nGonModalResolve = resolve;
+  });
+}
+
 function closeLabelModal(value = "") {
   if (!labelModalEl || !labelModalResolve) {
     return;
@@ -4311,9 +4418,30 @@ if (labelModalDialogEl) {
   });
 }
 
+if (nGonModalBackdropEl) {
+  nGonModalBackdropEl.addEventListener("click", () => closeNGonModal(null));
+}
+
+if (nGonModalCancelEl) {
+  nGonModalCancelEl.addEventListener("click", () => closeNGonModal(null));
+}
+
+if (nGonModalDialogEl) {
+  nGonModalDialogEl.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    const raw = Number(nGonModalInputEl?.value);
+    const n = Number.isInteger(raw) && raw >= 3 && raw <= 20 ? raw : null;
+    closeNGonModal(n);
+  });
+}
+
 document.addEventListener("keydown", (evt) => {
   if (evt.key === "Escape" && labelModalResolve) {
     evt.preventDefault();
     closeLabelModal("");
+  }
+  if (evt.key === "Escape" && nGonModalResolve) {
+    evt.preventDefault();
+    closeNGonModal(null);
   }
 });

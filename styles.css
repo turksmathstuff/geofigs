@@ -179,27 +179,6 @@ h2 {
   grid-column: span 2;
 }
 
-.ngon-row {
-  grid-column: span 2;
-  display: flex;
-  gap: 0.35rem;
-  align-items: center;
-}
-
-.ngon-row button {
-  flex: 1;
-}
-
-.ngon-input {
-  width: 3.2rem;
-  padding: 0.4rem 0.3rem;
-  border: 1px solid #bac7d6;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  text-align: center;
-  background: #f9fbfd;
-  color: var(--text);
-}
 
 button,
 .file-label {

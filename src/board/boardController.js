@@ -1,3 +1,5 @@
+const ARC_GLOW_COLORS = ["#93c5fd", "#fdba74", "#c4b5fd", "#f9a8d4", "#6ee7b7"];
+
 export class BoardController {
   constructor(containerId, onBoardClick, onObjectClick, onBoardMove, onObjectMove, onObjectDoubleClick = null) {
     this.containerId = containerId;
@@ -10,6 +12,7 @@ export class BoardController {
     this.elements = new Map();
     this.suppressNextBoardDown = false;
     this.previewElements = [];
+    this.arcGlowIndex = 0;
   }
 
   init() {
@@ -61,6 +64,7 @@ export class BoardController {
     this.board.removeObject(this.board.objectsList.slice());
     this.elements.clear();
     this.previewElements = [];
+    this.arcGlowIndex = 0;
     this.board.fullUpdate();
   }
 
@@ -1397,6 +1401,20 @@ export class BoardController {
       }
     );
     const [from, to] = swapStartEnd ? [p3, p1] : [p1, p3];
+    const glowColor = ARC_GLOW_COLORS[this.arcGlowIndex % ARC_GLOW_COLORS.length];
+    this.arcGlowIndex += 1;
+    const glowArc3pt = this.board.create("arc", [center, from, to], {
+      strokeColor: glowColor,
+      strokeWidth: (style.strokeWidth || 2) + 12,
+      strokeOpacity: 0.4,
+      dash: 0,
+      fillOpacity: 0,
+      highlight: false,
+      fixed: true,
+      withLabel: false,
+      name: "",
+    });
+    if (glowArc3pt.rendNode) glowArc3pt.rendNode.setAttribute("data-arc-glow", "true");
     const arc = this.board.create("arc", [center, from, to], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
@@ -1409,6 +1427,20 @@ export class BoardController {
 
   createArcCSE(id, center, start, end, swapStartEnd, style = {}) {
     const [from, to] = swapStartEnd ? [end, start] : [start, end];
+    const glowColor = ARC_GLOW_COLORS[this.arcGlowIndex % ARC_GLOW_COLORS.length];
+    this.arcGlowIndex += 1;
+    const glowArcCSE = this.board.create("arc", [center, from, to], {
+      strokeColor: glowColor,
+      strokeWidth: (style.strokeWidth || 2) + 12,
+      strokeOpacity: 0.4,
+      dash: 0,
+      fillOpacity: 0,
+      highlight: false,
+      fixed: true,
+      withLabel: false,
+      name: "",
+    });
+    if (glowArcCSE.rendNode) glowArcCSE.rendNode.setAttribute("data-arc-glow", "true");
     const arc = this.board.create("arc", [center, from, to], {
       strokeColor: style.strokeColor || "#111",
       strokeWidth: style.strokeWidth || 2,
@@ -1504,7 +1536,7 @@ export class BoardController {
 
   // ── Inscribed Polygon ─────────────────────────────────────────────────────
 
-  createInscribedPolygon(id, circleHit, n, handleAngles, style = {}, options = {}) {
+  createInscribedPolygon(id, circleHit, n, handleAngles, style = {}, options = {}, vertexIds = [], handleIds = []) {
     const showHandles = options.showHandles !== false;
     const jxgCircle = circleHit.el || circleHit;
 
@@ -1515,8 +1547,8 @@ export class BoardController {
       jxgCircle.center.Y() - jxgCircle.point2.Y()
     );
 
-    const handles = handleAngles.map((angle) => {
-      return this.board.create("glider", [
+    const handles = handleAngles.map((angle, i) => {
+      const handle = this.board.create("glider", [
         getCx() + getCr() * Math.cos(angle),
         getCy() + getCr() * Math.sin(angle),
         jxgCircle,
@@ -1529,32 +1561,50 @@ export class BoardController {
         visible: showHandles,
         highlight: false,
       });
+      const hid = handleIds[i];
+      if (hid) {
+        if (handle.rendNode) handle.rendNode.setAttribute("data-ghost-point", "true");
+        this.registerElement(hid, "point", handle);
+      }
+      return handle;
     });
 
     const vertices = handles.map((hi, i) => {
       const hj = handles[(i + 1) % n];
-      return this.createFunctionalSupportPoint(
-        () => {
-          const t1 = Math.atan2(hi.Y() - getCy(), hi.X() - getCx());
-          const t2 = Math.atan2(hj.Y() - getCy(), hj.X() - getCx());
-          const det = Math.sin(t2 - t1);
-          if (Math.abs(det) < 1e-10) return (hi.X() + hj.X()) / 2;
-          const r = getCr(), ccx = getCx(), ccy = getCy();
-          const r1 = r + Math.cos(t1) * ccx + Math.sin(t1) * ccy;
-          const r2 = r + Math.cos(t2) * ccx + Math.sin(t2) * ccy;
-          return (r1 * Math.sin(t2) - r2 * Math.sin(t1)) / det;
-        },
-        () => {
-          const t1 = Math.atan2(hi.Y() - getCy(), hi.X() - getCx());
-          const t2 = Math.atan2(hj.Y() - getCy(), hj.X() - getCx());
-          const det = Math.sin(t2 - t1);
-          if (Math.abs(det) < 1e-10) return (hi.Y() + hj.Y()) / 2;
-          const r = getCr(), ccx = getCx(), ccy = getCy();
-          const r1 = r + Math.cos(t1) * ccx + Math.sin(t1) * ccy;
-          const r2 = r + Math.cos(t2) * ccx + Math.sin(t2) * ccy;
-          return (r2 * Math.cos(t1) - r1 * Math.cos(t2)) / det;
-        }
-      );
+      const xFn = () => {
+        const t1 = Math.atan2(hi.Y() - getCy(), hi.X() - getCx());
+        const t2 = Math.atan2(hj.Y() - getCy(), hj.X() - getCx());
+        const det = Math.sin(t2 - t1);
+        if (Math.abs(det) < 1e-10) return (hi.X() + hj.X()) / 2;
+        const r = getCr(), ccx = getCx(), ccy = getCy();
+        const r1 = r + Math.cos(t1) * ccx + Math.sin(t1) * ccy;
+        const r2 = r + Math.cos(t2) * ccx + Math.sin(t2) * ccy;
+        return (r1 * Math.sin(t2) - r2 * Math.sin(t1)) / det;
+      };
+      const yFn = () => {
+        const t1 = Math.atan2(hi.Y() - getCy(), hi.X() - getCx());
+        const t2 = Math.atan2(hj.Y() - getCy(), hj.X() - getCx());
+        const det = Math.sin(t2 - t1);
+        if (Math.abs(det) < 1e-10) return (hi.Y() + hj.Y()) / 2;
+        const r = getCr(), ccx = getCx(), ccy = getCy();
+        const r1 = r + Math.cos(t1) * ccx + Math.sin(t1) * ccy;
+        const r2 = r + Math.cos(t2) * ccx + Math.sin(t2) * ccy;
+        return (r2 * Math.cos(t1) - r1 * Math.cos(t2)) / det;
+      };
+      const vid = vertexIds[i];
+      if (vid) {
+        const vpt = this.board.create("point", [xFn, yFn], {
+          name: "", withLabel: false,
+          size: 4,
+          strokeColor: "#60a5fa",
+          fillColor: "#60a5fa",
+          highlight: false,
+        });
+        if (vpt.rendNode) vpt.rendNode.setAttribute("data-ghost-point", "true");
+        this.registerElement(vid, "point", vpt);
+        return vpt;
+      }
+      return this.createFunctionalSupportPoint(xFn, yFn);
     });
 
     const sides = vertices.map((v, i) => {
