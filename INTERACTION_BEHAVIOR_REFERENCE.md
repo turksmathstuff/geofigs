@@ -268,17 +268,35 @@ General:
 ### Background
 - Affects SVG and PNG export background (`Transparent` or `White`).
 
+### Label Size
+- Scales label font size in exported SVG/PNG (`1×`–`2.5×`, default `1.5×`).
+- Does not affect the live board display.
+- Scaled labels are center-anchored on their original position so they do not drift.
+
+### Point Size
+- Scales point radius in exported SVG/PNG (`0.5×`–`1.5×`, default `1×`).
+- Does not affect the live board display.
+
 ### Tight SVG
 - Affects SVG export bounding behavior (`Download SVG`).
 - PNG export always uses tight SVG internally before rasterizing.
 
+### Preview Export
+- Opens the export preview modal showing the final SVG before downloading.
+- Respects all current export settings (Label Size, Point Size, Background, Tight SVG).
+- **Labels in the preview are draggable**: click and drag any label to reposition it exactly.
+  - A hint line appears below the preview when draggable labels are present.
+  - Drag offsets are applied in SVG coordinate space so positioning is accurate regardless of dialog zoom.
+- Download SVG / Download PNG buttons inside the preview use the repositioned label positions.
+  - Closing and reopening the preview resets all label positions to their computed defaults.
+
 ### Download SVG
-- Exports current rendered board as SVG.
+- Exports current rendered board as SVG (bypasses the preview; label positions are not customized).
 - Hidden items are excluded because they are not rendered.
 - Constrained intersection points export in black by default (temporary export override), even if shown in red on screen.
 
 ### Download PNG
-- Exports current rendered board to PNG using the selected scale and background.
+- Exports current rendered board to PNG using the selected scale and background (bypasses the preview).
 - Hidden items are excluded because they are not rendered.
 - Constrained intersection points export in black by default (same behavior as SVG export).
 
