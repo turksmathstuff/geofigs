@@ -9,7 +9,7 @@ import {
 import { exportSVG, replaceExportLabels, triggerDownload } from "./export/exportSvg.js";
 import { exportPNG, downloadBlob } from "./export/exportPng.js";
 import { initPreviewLabelDrag } from "./export/previewLabelDrag.js";
-import { arc3ptNeedsSwap, arcCSENeedsSwap, computeIncenter, computeInradius, computeCircumcenter } from "./app/geometry/circles.js";
+import { arc3ptNeedsSwap, arcCSENeedsSwap, computeIncenter, computeInradius, computeCircumcenter, computeTangentPoints } from "./app/geometry/circles.js";
 import { createCircleToolWorkflow } from "./app/workflows/circleToolWorkflow.js";
 import { makeId } from "./utils/ids.js";
 import { timestampForFile } from "./utils/time.js";
@@ -138,6 +138,7 @@ const constructionSelectionButtonIds = [
   "makeCircumscribedCircleCenter",
   "makeInscribedQuad",
   "makeInscribedNGon",
+  "makeTangentToCircle",
   "addArcTick1",
   "addArcTick2",
   "addArcTick3",
@@ -208,6 +209,7 @@ function setMode(mode) {
   }
   session.perpendicularBisectorPlacement = null;
   session.constructionSelectionSession = null;
+  session.tangentPickState = null;
   session.currentMode = mode;
   session.pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
@@ -243,6 +245,9 @@ function finishConstructionSelectionSession() {
   if (!session.perpendicularBisectorPlacement) {
     updateModeUi();
     renderCurrentDoc(false);
+    if (session.tangentPickState) {
+      showTangentPickGhosts();
+    }
   }
 }
 
@@ -376,7 +381,8 @@ function applyPointConstraintToDraggedPosition(pointObj, pos) {
     pointObj.constraint.kind === "angleBisectorRay" ||
     pointObj.constraint.kind === "equilateralApex" ||
     pointObj.constraint.kind === "regularPolygonVertex" ||
-    pointObj.constraint.kind === "regularPolygonCenter"
+    pointObj.constraint.kind === "regularPolygonCenter" ||
+    pointObj.constraint.kind === "circleTangentPoint"
   ) {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
   }
@@ -1510,6 +1516,26 @@ function recomputeConstrainedPoints() {
       obj.y = next.y;
       continue;
     }
+    if (obj.constraint.kind === "circleTangentPoint") {
+      const source = getPointById(obj.constraint.sourcePointId);
+      const circleObj = getObjectById(obj.constraint.circleId);
+      const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
+      const through = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
+      if (!source || !center || !through) {
+        continue;
+      }
+      const r = Math.hypot(through.x - center.x, through.y - center.y);
+      const tps = computeTangentPoints(source, center, r);
+      if (!tps) {
+        obj.constraint.invalid = true;
+        continue;
+      }
+      obj.constraint.invalid = false;
+      const tp = tps[obj.constraint.side];
+      obj.x = tp.x;
+      obj.y = tp.y;
+      continue;
+    }
   }
 }
 
@@ -1882,6 +1908,10 @@ function addPointInput(pointId, skipMutation = false) {
 }
 
 function handleBoardClick(coords, evt) {
+  if (session.tangentPickState) {
+    handleTangentPickBoardClick();
+    return;
+  }
   if (handlePerpendicularBisectorPlacementBoardClick(coords, evt)) {
     return;
   }
@@ -1929,6 +1959,14 @@ function handleBoardClick(coords, evt) {
 }
 
 function handleObjectClick(id, type, evt) {
+  if (session.tangentPickState) {
+    const eventType = String(evt?.type || "").toLowerCase();
+    if (eventType.includes("up") || eventType.includes("end")) {
+      handleTangentPickBoardClick();
+    }
+    if (evt?.stopPropagation) evt.stopPropagation();
+    return;
+  }
   const multi = evt.shiftKey || evt.metaKey || evt.ctrlKey;
   const eventType = String(evt?.type || "").toLowerCase();
   const isReleaseEvent = eventType.includes("up") || eventType.includes("end");
@@ -2222,6 +2260,7 @@ const { handleObjectMovePointLabel } = createObjectMovePointLabelWorkflow({
 
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
+  updateTangentPickPreview,
   updatePerpendicularBisectorPreview,
   updateLinearPreview,
   updateCirclePreview,
@@ -2348,6 +2387,25 @@ function removeWithDependencies(selectedSet) {
           selectedSet.add(obj.polygonId);
           changed = true;
         }
+        // Cascade: deleting a tangent segment deletes its tangentPoint endpoints
+        if (obj.type === "segment") {
+          for (const pid of obj.pointIds || []) {
+            const pt = getObjectById(pid);
+            if (pt?.tangentPoint && !selectedSet.has(pid)) {
+              selectedSet.add(pid);
+              changed = true;
+            }
+          }
+        }
+        // Cascade: deleting a tangentPoint deletes its parent segment
+        if (obj.tangentPoint) {
+          for (const other of store.doc.objects) {
+            if (other.type === "segment" && other.pointIds?.includes(obj.id) && !selectedSet.has(other.id)) {
+              selectedSet.add(other.id);
+              changed = true;
+            }
+          }
+        }
         continue;
       }
       if (obj.pointIds && obj.pointIds.some((pid) => selectedSet.has(pid))) {
@@ -2403,6 +2461,13 @@ function removeWithDependencies(selectedSet) {
       if (
         obj.constraint?.kind === "regularPolygonCenter" &&
         obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))
+      ) {
+        selectedSet.add(obj.id);
+        changed = true;
+      }
+      if (
+        obj.constraint?.kind === "circleTangentPoint" &&
+        (selectedSet.has(obj.constraint.sourcePointId) || selectedSet.has(obj.constraint.circleId))
       ) {
         selectedSet.add(obj.id);
         changed = true;
@@ -2522,6 +2587,16 @@ function buildPointMap() {
     if (obj.ghostVertex) {
       continue; // populated from inscribed-polygon rendering in renderDoc
     }
+    if (obj.tangentPoint) {
+      // Hidden by default but registered by id so it can be selected/labeled
+      const pt = boardController.createPoint(obj.id, obj.x, obj.y, {
+        size: 4,
+        visible: false,
+        fixed: true,
+      });
+      map.set(obj.id, pt);
+      continue;
+    }
     const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint";
     const isPolygonControlPoint = polygonControlIds.has(obj.id);
     const isArcControlPoint = arcControlIds.has(obj.id);
@@ -2551,6 +2626,7 @@ function buildPointMap() {
                 obj.constraint?.kind === "midpoint" ||
                 obj.constraint?.kind === "angleBisectorRay" ||
                 obj.constraint?.kind === "equilateralApex" ||
+                obj.constraint?.kind === "circleTangentPoint" ||
                 obj.style?.fixed,
         });
     map.set(obj.id, pt);
@@ -3840,6 +3916,168 @@ async function launchInscribedNGon(buttonId) {
   launchInscribedPolygon(n, buttonId);
 }
 
+// ── Tangent to Circle ─────────────────────────────────────────────────────────
+
+function distanceToSegment(pt, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-12) return Math.hypot(pt.x - a.x, pt.y - a.y);
+  const t = Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / len2));
+  return Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy));
+}
+
+function computeTangentPickPoints(sourcePointId, circleId) {
+  const source = getPointById(sourcePointId);
+  const circleObj = getObjectById(circleId);
+  const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
+  const through = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
+  if (!source || !center || !through) return null;
+  const r = Math.hypot(through.x - center.x, through.y - center.y);
+  return computeTangentPoints(source, center, r);
+}
+
+function showTangentPickGhosts() {
+  const ps = session.tangentPickState;
+  if (!ps) return;
+  const source = getPointById(ps.sourcePointId);
+  const tps = computeTangentPickPoints(ps.sourcePointId, ps.circleId);
+  if (!source || !tps) return;
+  const stagedSides = new Set(ps.staged.map((s) => s.side));
+  boardController.showTangentPickPreview(source, tps[0], tps[1], stagedSides, ps.hoveredSide);
+}
+
+function updateTangentPickPreview(cursorCoords) {
+  const ps = session.tangentPickState;
+  if (!ps) return false;
+  const source = getPointById(ps.sourcePointId);
+  const tps = computeTangentPickPoints(ps.sourcePointId, ps.circleId);
+  if (!source || !tps) return true;
+  const stagedSides = new Set(ps.staged.map((s) => s.side));
+  const HOVER_THRESHOLD = 0.4;
+  let hovered = null;
+  let bestDist = Infinity;
+  for (let i = 0; i < 2; i++) {
+    if (stagedSides.has(i)) continue;
+    const d = distanceToSegment(cursorCoords, source, tps[i]);
+    if (d < HOVER_THRESHOLD && d < bestDist) {
+      bestDist = d;
+      hovered = i;
+    }
+  }
+  ps.hoveredSide = hovered;
+  boardController.showTangentPickPreview(source, tps[0], tps[1], stagedSides, hovered);
+  return true;
+}
+
+function commitStagedTangent(side) {
+  const ps = session.tangentPickState;
+  if (!ps || ps.staged.some((s) => s.side === side)) return;
+  ps.staged.push({ segmentId: makeId("tseg"), tangentPointId: makeId("ttp"), side });
+  showTangentPickGhosts();
+  updateModeUi();
+  if (ps.staged.length === 2) {
+    finalizeTangentPickSession();
+  }
+}
+
+function finalizeTangentPickSession() {
+  const ps = session.tangentPickState;
+  if (!ps) return;
+  const { sourcePointId, circleId, staged } = ps;
+  session.tangentPickState = null;
+  boardController.clearPreview();
+  updateModeUi();
+  if (!staged.length) {
+    renderCurrentDoc();
+    return;
+  }
+  const tps = computeTangentPickPoints(sourcePointId, circleId);
+  if (!tps) {
+    renderCurrentDoc();
+    return;
+  }
+  runMutation("tangent-to-circle", () => {
+    for (const { segmentId, tangentPointId, side } of staged) {
+      const tp = tps[side];
+      addObject({
+        id: tangentPointId,
+        type: "point",
+        x: tp.x,
+        y: tp.y,
+        tangentPoint: true,
+        constraint: {
+          kind: "circleTangentPoint",
+          sourcePointId,
+          circleId,
+          side,
+        },
+        style: defaultStyle(),
+      });
+      addObject({
+        id: segmentId,
+        type: "segment",
+        pointIds: [sourcePointId, tangentPointId],
+        style: defaultStyle(),
+      });
+    }
+    store.clearSelection();
+  });
+}
+
+function handleTangentPickBoardClick() {
+  const ps = session.tangentPickState;
+  if (!ps) return;
+  if (ps.hoveredSide !== null) {
+    commitStagedTangent(ps.hoveredSide);
+  } else {
+    finalizeTangentPickSession();
+  }
+}
+
+function addTangentToCircle(options = {}) {
+  const quiet = !!options.quiet;
+  const selectedPoints = selectedOfTypes(["point"]);
+  const selectedCircles = selectedOfTypes(["circle"]);
+  if (selectedPoints.length !== 1 || selectedCircles.length !== 1) {
+    if (!quiet) {
+      alert("Select exactly one point and one circle.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+  const sourcePointId = selectedPoints[0];
+  const circleId = selectedCircles[0];
+  const tps = computeTangentPickPoints(sourcePointId, circleId);
+  if (!tps) {
+    if (!quiet) {
+      alert("Point must be outside the circle.");
+      setMode(ToolMode.SELECT);
+    }
+    return false;
+  }
+  // finishConstructionSelectionSession will be called by maybeCompleteConstructionSelectionSession
+  // after tryCreate returns true; set pick state now so it's in place for that render pass
+  session.tangentPickState = { sourcePointId, circleId, staged: [], hoveredSide: null };
+  store.clearSelection();
+  return true;
+}
+
+function launchTangentToCircle(buttonId) {
+  if (addTangentToCircle({ quiet: true })) {
+    // Called directly (valid selection already present); show ghosts now
+    showTangentPickGhosts();
+    updateModeUi();
+    return;
+  }
+  startConstructionSelectionSession({
+    kind: "tangent-to-circle",
+    label: "Tangent (Pt→Circle)",
+    buttonId,
+    instructions: "Select exactly one point and one circle.",
+    tryCreate: () => addTangentToCircle({ quiet: true }),
+  });
+}
+
 // ── Arc Ticks ────────────────────────────────────────────────────────────────
 
 function addArcTicks(tickCount, options = {}) {
@@ -4383,6 +4621,7 @@ wireUi({
   launchCircumscribedCircle,
   launchInscribedQuad,
   launchInscribedNGon,
+  launchTangentToCircle,
   launchArcTicks,
 });
 startMarqueeSelection();

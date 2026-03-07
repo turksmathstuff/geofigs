@@ -152,6 +152,39 @@ export class BoardController {
     this.board.update();
   }
 
+  showTangentPickPreview(source, tp0, tp1, stagedSides, hoveredSide) {
+    this.clearPreview();
+    const elements = [];
+    const srcPt = this.board.create("point", [source.x, source.y], {
+      visible: false, fixed: true, name: "", withLabel: false,
+    });
+    elements.push(srcPt);
+    for (let i = 0; i < 2; i++) {
+      const tp = i === 0 ? tp0 : tp1;
+      const isStaged = stagedSides.has(i);
+      const isHovered = hoveredSide === i;
+      const color = isStaged ? "#111" : isHovered ? "#3b82f6" : "#9ca3af";
+      const tPt = this.board.create("point", [tp.x, tp.y], {
+        name: "", withLabel: false,
+        size: isStaged ? 4 : isHovered ? 5 : 3,
+        strokeColor: color, fillColor: color,
+        strokeOpacity: 1, fillOpacity: 1,
+        fixed: true, highlight: false,
+      });
+      elements.push(tPt);
+      const seg = this.board.create("segment", [srcPt, tPt], {
+        strokeColor: color,
+        strokeWidth: isHovered ? 2.5 : 2,
+        dash: isStaged ? 0 : 2,
+        fixed: true, highlight: false, withLabel: false, name: "",
+      });
+      elements.push(seg);
+    }
+    this.previewElements = elements;
+    this.disablePreviewHitTesting(elements);
+    this.board.update();
+  }
+
   showPreviewCircle(center, through) {
     this.clearPreview();
     const attrs = {
@@ -823,6 +856,7 @@ export class BoardController {
     let attrs;
     if (selected && hit.type === "point") {
       attrs = {
+        visible: true,
         strokeColor: "#0f766e",
         fillColor: "#0f766e",
         fillOpacity: 0.18,
@@ -832,13 +866,18 @@ export class BoardController {
     } else if (selected) {
       attrs = { strokeColor: "#0f766e", strokeWidth: 3, fillColor: "#0f766e", fillOpacity: 0.2 };
     } else {
-      attrs = { strokeColor: undefined, strokeWidth: undefined, fillColor: undefined, fillOpacity: undefined, size: undefined };
+      attrs = {
+        strokeColor: undefined, strokeWidth: undefined,
+        fillColor: undefined, fillOpacity: undefined, size: undefined,
+        visible: hit.meta?.initiallyHidden ? false : undefined,
+      };
     }
     hit.el.setAttribute(attrs);
     this.board.update();
   }
 
   createPoint(id, x, y, style = {}) {
+    const hidden = style.visible === false;
     const el = this.board.create("point", [x, y], {
       size: style.size || 3,
       strokeColor: style.strokeColor || "#111",
@@ -847,8 +886,9 @@ export class BoardController {
       withLabel: false,
       fixed: !!style.fixed,
       layer: style.layer ?? 9,
+      visible: !hidden,
     });
-    return this.registerElement(id, "point", el);
+    return this.registerElement(id, "point", el, { initiallyHidden: hidden });
   }
 
   createSupportPoint(x, y) {

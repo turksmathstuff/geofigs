@@ -47,6 +47,28 @@ export function arc3ptNeedsSwap(p1, p2, p3) {
   return t2rel >= span13CCW;
 }
 
+// Returns the two exterior tangent points from source point to a circle.
+// Returns null if source is inside or on the circle (no exterior tangents).
+export function computeTangentPoints(source, circleCenter, circleRadius) {
+  const dx = circleCenter.x - source.x;
+  const dy = circleCenter.y - source.y;
+  const d = Math.hypot(dx, dy);
+  if (d <= circleRadius + 1e-9) return null;
+  const tangentLen = Math.sqrt(d * d - circleRadius * circleRadius);
+  const baseAngle = Math.atan2(dy, dx);
+  const phi = Math.asin(Math.min(1, circleRadius / d));
+  return [
+    {
+      x: source.x + tangentLen * Math.cos(baseAngle - phi),
+      y: source.y + tangentLen * Math.sin(baseAngle - phi),
+    },
+    {
+      x: source.x + tangentLen * Math.cos(baseAngle + phi),
+      y: source.y + tangentLen * Math.sin(baseAngle + phi),
+    },
+  ];
+}
+
 // Returns true if the CCW arc from angleStart to angleCursor (around center) is the
 // major arc (span > π), i.e. should swap start/end to render the minor side.
 export function arcCSENeedsSwap(centerX, centerY, startX, startY, cursorX, cursorY) {
