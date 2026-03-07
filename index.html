@@ -100,11 +100,8 @@
                 <button id="makeCircumscribedCircleCenter">Circumscribed + Cctr</button>
                 <button data-mode="arc-3pt">Arc: 3 Pts On</button>
                 <button data-mode="arc-cse">Arc: Ctr–Start–End</button>
-                <button id="makeInscribedQuad">Inscribed Quad</button>
-                <div class="ngon-row">
-                  <button id="makeInscribedNGon">Inscribed n-gon</button>
-                  <input id="nGonInput" type="number" min="3" max="20" value="5" class="ngon-input" />
-                </div>
+                <button id="makeInscribedQuad">Circle Inscribed in Quad</button>
+                <button id="makeInscribedNGon">Circle Inscribed in n-gon</button>
               </div>
             </details>
           </div>
@@ -263,6 +260,18 @@
             <div class="app-modal-actions">
               <button id="labelModalCancel" type="button">Cancel</button>
               <button id="labelModalSubmit" type="submit">Add Label</button>
+            </div>
+          </form>
+        </div>
+        <div id="nGonModal" class="app-modal" hidden>
+          <div id="nGonModalBackdrop" class="app-modal-backdrop"></div>
+          <form id="nGonModalDialog" class="app-modal-dialog" aria-labelledby="nGonModalTitle">
+            <h3 id="nGonModalTitle">Circle Inscribed in n-gon</h3>
+            <label class="app-modal-label" for="nGonModalInput">Number of sides</label>
+            <input id="nGonModalInput" type="number" min="3" max="20" value="5" autocomplete="off" />
+            <div class="app-modal-actions">
+              <button id="nGonModalCancel" type="button">Cancel</button>
+              <button id="nGonModalSubmit" type="submit">Create</button>
             </div>
           </form>
         </div>

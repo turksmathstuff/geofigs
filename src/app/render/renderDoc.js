@@ -120,8 +120,14 @@ export function createRenderDoc(ctx) {
         if (circleEl) {
           boardController.createInscribedPolygon(
             obj.id, circleEl, obj.n, obj.handleAngles || [], style,
-            { showHandles: !session.exportPointHighlightsBlack }
+            { showHandles: !session.exportPointHighlightsBlack },
+            obj.vertexIds || [],
+            obj.handleIds || []
           );
+          for (const gid of [...(obj.vertexIds || []), ...(obj.handleIds || [])]) {
+            const el = boardController.getElement(gid);
+            if (el) points.set(gid, el);
+          }
         }
       }
     }
