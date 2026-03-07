@@ -36,7 +36,11 @@ export function createRenderDoc(ctx) {
         const p1 = points.get(obj.pointIds[0]);
         const p2 = points.get(obj.pointIds[1]);
         if (p1 && p2) {
-          boardController.createSegment(obj.id, p1, p2, style);
+          const isInvalidTangent = obj.pointIds.some((pid) => {
+            const pt = store.doc.objects.find((o) => o.id === pid);
+            return pt?.constraint?.kind === "circleTangentPoint" && pt.constraint.invalid;
+          });
+          boardController.createSegment(obj.id, p1, p2, isInvalidTangent ? { ...style, strokeColor: "#9ca3af" } : style);
         }
       } else if (obj.type === "line") {
         const p1 = points.get(obj.pointIds[0]);

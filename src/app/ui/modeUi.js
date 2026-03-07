@@ -36,6 +36,11 @@ export function createModeUi({
   }
 
   function canvasHintText() {
+    if (session.tangentPickState) {
+      const n = session.tangentPickState.staged.length;
+      if (n === 0) return "Hover a tangent line to highlight it, then click to commit. Click empty space or Esc to cancel.";
+      return "Click the other tangent to also commit it, or click empty space to finish. Esc cancels all.";
+    }
     if (session.constructionSelectionSession) {
       return `${session.constructionSelectionSession.instructions} Press Esc to cancel.`;
     }
@@ -118,7 +123,10 @@ export function createModeUi({
         btn.classList.toggle("active", id === activeConstructionButtonId);
       }
     }
-    if (session.constructionSelectionSession) {
+    if (session.tangentPickState) {
+      const n = session.tangentPickState.staged.length;
+      dom.statusEl.textContent = `Mode: Tangent pick (${n}/2 committed)`;
+    } else if (session.constructionSelectionSession) {
       dom.statusEl.textContent = constructionSelectionStatusText();
     } else {
       dom.statusEl.textContent = `Mode: ${modeLabel(session.currentMode)}`;
