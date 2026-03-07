@@ -515,6 +515,14 @@ button.active {
   display: block;
 }
 
+.export-preview-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: #5a6a7e;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .export-preview-actions {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

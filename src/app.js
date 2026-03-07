@@ -8,6 +8,7 @@ import {
 } from "./state/figureDoc.js";
 import { exportSVG, replaceExportLabels, triggerDownload } from "./export/exportSvg.js";
 import { exportPNG, downloadBlob } from "./export/exportPng.js";
+import { initPreviewLabelDrag } from "./export/previewLabelDrag.js";
 import { makeId } from "./utils/ids.js";
 import { timestampForFile } from "./utils/time.js";
 import {
@@ -3813,7 +3814,45 @@ async function previewExport() {
   const svg = exportSVG(withLabels, { background, tight });
   const content = document.getElementById("exportPreviewContent");
   content.innerHTML = svg;
+  const svgEl = content.querySelector("svg");
+  const labelHint = document.getElementById("exportPreviewLabelHint");
+  if (svgEl) {
+    const count = initPreviewLabelDrag(svgEl);
+    if (labelHint) {
+      labelHint.hidden = count === 0;
+    }
+  } else if (labelHint) {
+    labelHint.hidden = true;
+  }
   document.getElementById("exportPreviewModal").removeAttribute("hidden");
+}
+
+function getPreviewSvgString() {
+  const svgEl = document.querySelector("#exportPreviewContent svg");
+  if (!svgEl) {
+    return null;
+  }
+  return new XMLSerializer().serializeToString(svgEl);
+}
+
+async function downloadPreviewSvg() {
+  const svg = getPreviewSvgString();
+  if (!svg) {
+    return downloadSvg();
+  }
+  const name = `figure-${timestampForFile()}.svg`;
+  triggerDownload(name, svg, "image/svg+xml");
+}
+
+async function downloadPreviewPng() {
+  const svg = getPreviewSvgString();
+  if (!svg) {
+    return downloadPng();
+  }
+  const { background, pngScale } = readExportSettings();
+  const blob = await exportPNG(svg, { background, scale: pngScale });
+  const name = `figure-${timestampForFile()}.png`;
+  downloadBlob(name, blob);
 }
 
 function withExportSettings({ pointScale } = {}, fn) {
@@ -3890,6 +3929,8 @@ wireUi({
   downloadSvg,
   downloadPng,
   previewExport,
+  downloadPreviewSvg,
+  downloadPreviewPng,
   saveDoc,
   openDocFromFile,
   applyStyleToSelection,
