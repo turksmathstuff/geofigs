@@ -18,8 +18,16 @@ export function createCircleToolWorkflow(ctx) {
 
     if (modeForCreate === ToolMode.ARC_CSE) {
       const swapStartEnd = session.arcCSESwapStartEnd ?? false;
-      addObject({ id: makeId("arc"), type: "arc-cse", pointIds: pointsForCreate, swapStartEnd, style });
+      const arcId = makeId("arc");
+      addObject({ id: arcId, type: "arc-cse", pointIds: pointsForCreate, swapStartEnd, style });
       session.arcCSESwapStartEnd = false;
+      // Constrain end point to slide along the arc's circle
+      const centerPt = getPointById(pointsForCreate[0]);
+      const endPt = getPointById(pointsForCreate[2]);
+      if (centerPt && endPt) {
+        const angle = Math.atan2(endPt.y - centerPt.y, endPt.x - centerPt.x);
+        endPt.constraint = { kind: "onObject", sourceObjectId: arcId, attach: { type: "circle", angle } };
+      }
       store.clearSelection();
       return true;
     }
