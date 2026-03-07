@@ -231,7 +231,7 @@ function bindUndoRedoActions({ doc, store, renderCurrentDoc }) {
   });
 }
 
-function bindExportActions({ doc, downloadSvg, downloadPng, previewExport }) {
+function bindExportActions({ doc, downloadSvg, downloadPng, previewExport, downloadPreviewSvg, downloadPreviewPng }) {
   doc.getElementById("previewExportBtn").addEventListener("click", () => {
     previewExport().catch((err) => alert(err.message));
   });
@@ -242,10 +242,10 @@ function bindExportActions({ doc, downloadSvg, downloadPng, previewExport }) {
     downloadPng().catch((err) => alert(err.message));
   });
   doc.getElementById("previewDownloadSvg").addEventListener("click", () => {
-    downloadSvg().catch((err) => alert(err.message));
+    downloadPreviewSvg().catch((err) => alert(err.message));
   });
   doc.getElementById("previewDownloadPng").addEventListener("click", () => {
-    downloadPng().catch((err) => alert(err.message));
+    downloadPreviewPng().catch((err) => alert(err.message));
   });
   const closePreview = () => doc.getElementById("exportPreviewModal").setAttribute("hidden", "");
   doc.getElementById("closeExportPreview").addEventListener("click", closePreview);
