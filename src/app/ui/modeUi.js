@@ -39,7 +39,7 @@ export function createModeUi({
     if (session.tangentPickState) {
       const n = session.tangentPickState.staged.length;
       if (n === 0) return "Hover a tangent line to highlight it, then click to commit. Click empty space or Esc to cancel.";
-      return "Click the other tangent to also commit it, or click empty space to finish. Esc cancels all.";
+      return "Click the other tangent to also commit it, or click empty space or Esc to finish.";
     }
     if (session.tangentAtPointPlacement) {
       return "Move cursor to set tangent length and direction, then click to place.";
