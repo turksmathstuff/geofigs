@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file.
 - Export preview modal: "Preview Export" button renders the figure as SVG in a full-screen overlay before downloading, with Download SVG and Download PNG actions inside.
 - Label Size export control (1×–2.5×, default 1.5×): scales label font size in exported SVG/PNG so labels remain readable when images are resized in documents.
 - Point Size export control (0.5×–1.5×, default 1×): scales point radius at export time without affecting the live board.
+- Draggable labels in export preview: labels in the preview can be dragged to reposition them before downloading; Download SVG and Download PNG in the preview use the adjusted positions.
 
 ### Changed
 - Export label placement is now center-anchored: scaled labels stay visually centered on their original position rather than drifting right/down.
