@@ -6,6 +6,8 @@ export function createBoardMovePreviewWorkflow(ctx) {
     updateCirclePreview,
     updateAnglePreview,
     updateTrianglePreview,
+    updateArc3PtPreview,
+    updateArcCSEPreview,
   } = ctx;
 
   function handleBoardMove(coords, evt) {
@@ -20,6 +22,12 @@ export function createBoardMovePreviewWorkflow(ctx) {
       return;
     }
     if (updateAnglePreview(adjusted)) {
+      return;
+    }
+    if (updateArc3PtPreview(adjusted)) {
+      return;
+    }
+    if (updateArcCSEPreview(adjusted)) {
       return;
     }
     updateTrianglePreview(adjusted, evt);

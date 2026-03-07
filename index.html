@@ -91,6 +91,22 @@
                 <button id="transformSelectedTriangle">Rotate/Slide Triangle</button>
               </div>
             </details>
+            <details class="annotate-group">
+              <summary>Circles</summary>
+              <div class="annotate-subgrid">
+                <button id="makeInscribedCircle">Inscribed</button>
+                <button id="makeInscribedCircleCenter">Inscribed + Incenter</button>
+                <button id="makeCircumscribedCircle">Circumscribed</button>
+                <button id="makeCircumscribedCircleCenter">Circumscribed + Cctr</button>
+                <button data-mode="arc-3pt">Arc: 3 Pts On</button>
+                <button data-mode="arc-cse">Arc: Ctr–Start–End</button>
+                <button id="makeInscribedQuad">Inscribed Quad</button>
+                <div class="ngon-row">
+                  <button id="makeInscribedNGon">Inscribed n-gon</button>
+                  <input id="nGonInput" type="number" min="3" max="20" value="5" class="ngon-input" />
+                </div>
+              </div>
+            </details>
           </div>
         </section>
 
@@ -122,6 +138,14 @@
                 <button id="markParallel1">1 Mark</button>
                 <button id="markParallel2">2 Marks</button>
                 <button id="markParallel3">3 Marks</button>
+              </div>
+            </details>
+            <details class="annotate-group">
+              <summary>Arc Ticks</summary>
+              <div class="annotate-subgrid">
+                <button id="addArcTick1">1 Tick</button>
+                <button id="addArcTick2">2 Ticks</button>
+                <button id="addArcTick3">3 Ticks</button>
               </div>
             </details>
             <button id="addSideMeasure">Side Length</button>
