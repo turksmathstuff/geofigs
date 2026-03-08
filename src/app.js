@@ -2706,7 +2706,8 @@ function buildPointMap() {
                 obj.constraint?.kind === "circleTangentPoint" ||
                 obj.style?.fixed,
         });
-    if (isCircleRadiusPoint && !hidePointObject && !obj.name && pt?.rendNode) {
+    const hasLabel = obj.name || store.doc.objects.some((o) => o.type === "label" && o.targetId === obj.id);
+    if (isCircleRadiusPoint && !hidePointObject && !hasLabel && pt?.rendNode) {
       pt.rendNode.setAttribute("data-circle-through-point", "true");
     }
     map.set(obj.id, pt);
