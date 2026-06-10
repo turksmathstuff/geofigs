@@ -7,6 +7,7 @@ export function createEmptyFigureDoc() {
       width: 800,
       height: 600,
       background: "transparent",
+      backgroundImage: null,
     },
     objects: [],
     annotations: [],

@@ -22,6 +22,9 @@ export function createRenderDoc(ctx) {
 
     recomputeConstrainedPoints();
     boardController.resetBoard();
+    if (store.doc.canvas?.backgroundImage?.src) {
+      boardController.createBackgroundImage("background-image", store.doc.canvas.backgroundImage);
+    }
     const points = buildPointMap();
 
     for (const obj of store.doc.objects) {

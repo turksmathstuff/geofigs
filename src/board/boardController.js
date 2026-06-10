@@ -77,6 +77,30 @@ export class BoardController {
     this.board.update();
   }
 
+  createBackgroundImage(id, imageSpec = {}) {
+    const src = imageSpec.src || "";
+    if (!src) {
+      return null;
+    }
+    const x = Number(imageSpec.x);
+    const y = Number(imageSpec.y);
+    const width = Math.max(0.0001, Number(imageSpec.width) || 0);
+    const height = Math.max(0.0001, Number(imageSpec.height) || 0);
+    const el = this.board.create("image", [src, [x, y], [width, height]], {
+      fixed: true,
+      highlight: false,
+      withLabel: false,
+      name: "",
+      opacity: Number.isFinite(Number(imageSpec.opacity)) ? Number(imageSpec.opacity) : 1,
+      layer: 0,
+    });
+    if (el?.rendNode) {
+      el.rendNode.setAttribute("data-geo-background-image-id", id || "background-image");
+      el.rendNode.setAttribute("preserveAspectRatio", "none");
+    }
+    return el;
+  }
+
   disablePreviewHitTesting(elements) {
     for (const el of elements) {
       if (!el) {

@@ -297,7 +297,7 @@ function bindExportActions({ doc, downloadSvg, downloadPng, previewExport, downl
   });
 }
 
-function bindFileActions({ doc, saveDoc, openDocFromFile }) {
+function bindFileActions({ doc, saveDoc, openDocFromFile, uploadBackgroundImageFromFile, clearBackgroundImage }) {
   doc.getElementById("saveDoc").addEventListener("click", saveDoc);
   doc.getElementById("openDoc").addEventListener("change", (evt) => {
     const file = evt.target.files?.[0];
@@ -306,6 +306,17 @@ function bindFileActions({ doc, saveDoc, openDocFromFile }) {
     }
     evt.target.value = "";
   });
+  doc.getElementById("uploadBackgroundImage").addEventListener("click", () => {
+    doc.getElementById("backgroundImageInput").click();
+  });
+  doc.getElementById("backgroundImageInput").addEventListener("change", (evt) => {
+    const file = evt.target.files?.[0];
+    if (file) {
+      uploadBackgroundImageFromFile(file);
+    }
+    evt.target.value = "";
+  });
+  doc.getElementById("clearBackgroundImage").addEventListener("click", clearBackgroundImage);
 }
 
 function bindStyleActions({ doc, store, applyStyleToSelection, runMutation }) {
