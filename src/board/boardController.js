@@ -1439,7 +1439,19 @@ export class BoardController {
   }
 
   exportBoardSvg() {
-    return this.board.renderer.svgRoot.outerHTML;
+    const svg = this.board.renderer.svgRoot;
+    if (!svg) {
+      return "";
+    }
+    if (svg.querySelector("image")) {
+      if (!svg.getAttribute("xmlns")) {
+        svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      }
+      if (!svg.getAttribute("xmlns:xlink")) {
+        svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+      }
+    }
+    return svg.outerHTML;
   }
 
   update() {
