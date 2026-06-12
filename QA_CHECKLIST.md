@@ -7,6 +7,14 @@ Use this checklist on the current `main` branch build. Go in order.
 - If something fails, note the exact step number and what happened.
 - Prefer a fresh reload before starting.
 
+## Automation Status
+
+| Status | What it covers | Examples |
+|--------|----------------|----------|
+| Automated now | Pure geometry math and document/background-image serialization | `test/geometry.test.js`, `test/figureDoc.test.js` |
+| Still manual | Live UI behavior, pointer interactions, drag/undo flow, exports, keyboard shortcuts | Tool switching, marquee select, triangle workflows, SVG/PNG export, hide/show |
+| Worth automating next | High-value browser flows that are currently easy to regress | App startup smoke test, upload/save/reopen background image, undo after drag, export preview |
+
 ## Refactor Phase 0 Starter Subset (Fast Baseline)
 - Use this subset before starting `app.js` refactor work and after each refactor phase.
 - Goal: catch behavior regressions quickly without running the full checklist every time.
@@ -15,9 +23,9 @@ Use this checklist on the current `main` branch build. Go in order.
 1. **Basic draw tools**
    - Create points, a segment, a line, a ray, and a circle.
 2. **Triangle variants**
-   - Create a 3-point triangle, right triangle, and isosceles triangle.
+   - Create a 3-point triangle, right triangle, isosceles triangle, and equilateral triangle.
 3. **Angle tools**
-   - Add a regular angle mark and a right-angle mark.
+   - Add a regular angle mark, a right-angle mark, and an arc tick mark.
 4. **Selection + marquee**
    - Single select, multi-select, marquee select, and clear selection on background click.
 5. **Drag + undo safety check (critical)**
@@ -29,6 +37,7 @@ Use this checklist on the current `main` branch build. Go in order.
    - Test `Undo`, `Redo`, `Delete/Backspace`, and `Escape`.
 8. **Persistence / export**
    - Save and reopen a doc.
+   - Upload a background image, save, and reopen it.
    - Trigger SVG and PNG export.
 
 ### When to run the full checklist
@@ -45,7 +54,7 @@ Use this checklist on the current `main` branch build. Go in order.
 ---
 
 ## 1. Smoke Test (UI + Basic Interaction)
-1. Confirm clicking `Select`, `Point`, `Segment`, `Line`, `Ray`, `Triangle`, `Circle`, `Delete`, and `Auto Label` updates the active state correctly.
+1. Confirm clicking `Select`, `Point`, `Segment`, `Line`, `Ray`, `Triangle` submenu choices, `Circle`, `Delete Selected`, and `Auto Label` updates the active state correctly.
 2. Confirm the status text updates as tool modes change.
 3. Confirm the drawing hint text updates and hides/shows as expected when hovering away/back.
 4. Press `Escape` and confirm mode resets to `Select`.
@@ -90,9 +99,14 @@ Use this checklist on the current `main` branch build. Go in order.
 4. In `Select` mode, drag the center point and confirm circle moves.
 5. Drag the through-point and confirm radius changes.
 
+## 5. Arc Tools
+1. Switch to `Arc: 3 Pts On` and create an arc using three points on the circumference.
+2. Switch to `Arc: Ctr–Start–End` and create an arc using center, start, and end points.
+3. Confirm both arc tools redraw correctly after undo/redo.
+
 ---
 
-## 5. Triangle Tool - 3 Variants
+## 6. Triangle Tool - 4 Variants
 ### 5A. 3-Point Triangle
 1. Open `Triangle ▾` and choose `3-Point Triangle`.
 2. Click two points and confirm dashed triangle preview appears while moving to third point.
@@ -114,19 +128,23 @@ Use this checklist on the current `main` branch build. Go in order.
 6. Repeat step 3-5 at least 3 times to confirm stability.
 7. Try clicking near the base segment at an endpoint and confirm it does not accidentally complete a triangle early.
 
+### 5D. Equilateral Triangle
+1. Choose `Equilateral Triangle`.
+2. Click two base vertices and confirm the apex preview appears on the correct side.
+3. Create the triangle and confirm the three sides match.
+
 ---
 
-## 6. Selection, Marquee, and Delete
+## 7. Selection, Marquee, and Delete
 1. Switch to `Select` mode.
 2. Drag on blank canvas to marquee-select multiple objects.
 3. Confirm selected objects highlight.
 4. Press `Delete` or `Backspace` and confirm selected objects are removed.
-5. Create a few objects again, select them, and test `Delete` tool button mode if present in workflow.
-6. Confirm deleting parent geometry also removes dependent annotations/labels when applicable.
+5. Confirm deleting parent geometry also removes dependent annotations/labels when applicable.
 
 ---
 
-## 7. Undo / Redo
+## 8. Undo / Redo
 Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded content becomes the new baseline, and undo/redo should apply to actions performed after opening.
 
 1. Create several objects (point, segment, triangle).
@@ -137,7 +155,7 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 8. Parallel / Perpendicular Construction (Selection-Based)
+## 9. Parallel / Perpendicular Construction (Selection-Based)
 1. Create one segment or line and one separate point.
 2. In `Select`, select exactly one line-like object and one point.
 3. Click `Parallel` and confirm a parallel line is created through the point.
@@ -149,34 +167,34 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 9. Midpoint / Angle Bisector / Perpendicular Bisector Tools
-### 9A. Midpoint
+## 10. Midpoint / Angle Bisector / Perpendicular Bisector Tools
+### 10A. Midpoint
 1. Create a segment and select it.
 2. Click `Midpoint` and confirm a midpoint point is created on the segment.
 3. Repeat using exactly two selected points (no segment) and confirm midpoint creation.
 4. Drag either source endpoint and confirm the midpoint tracks.
 5. Try invalid selection (no segment and not exactly two points) and confirm alert behavior.
 
-### 9B. Midpoint Tick Variants
+### 10B. Midpoint Tick Variants
 1. Select a segment (or two points) and create `Midpoint 1 Tick`, `2 Ticks`, and `3 Ticks`.
 2. Confirm midpoint point appears and tick marks render on both half-segments.
 3. Drag source endpoints and confirm the midpoint and both tick groups stay aligned.
 
-### 9C. Angle Bisector
+### 10C. Angle Bisector
 1. Select 3 points representing an angle (vertex is the second selected point).
 2. Click `Bisector` and confirm a bisector ray is created from the vertex.
 3. Drag either side point of the source angle and confirm the bisector ray updates.
 4. Select an existing angle annotation and click `Bisector`; confirm creation from the annotation works.
 5. Try a degenerate/straight angle and confirm the tool warns instead of creating invalid geometry.
 
-### 9D. Angle Bisector Tick Variants + Angle Decorator Drag
+### 10D. Angle Bisector Tick Variants + Angle Decorator Drag
 1. Create `Bisector + 1 Tick`, then `+ 2 Ticks` (and `+ 3 Ticks` if desired).
 2. Confirm each bisector variant adds two congruent angle decorators (arc + ticks), one on each side of the bisector.
 3. Drag one of the angle decorators outward/inward and confirm both decorators in the pair move together (same radius).
 4. Confirm dragged angle decorator radius persists after moving source points and after undo/redo.
 5. Confirm angle marks never render as a full circle/major arc when source points are moved.
 
-### 9E. Perpendicular Bisector (Placement Segment)
+### 10E. Perpendicular Bisector (Placement Segment)
 1. Select a segment (or exactly two points), open `Perp Bisector`, and choose `Bisector`.
 2. Move the cursor to one side of the segment and click to place.
 3. Confirm a perpendicular bisector **segment** (not full line) is created from the midpoint in one direction only.
@@ -185,7 +203,7 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 6. Confirm dragging the bisector segment body does not move the construction.
 7. Drag the bisector endpoint point and confirm it slides along the perpendicular and resizes the segment.
 
-### 9F. Perpendicular Bisector Variants
+### 10F. Perpendicular Bisector Variants
 1. Create `Bisector + Rt ∠`, `Bisector + MP Ticks`, and `Bisector + Rt ∠ + MP`.
 2. Confirm right-angle decoration appears at the midpoint when selected.
 3. Confirm midpoint tick marks appear on the original source segment when selected.
@@ -193,19 +211,19 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 10. Congruent / Similar / Transform Triangle Tools
-### 10A. Congruent Triangle Copy
+## 11. Congruent / Similar / Transform Triangle Tools
+### 11A. Congruent Triangle Copy
 1. Create a triangle and select its 3 vertices (or its 3 side segments).
 2. Click `Congruent △`.
 3. Confirm a congruent offset copy is created.
 4. Confirm copy placement avoids obvious overlap when possible.
 
-### 10B. Similar Triangle Copy
+### 11B. Similar Triangle Copy
 1. Select one triangle again.
 2. Click `Similar △`.
 3. Confirm a larger similar copy is created.
 
-### 10C. Rotate/Slide Triangle Panel
+### 11C. Rotate/Slide Triangle Panel
 1. Select one triangle.
 2. Click `Rotate/Slide Triangle`.
 3. Confirm transform panel opens with live preview.
@@ -218,14 +236,14 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 11. Annotation Tools
-### 11A. Segment Ticks
+## 12. Annotation Tools
+### 12A. Segment Ticks
 1. Select one or more segments.
 2. Add `1` tick, then `2`, then `3` tick marks on test segments.
 3. Confirm marks appear on each selected segment.
 4. Try with no segment selected and confirm alert behavior.
 
-### 11B. Angle Arcs + Right Angle
+### 12B. Angle Arcs + Right Angle
 1. Select 3 points (counterclockwise) and add angle arc `1`.
 2. Repeat for arc `2` and `3` on a test angle.
 3. Add a right-angle marker using valid 3-point selection.
@@ -233,12 +251,12 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 5. In angle point-pick mode, click 3 existing points and confirm annotation is created.
 6. Confirm duplicate point clicks are rejected (should not create degenerate angle).
 
-### 11C. Parallel Marks
+### 12C. Parallel Marks
 1. Select one or more segments/lines.
 2. Add parallel marks (`1`, `2`, `3`) and confirm chevrons render.
 3. Try with no valid selection and confirm alert behavior.
 
-### 11D. Side Length + Angle Measure Labels
+### 12D. Side Length + Angle Measure Labels
 1. Select exactly one segment and click `Side Length`.
 2. Confirm prompt appears with default numeric value.
 3. Accept default and confirm a draggable label is created.
@@ -247,7 +265,7 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 6. Enter a value without `°` and confirm the app appends `°`.
 7. Drag both labels and confirm they move.
 
-### 11E. Manual Label + Auto Label Mode
+### 12E. Manual Label + Auto Label Mode
 1. Click `Add Label`, enter text, and confirm label appears.
 2. Select a point first, then `Add Label`; confirm it is placed near the point.
 3. Switch to `Auto Label` mode.
@@ -257,7 +275,7 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 12. Style Controls
+## 13. Style Controls
 1. Create a few test objects (point/segment/circle/triangle edge).
 2. Change stroke color and create a new object; confirm the new object uses the new color.
 3. Change stroke width and create a new object; confirm width applies.
@@ -268,7 +286,7 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 13. Hide / Show All (Export Cleanup)
+## 14. Hide / Show All (Export Cleanup)
 1. Select one or more objects.
 2. Use `Hide Selected` (or keyboard `H`) and confirm they disappear.
 3. Confirm hidden items are excluded visually but app remains functional.
@@ -277,17 +295,18 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 14. Save / Open (Persistence)
+## 15. Save / Open (Persistence)
 1. Create a mixed figure (triangle, circle, labels, annotations).
 2. Save/export the editable figure as `.geojson`.
 3. Clear the board (or reload page) and confirm canvas resets.
 4. Open/import the saved `.geojson`.
 5. Confirm all geometry, annotations, and labels are restored correctly.
 6. Confirm imported objects remain selectable and draggable.
+7. Upload a background image, save, reload, and confirm the image is restored.
 
 ---
 
-## 15. SVG / PNG Export
+## 16. SVG / PNG Export
 1. Create a representative figure with labels and annotations.
 2. Download SVG with default settings.
 3. If available, test `tight` SVG export toggle and compare bounds.
@@ -295,10 +314,11 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 5. Download PNG at `1x`, `2x`, and `3x` scales.
 6. Confirm PNG files are created and visually correct.
 7. If using constrained intersection points, confirm exported appearance is acceptable (black by default in export).
+8. Open the export preview, drag labels, and confirm the adjusted positions are used in the downloaded export.
 
 ---
 
-## 15. Keyboard Shortcuts (Final Pass)
+## 17. Keyboard Shortcuts (Final Pass)
 1. `Cmd/Ctrl+Z` undo
 2. `Cmd/Ctrl+Shift+Z` redo (and/or `Ctrl+Y`)
 3. `H` hide selected
@@ -308,12 +328,13 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ---
 
-## 16. Regression Spot Checks (Quick Repeat)
+## 18. Regression Spot Checks (Quick Repeat)
 1. Isosceles triangle reuse same base `A-B` repeatedly (5 times).
 2. Right triangle creation still auto-adds right-angle marker.
 3. Angle point-pick mode still rejects duplicate points.
 4. Segment/line/ray/circle creation still works with existing points.
 5. Undo/redo after triangle + annotation still works.
+6. Background image upload/save/reopen still works.
 
 ---
 
