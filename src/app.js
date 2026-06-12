@@ -4,6 +4,8 @@ import { ToolMode, isToolMode } from "./state/toolModes.js";
 import {
   createEmptyFigureDoc,
   cloneFigureDoc,
+  normalizeImportedFigureDoc,
+  serializeFigureDocPackage,
   validateFigureDoc,
 } from "./state/figureDoc.js";
 import { exportSVG, replaceExportLabels, triggerDownload } from "./export/exportSvg.js";
@@ -188,6 +190,17 @@ function defaultRegularPolygonControlPointColor() {
 
 function defaultAttachedPointColor() {
   return store.doc.styles.examMode ? "#000000" : "#00c7b7";
+}
+
+function getBackgroundImageAssetsObject() {
+  return Object.fromEntries(store.backgroundImageAssets?.entries?.() || []);
+}
+
+function setBackgroundImageAsset(assetId, src) {
+  if (!store.backgroundImageAssets || typeof store.backgroundImageAssets.set !== "function") {
+    store.backgroundImageAssets = new Map();
+  }
+  store.backgroundImageAssets.set(assetId, src);
 }
 
 function getRayExtensionForObject(obj) {
@@ -4789,7 +4802,11 @@ function withExportSettings({ pointScale } = {}, fn) {
 }
 
 function saveDoc() {
-  const content = JSON.stringify(store.doc, null, 2);
+  const content = JSON.stringify(
+    serializeFigureDocPackage(store.doc, getBackgroundImageAssetsObject()),
+    null,
+    2,
+  );
   const name = `figure-${timestampForFile()}.geojson`;
   triggerDownload(name, content, "application/json");
 }
@@ -4848,9 +4865,11 @@ async function uploadBackgroundImageFromFile(file) {
     const src = await readImageFileAsDataUrl(file);
     const { naturalWidth, naturalHeight } = await getImageDimensions(src);
     const placement = fitBackgroundImageToBoard(naturalWidth, naturalHeight);
+    const assetId = makeId("bg");
+    setBackgroundImageAsset(assetId, src);
     runMutation("upload-background-image", () => {
       store.doc.canvas.backgroundImage = {
-        src,
+        assetId,
         naturalWidth,
         naturalHeight,
         opacity: 1,
@@ -4876,8 +4895,10 @@ function openDocFromFile(file) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(String(reader.result));
-      validateFigureDoc(parsed);
-      applyDoc(cloneFigureDoc(parsed));
+      const { doc, backgroundImageAssets } = normalizeImportedFigureDoc(parsed);
+      validateFigureDoc(doc);
+      store.setBackgroundImageAssets(backgroundImageAssets);
+      applyDoc(cloneFigureDoc(doc));
       store.commandStack.clear();
     } catch (err) {
       alert(`Cannot open document: ${err.message}`);

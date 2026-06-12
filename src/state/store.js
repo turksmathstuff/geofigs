@@ -6,6 +6,7 @@ export class AppStore {
     this.doc = createEmptyFigureDoc();
     this.selection = new Set();
     this.commandStack = new CommandStack();
+    this.backgroundImageAssets = new Map();
   }
 
   setDoc(doc) {
@@ -26,6 +27,21 @@ export class AppStore {
       styles: doc.styles,
       title: doc.metadata?.title || "",
     };
+  }
+
+  setBackgroundImageAssets(assets = {}) {
+    this.backgroundImageAssets = new Map(Object.entries(assets));
+  }
+
+  getBackgroundImageAsset(assetId) {
+    if (!assetId) {
+      return null;
+    }
+    return this.backgroundImageAssets.get(assetId) || null;
+  }
+
+  exportBackgroundImageAssets() {
+    return Object.fromEntries(this.backgroundImageAssets.entries());
   }
 
   commitSnapshot(label, before, after, applyDoc) {
