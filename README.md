@@ -53,6 +53,7 @@ Do not open `index.html` directly with `file://`.
 ### Export / persistence
 - Save editable figure state as `.geojson`
 - Open `.geojson`
+- Upload a background image that stays with the saved figure
 - Download SVG (tight export supported)
 - Download PNG (scale 1x/2x/3x)
 - Hide Selected / Show All (useful for export cleanup)

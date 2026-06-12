@@ -1,3 +1,5 @@
+import { makeId } from "../utils/ids.js";
+
 export const FIGURE_DOC_VERSION = 1;
 
 export function createEmptyFigureDoc() {
@@ -32,6 +34,39 @@ export function createEmptyFigureDoc() {
 
 export function cloneFigureDoc(doc) {
   return JSON.parse(JSON.stringify(doc));
+}
+
+export function serializeFigureDocPackage(doc, backgroundImageAssets = {}) {
+  return {
+    version: FIGURE_DOC_VERSION,
+    doc,
+    backgroundImageAssets,
+  };
+}
+
+export function normalizeImportedFigureDoc(input) {
+  if (!input || typeof input !== "object") {
+    throw new Error("Invalid document format.");
+  }
+
+  const doc = input.doc || input.figureDoc || input;
+  const backgroundImageAssets = { ...(input.backgroundImageAssets || {}) };
+  const backgroundImage = doc?.canvas?.backgroundImage;
+
+  if (backgroundImage?.src && !backgroundImage.assetId) {
+    const assetId = makeId("bg");
+    backgroundImageAssets[assetId] = backgroundImage.src;
+    doc.canvas.backgroundImage = {
+      ...backgroundImage,
+      assetId,
+    };
+    delete doc.canvas.backgroundImage.src;
+  }
+
+  return {
+    doc,
+    backgroundImageAssets,
+  };
 }
 
 export function validateFigureDoc(input) {
