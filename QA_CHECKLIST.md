@@ -11,7 +11,7 @@ Use this checklist on the current `main` branch build. Go in order.
 
 | Status | What it covers | Examples |
 |--------|----------------|----------|
-| Automated now | Pure geometry math and document/background-image serialization | `test/geometry.test.js`, `test/figureDoc.test.js` |
+| Automated now | Pure geometry math, document/background-image serialization, and shade-region fill pipeline (flood fill, contour trace, simplification, doc round-trip) | `test/geometry.test.js`, `test/figureDoc.test.js`, `test/shadeRegion.test.js` |
 | Still manual | Live UI behavior, pointer interactions, drag/undo flow, exports, keyboard shortcuts | Tool switching, marquee select, triangle workflows, SVG/PNG export, hide/show |
 | Worth automating next | High-value browser flows that are currently easy to regress | App startup smoke test, upload/save/reopen background image, undo after drag, export preview |
 
@@ -335,6 +335,21 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 4. Segment/line/ray/circle creation still works with existing points.
 5. Undo/redo after triangle + annotation still works.
 6. Background image upload/save/reopen still works.
+
+---
+
+## 19. Shade Region Tool
+1. Draw a triangle. Click `Shade Region`, then click inside the triangle. Confirm the fill appears immediately on the board with a small ◼ marker.
+2. Confirm the tool stays in Shade Region mode after a fill (you can fill another region without re-selecting the tool).
+3. Change the `Fill` color and `Fill Opacity` in Style Controls, then fill a second region. Confirm the new fill uses the new color/opacity.
+4. Draw two overlapping circles. Fill the lens-shaped overlap region. Confirm only the overlap is shaded.
+5. Click on a stroke or outside any closed region. Confirm a hint appears ("Couldn't fill here…") and no fill is created.
+6. Drag a vertex of a filled triangle. Confirm the stale fill disappears automatically.
+7. In `Delete` mode, click a fill's ◼ marker. Confirm the fill is removed.
+8. Upload a background image, then fill a region drawn on top of it. Confirm the fill respects the drawn geometry (the image does not block or distort the fill).
+9. Save, then reopen the figure. Confirm fills are restored.
+10. Export SVG and PNG (and open the export preview). Confirm fills appear, ◼ markers do not, and tight-crop bounds look right.
+11. Undo after creating a fill. Confirm the fill is removed; redo restores it.
 
 ---
 

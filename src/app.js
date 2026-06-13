@@ -65,6 +65,7 @@ import { createObjectMoveCircleWorkflow } from "./app/workflows/objectMoveCircle
 import { createObjectMoveRayWorkflow } from "./app/workflows/objectMoveRay.js";
 import { createObjectMoveLineWorkflow } from "./app/workflows/objectMoveLine.js";
 import { createObjectMovePointLabelWorkflow } from "./app/workflows/objectMovePointLabel.js";
+import { launchShadeRegionFill } from "./app/workflows/shadeRegionFill.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -228,6 +229,7 @@ function setMode(mode) {
     finalizeTangentPickSession();
   }
   session.tangentPickState = null;
+  session.shadeRegionNotice = null;
   session.currentMode = mode;
   session.pendingPointIds = [];
   if (mode !== ToolMode.ANGLE) {
@@ -1596,6 +1598,26 @@ function recomputeConstrainedPoints() {
       continue;
     }
   }
+  purgeStaleShadeRegions();
+}
+
+function purgeStaleShadeRegions() {
+  // Staleness is detected only through linked points. A region bounded solely
+  // by point-free geometry (e.g. the gap between two circles) has no linked
+  // points and will go stale silently if that geometry moves.
+  const stale = store.doc.objects.filter((obj) => {
+    if (obj.type !== "shade-region") return false;
+    return (obj.linkedPointIds || []).some((pid, i) => {
+      const pt = getPointById(pid);
+      if (!pt) return true; // point deleted
+      const stored = obj.linkedPointPositions?.[i];
+      if (!stored) return false;
+      return Math.hypot(pt.x - stored.x, pt.y - stored.y) > 0.05;
+    });
+  });
+  if (stale.length > 0) {
+    store.doc.objects = store.doc.objects.filter((o) => !stale.includes(o));
+  }
 }
 
 function syncConstrainedPointsToBoard() {
@@ -1994,6 +2016,53 @@ function handleBoardClick(coords, evt) {
 
   if (session.currentMode === ToolMode.ADD_LABEL) {
     addManualLabelAtCoords(coords);
+    return;
+  }
+
+  if (session.currentMode === ToolMode.SHADE_REGION) {
+    if (session.shadeFillInFlight) {
+      return;
+    }
+    session.shadeFillInFlight = true;
+    const fillColor = document.getElementById("shadeFillColor")?.value || "#9ca3af";
+    const fillOpacityRaw = Number(document.getElementById("shadeFillOpacity")?.value);
+    const fillOpacity = Number.isFinite(fillOpacityRaw) && fillOpacityRaw > 0 ? fillOpacityRaw : 0.25;
+    launchShadeRegionFill(coords, boardController.board, boardEl, store.doc.objects).then((result) => {
+      session.shadeFillInFlight = false;
+      if (session.currentMode !== ToolMode.SHADE_REGION) {
+        return;
+      }
+      if (!result) {
+        session.shadeRegionNotice =
+          "Couldn't fill here — click inside a closed region that is fully on screen.";
+        updateModeUi();
+        setTimeout(() => {
+          if (session.shadeRegionNotice) {
+            session.shadeRegionNotice = null;
+            updateModeUi();
+          }
+        }, 4000);
+        return;
+      }
+      session.shadeRegionNotice = null;
+      const { pathPoints, linkedPointIds, linkedPointPositions } = result;
+      runMutation("shade-region", () => {
+        store.doc.objects.push({
+          id: makeId("shade"),
+          type: "shade-region",
+          pathPoints,
+          linkedPointIds,
+          linkedPointPositions,
+          marker: { x: coords.x, y: coords.y },
+          style: {
+            fillColor,
+            fillOpacity,
+            strokeWidth: 0,
+          },
+        });
+      });
+      updateModeUi();
+    });
     return;
   }
 
