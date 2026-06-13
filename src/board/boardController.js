@@ -985,6 +985,46 @@ export class BoardController {
     return this.registerElement(id, style.lineType || "line", el);
   }
 
+  createShadedRegion(id, pathPoints, markerPos, style = {}) {
+    const fillColor = style.fillColor || "#9ca3af";
+    const xs = pathPoints.map((p) => p.x);
+    const ys = pathPoints.map((p) => p.y);
+    // Close the path
+    if (xs.length > 0 && (xs[0] !== xs[xs.length - 1] || ys[0] !== ys[ys.length - 1])) {
+      xs.push(xs[0]);
+      ys.push(ys[0]);
+    }
+    const curve = this.board.create("curve", [xs, ys], {
+      fillColor,
+      fillOpacity: style.fillOpacity ?? 0.25,
+      strokeWidth: 0,
+      // JSXGraph's color parser rejects "none"; an invisible stroke needs a
+      // real color with opacity 0.
+      strokeColor: fillColor,
+      strokeOpacity: 0,
+      highlight: false,
+      layer: 1,
+      fixed: true,
+      withLabel: false,
+    });
+    if (curve?.rendNode) {
+      curve.rendNode.setAttribute("data-geo-shade-id", id);
+      curve.rendNode.style.pointerEvents = "none";
+    }
+    // JSXGraph hit-tests curves on their stroke, not the filled interior, so a
+    // small marker is the click target for selecting/deleting the region.
+    const marker = this.board.create("text", [markerPos.x, markerPos.y, "◼"], {
+      fontSize: 14,
+      color: fillColor,
+      fixed: true,
+      display: "internal",
+      parse: false,
+      layer: 9,
+    });
+    marker?.rendNode?.setAttribute?.("data-geo-shade-marker-id", id);
+    return this.registerElement(id, "shade-region", marker, { fillCurve: curve });
+  }
+
   createCircle(id, center, through, style = {}) {
     const el = this.board.create("circle", [center, through], {
       strokeColor: style.strokeColor || "#111",

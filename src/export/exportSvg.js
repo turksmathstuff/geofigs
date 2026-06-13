@@ -152,7 +152,7 @@ export function exportSVG(svgString, options = {}) {
       svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
     }
   }
-  for (const el of svg.querySelectorAll("[data-arc-glow], [data-ghost-point], [data-circle-through-point]")) {
+  for (const el of svg.querySelectorAll("[data-arc-glow], [data-ghost-point], [data-circle-through-point], [data-geo-shade-marker-id]")) {
     el.remove();
   }
   const fallbackBounds = getFallbackBounds(svg, options);

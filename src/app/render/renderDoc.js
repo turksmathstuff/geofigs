@@ -129,6 +129,12 @@ export function createRenderDoc(ctx) {
         if (p1 && p2 && p3) {
           boardController.createCircumscribedCircle(obj.id, p1, p2, p3, !!obj.showCenter, style);
         }
+      } else if (obj.type === "shade-region") {
+        const mx = obj.marker?.x ?? (obj.pathPoints?.reduce((s, p) => s + p.x, 0) / (obj.pathPoints?.length || 1));
+        const my = obj.marker?.y ?? (obj.pathPoints?.reduce((s, p) => s + p.y, 0) / (obj.pathPoints?.length || 1));
+        if (obj.pathPoints?.length >= 3 && Number.isFinite(mx) && Number.isFinite(my)) {
+          boardController.createShadedRegion(obj.id, obj.pathPoints, { x: mx, y: my }, style);
+        }
       } else if (obj.type === "inscribed-polygon") {
         const circleEl = boardController.getElement(obj.circleId);
         if (circleEl) {

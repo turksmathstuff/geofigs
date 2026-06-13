@@ -71,6 +71,12 @@ export function createModeUi({
     if (session.currentMode === ToolMode.ARC_3PT) {
       return "Click start point, a point on the arc, then end point.";
     }
+    if (session.currentMode === ToolMode.SHADE_REGION) {
+      if (session.shadeRegionNotice) {
+        return session.shadeRegionNotice;
+      }
+      return "Click inside any closed region to fill it. Fills auto-clear if geometry moves.";
+    }
     if (session.currentMode === ToolMode.ARC_CSE) {
       const n = session.pendingPointIds?.length ?? 0;
       if (n === 0) return "Click center point.";

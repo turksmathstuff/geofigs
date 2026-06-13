@@ -13,6 +13,7 @@ export const ToolMode = Object.freeze({
   ADD_LABEL: "add-label",
   LABEL: "label",
   DELETE: "delete",
+  SHADE_REGION: "shade-region",
 });
 
 export function isToolMode(value) {
