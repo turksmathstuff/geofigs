@@ -30,6 +30,18 @@
           <div class="grid-buttons">
             <button data-mode="select">Select</button>
             <button data-mode="point">Point</button>
+          </div>
+          <h3 class="toolbar-subhead">Lines &amp; Circles</h3>
+          <div class="grid-buttons">
+            <button data-mode="segment">Segment</button>
+            <button data-mode="line">Line</button>
+            <button data-mode="ray">Ray</button>
+            <button id="makeParallel">Parallel</button>
+            <button id="makePerpendicular">Perpendicular</button>
+            <button data-mode="circle">Circle</button>
+          </div>
+          <h3 class="toolbar-subhead">Point &amp; Line Constructions</h3>
+          <div class="grid-buttons">
             <details class="annotate-group">
               <summary>Midpoint</summary>
               <div class="annotate-subgrid">
@@ -39,12 +51,6 @@
                 <button id="makeMidpointTick3">Midpoint 3 Ticks</button>
               </div>
             </details>
-            <button data-mode="segment">Segment</button>
-            <button data-mode="line">Line</button>
-            <button data-mode="ray">Ray</button>
-            <button id="makeParallel">Parallel</button>
-            <button id="makePerpendicular">Perpendicular</button>
-            <button data-mode="circle">Circle</button>
             <details class="annotate-group">
               <summary>Perp Bisector</summary>
               <div class="annotate-subgrid">
@@ -63,6 +69,18 @@
                 <button id="makeAngleBisectorTick3">Bisector 3 Ticks</button>
               </div>
             </details>
+          </div>
+          <h3 class="toolbar-subhead">Shapes</h3>
+          <div class="grid-buttons">
+            <details id="triangleMenuPanel" class="annotate-group">
+              <summary id="triangleMenuBtn">Triangles</summary>
+              <div class="annotate-subgrid">
+                <button type="button" data-triangle-mode="three-point">3-Point Triangle</button>
+                <button type="button" data-triangle-mode="right">Right Triangle</button>
+                <button type="button" data-triangle-mode="isosceles">Isosceles Triangle</button>
+                <button type="button" data-triangle-mode="equilateral">Equilateral</button>
+              </div>
+            </details>
             <details class="annotate-group">
               <summary>Regular Polygon</summary>
               <div class="annotate-subgrid">
@@ -74,15 +92,6 @@
                 <button id="makeRegularPolygonArcTicksCenter">n Sides + Arc Tick + Center</button>
               </div>
             </details>
-            <details id="triangleMenuPanel" class="annotate-group">
-              <summary id="triangleMenuBtn">Triangles</summary>
-              <div class="annotate-subgrid">
-                <button type="button" data-triangle-mode="three-point">3-Point Triangle</button>
-                <button type="button" data-triangle-mode="right">Right Triangle</button>
-                <button type="button" data-triangle-mode="isosceles">Isosceles Triangle</button>
-                <button type="button" data-triangle-mode="equilateral">Equilateral</button>
-              </div>
-            </details>
             <details class="annotate-group">
               <summary>Congruent/Similar Triangles</summary>
               <div class="annotate-subgrid">
@@ -91,6 +100,9 @@
                 <button id="transformSelectedTriangle">Rotate/Slide Triangle</button>
               </div>
             </details>
+          </div>
+          <h3 class="toolbar-subhead">Circle Constructions</h3>
+          <div class="grid-buttons">
             <details class="annotate-group">
               <summary>Circles</summary>
               <div class="annotate-subgrid">
@@ -111,6 +123,15 @@
 
         <section>
           <h2>Annotate</h2>
+          <div class="grid-buttons">
+            <button id="addSideMeasure">Side Length</button>
+            <button id="addAngleMeasure">Angle Measure</button>
+            <button id="markRightAngle">Right Angle</button>
+            <button id="addLabel">Add/Edit Label</button>
+            <button id="autoLabel">Auto Label</button>
+            <button data-mode="shade-region">Shade Region</button>
+          </div>
+          <h3 class="toolbar-subhead">Tick &amp; Mark Sets</h3>
           <div class="grid-buttons">
             <details class="annotate-group">
               <summary>Segment Ticks</summary>
@@ -147,13 +168,79 @@
                 <button id="addArcTick3">3 Ticks</button>
               </div>
             </details>
-            <button id="addSideMeasure">Side Length</button>
-            <button id="addAngleMeasure">Angle Measure</button>
-            <button id="markRightAngle">Right Angle</button>
-            <button id="addLabel">Add/Edit Label</button>
-            <button id="autoLabel">Auto Label</button>
-            <button data-mode="shade-region">Shade Region</button>
           </div>
+        </section>
+
+        <section>
+          <h2>Edit</h2>
+          <div class="grid-buttons">
+            <button id="undoBtn">Undo</button>
+            <button id="redoBtn">Redo</button>
+            <button id="hideSelected">Hide Selected</button>
+            <button id="showAll">Show All</button>
+            <button id="deleteSelected">Delete Selected</button>
+            <button id="clearBoard">Clear Board</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Export</h2>
+          <div class="form-row">
+            <label for="exportLabelScale">Label Size</label>
+            <select id="exportLabelScale">
+              <option value="1">1x (screen size)</option>
+              <option value="1.5" selected>1.5x</option>
+              <option value="2">2x</option>
+              <option value="2.5">2.5x</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="exportPointScale">Point Size</label>
+            <select id="exportPointScale">
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1" selected>1x (screen size)</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+            </select>
+          </div>
+          <div class="grid-buttons">
+            <button id="previewExportBtn" style="grid-column: span 2;">Preview Export</button>
+            <button id="downloadSvg">Download SVG</button>
+            <button id="downloadPng">Download PNG</button>
+            <button id="uploadBackgroundImage" type="button">Upload Background Image</button>
+            <button id="clearBackgroundImage" type="button">Clear Background Image</button>
+            <button id="togglePointObjects">Hide Points</button>
+            <button id="toggleLineArrows">Hide Arrows</button>
+            <button id="saveDoc">Save .geojson</button>
+            <input id="backgroundImageInput" type="file" accept="image/*" hidden />
+            <label class="file-label">
+              Open .geojson
+              <input id="openDoc" type="file" accept=".geojson,application/json" />
+            </label>
+          </div>
+          <details class="annotate-group export-advanced">
+            <summary>Advanced</summary>
+            <div class="form-row">
+              <label for="pngScale">PNG Scale</label>
+              <select id="pngScale">
+                <option value="1">1x</option>
+                <option value="2" selected>2x</option>
+                <option value="3">3x</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="bgMode">Background</label>
+              <select id="bgMode">
+                <option value="transparent" selected>Transparent</option>
+                <option value="white">White</option>
+              </select>
+            </div>
+            <div class="form-row checkbox-row">
+              <label for="tightSvg">Tight SVG</label>
+              <input id="tightSvg" type="checkbox" checked />
+            </div>
+          </details>
         </section>
 
         <section>
@@ -190,75 +277,6 @@
               <input id="examMode" type="checkbox" />
             </div>
           </details>
-        </section>
-
-        <section>
-          <h2>Export</h2>
-          <div class="form-row">
-            <label for="pngScale">PNG Scale</label>
-            <select id="pngScale">
-              <option value="1">1x</option>
-              <option value="2" selected>2x</option>
-              <option value="3">3x</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="bgMode">Background</label>
-            <select id="bgMode">
-              <option value="transparent" selected>Transparent</option>
-              <option value="white">White</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="exportLabelScale">Label Size</label>
-            <select id="exportLabelScale">
-              <option value="1">1x (screen size)</option>
-              <option value="1.5" selected>1.5x</option>
-              <option value="2">2x</option>
-              <option value="2.5">2.5x</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="exportPointScale">Point Size</label>
-            <select id="exportPointScale">
-              <option value="0.5">0.5x</option>
-              <option value="0.75">0.75x</option>
-              <option value="1" selected>1x (screen size)</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-            </select>
-          </div>
-          <div class="form-row checkbox-row">
-            <label for="tightSvg">Tight SVG</label>
-            <input id="tightSvg" type="checkbox" checked />
-          </div>
-          <div class="grid-buttons">
-            <button id="previewExportBtn" style="grid-column: span 2;">Preview Export</button>
-            <button id="downloadSvg">Download SVG</button>
-            <button id="downloadPng">Download PNG</button>
-            <button id="uploadBackgroundImage" type="button">Upload Background Image</button>
-            <button id="clearBackgroundImage" type="button">Clear Background Image</button>
-            <button id="togglePointObjects">Hide Points</button>
-            <button id="toggleLineArrows">Hide Arrows</button>
-            <button id="saveDoc">Save .geojson</button>
-            <input id="backgroundImageInput" type="file" accept="image/*" hidden />
-            <label class="file-label">
-              Open .geojson
-              <input id="openDoc" type="file" accept=".geojson,application/json" />
-            </label>
-          </div>
-        </section>
-
-        <section>
-          <h2>Edit</h2>
-          <div class="grid-buttons">
-            <button id="undoBtn">Undo</button>
-            <button id="redoBtn">Redo</button>
-            <button id="hideSelected">Hide Selected</button>
-            <button id="showAll">Show All</button>
-            <button id="deleteSelected">Delete Selected</button>
-            <button id="clearBoard">Clear Board</button>
-          </div>
         </section>
       </aside>
 
