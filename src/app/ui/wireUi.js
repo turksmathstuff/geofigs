@@ -259,14 +259,18 @@ function bindSelectionActions({
 }
 
 function bindUndoRedoActions({ doc, store, renderCurrentDoc }) {
-  doc.getElementById("undoBtn").addEventListener("click", () => {
-    store.commandStack.undo();
-    renderCurrentDoc();
+  doc.querySelectorAll('[data-action="undo"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      store.commandStack.undo();
+      renderCurrentDoc();
+    });
   });
 
-  doc.getElementById("redoBtn").addEventListener("click", () => {
-    store.commandStack.redo();
-    renderCurrentDoc();
+  doc.querySelectorAll('[data-action="redo"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      store.commandStack.redo();
+      renderCurrentDoc();
+    });
   });
 }
 
