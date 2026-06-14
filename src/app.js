@@ -1988,6 +1988,43 @@ function addPointInput(pointId, skipMutation = false) {
   renderCurrentDoc(false);
 }
 
+// While a construction-selection session opts in with `allowPointPlacement`,
+// clicking empty board space drops a new point (snapping to existing geometry)
+// and feeds it to the session — so e.g. Regular Polygon can be used by clicking
+// two points instead of pre-selecting them.
+function handleConstructionPointPlacementBoardClick(coords, evt) {
+  const cs = session.constructionSelectionSession;
+  if (!cs || !cs.allowPointPlacement) {
+    return false;
+  }
+  const tag = String(evt?.target?.tagName || "").toLowerCase();
+  const isBoardBackground = tag === "svg" || evt?.target === boardEl;
+  if (!isBoardBackground) {
+    return false;
+  }
+  if (evt?.shiftKey || evt?.metaKey || evt?.ctrlKey) {
+    return false;
+  }
+  const snappedCoords = getPointInputCoords(coords, evt);
+  const pointSnap = findPreferredPointSnap(snappedCoords);
+  let newId = null;
+  runMutation("create-point", () => {
+    if (pointSnap?.sourceObjectIds) {
+      newId = maybeCreateIntersectionPoint(pointSnap);
+    } else if (pointSnap?.sourceObjectId) {
+      newId = maybeCreateAttachedPoint(pointSnap);
+    } else {
+      newId = maybeCreatePoint(snappedCoords);
+    }
+  });
+  if (newId) {
+    store.selection.add(newId);
+    renderCurrentDoc();
+    maybeCompleteConstructionSelectionSession();
+  }
+  return true;
+}
+
 function handleBoardClick(coords, evt) {
   if (session.tangentPickState) {
     handleTangentPickBoardClick();
@@ -2004,6 +2041,9 @@ function handleBoardClick(coords, evt) {
       commitTangentAtPointPlacement(adjusted);
       return;
     }
+    return;
+  }
+  if (handleConstructionPointPlacementBoardClick(coords, evt)) {
     return;
   }
   if (session.currentMode === ToolMode.SELECT) {
@@ -4514,7 +4554,9 @@ function launchRegularPolygonVariant(options = {}) {
     kind: `regular-polygon${kindSuffix}`,
     label: `Regular Polygon${labelSuffix}`,
     buttonId: options.buttonId || null,
-    instructions: "Select exactly one segment or exactly two points.",
+    instructions:
+      "Click two points (or select a segment / two existing points) to set the first edge.",
+    allowPointPlacement: true,
     tryCreate: () => addRegularPolygonVariant(options, { quiet: true }),
   });
 }
