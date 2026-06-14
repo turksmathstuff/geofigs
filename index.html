@@ -20,6 +20,10 @@
         <h1>Geometry Figure Generator</h1>
         <span class="app-version" aria-label="Application version">v1.2</span>
       </div>
+      <div class="topbar-actions">
+        <button type="button" class="topbar-btn" data-action="undo" title="Undo" aria-label="Undo">↶ Undo</button>
+        <button type="button" class="topbar-btn" data-action="redo" title="Redo" aria-label="Redo">↷ Redo</button>
+      </div>
       <div class="status" id="statusText">Mode: Select</div>
     </header>
 
@@ -40,85 +44,91 @@
             <button id="makePerpendicular">Perpendicular</button>
             <button data-mode="circle">Circle</button>
           </div>
-          <h3 class="toolbar-subhead">Point &amp; Line Constructions</h3>
-          <div class="grid-buttons">
-            <details class="annotate-group">
-              <summary>Midpoint</summary>
-              <div class="annotate-subgrid">
-                <button id="makeMidpoint">Midpoint</button>
-                <button id="makeMidpointTick1">Midpoint 1 Tick</button>
-                <button id="makeMidpointTick2">Midpoint 2 Ticks</button>
-                <button id="makeMidpointTick3">Midpoint 3 Ticks</button>
-              </div>
-            </details>
-            <details class="annotate-group">
-              <summary>Perp Bisector</summary>
-              <div class="annotate-subgrid">
-                <button id="makePerpBisector">Bisector</button>
-                <button id="makePerpBisectorRA">Bisector + Rt ∠</button>
-                <button id="makePerpBisectorTicks">Bisector + MP Ticks</button>
-                <button id="makePerpBisectorBoth">Bisector + Rt ∠ + MP</button>
-              </div>
-            </details>
-            <details class="annotate-group">
-              <summary>Angle Bisector</summary>
-              <div class="annotate-subgrid">
-                <button id="makeAngleBisector">Bisector</button>
-                <button id="makeAngleBisectorTick1">Bisector 1 Tick</button>
-                <button id="makeAngleBisectorTick2">Bisector 2 Ticks</button>
-                <button id="makeAngleBisectorTick3">Bisector 3 Ticks</button>
-              </div>
-            </details>
-          </div>
-          <h3 class="toolbar-subhead">Shapes</h3>
-          <div class="grid-buttons">
-            <details id="triangleMenuPanel" class="annotate-group">
-              <summary id="triangleMenuBtn">Triangles</summary>
-              <div class="annotate-subgrid">
-                <button type="button" data-triangle-mode="three-point">3-Point Triangle</button>
-                <button type="button" data-triangle-mode="right">Right Triangle</button>
-                <button type="button" data-triangle-mode="isosceles">Isosceles Triangle</button>
-                <button type="button" data-triangle-mode="equilateral">Equilateral</button>
-              </div>
-            </details>
-            <details class="annotate-group">
-              <summary>Regular Polygon</summary>
-              <div class="annotate-subgrid">
-                <button id="makeRegularPolygonPlain">n Sides</button>
-                <button id="makeRegularPolygonTicks">n Sides + Ticks</button>
-                <button id="makeRegularPolygonArcTicks">n Sides + Arc Tick</button>
-                <button id="makeRegularPolygonPlainCenter">n Sides + Center</button>
-                <button id="makeRegularPolygonTicksCenter">n Sides + Ticks + Center</button>
-                <button id="makeRegularPolygonArcTicksCenter">n Sides + Arc Tick + Center</button>
-              </div>
-            </details>
-            <details class="annotate-group">
-              <summary>Congruent/Similar Triangles</summary>
-              <div class="annotate-subgrid">
-                <button id="makeCongruentTriangle">Congruent △</button>
-                <button id="makeSimilarTriangle">Similar △</button>
-                <button id="transformSelectedTriangle">Rotate/Slide Triangle</button>
-              </div>
-            </details>
-          </div>
-          <h3 class="toolbar-subhead">Circle Constructions</h3>
-          <div class="grid-buttons">
-            <details class="annotate-group">
-              <summary>Circles</summary>
-              <div class="annotate-subgrid">
-                <button id="makeInscribedCircle">Inscribed</button>
-                <button id="makeInscribedCircleCenter">Inscribed + Incenter</button>
-                <button id="makeCircumscribedCircle">Circumscribed</button>
-                <button id="makeCircumscribedCircleCenter">Circumscribed + Cctr</button>
-                <button data-mode="arc-3pt">Arc: 3 Pts On</button>
-                <button data-mode="arc-cse">Arc: Ctr–Start–End</button>
-                <button id="makeInscribedQuad">Circle Inscribed in Quad</button>
-                <button id="makeInscribedNGon">Circle Inscribed in n-gon</button>
-                <button id="makeTangentToCircle">Tangent (Pt→Circle)</button>
-                <button id="makeTangentAtCirclePoint">Tangent at Pt on Circle</button>
-              </div>
-            </details>
-          </div>
+          <details class="annotate-group annotate-group--section" open>
+            <summary>Point &amp; Line Constructions</summary>
+            <div class="annotate-subgrid">
+              <details class="annotate-group">
+                <summary>Midpoint</summary>
+                <div class="annotate-subgrid">
+                  <button id="makeMidpoint">Midpoint</button>
+                  <button id="makeMidpointTick1">Midpoint 1 Tick</button>
+                  <button id="makeMidpointTick2">Midpoint 2 Ticks</button>
+                  <button id="makeMidpointTick3">Midpoint 3 Ticks</button>
+                </div>
+              </details>
+              <details class="annotate-group">
+                <summary>Perp Bisector</summary>
+                <div class="annotate-subgrid">
+                  <button id="makePerpBisector">Bisector</button>
+                  <button id="makePerpBisectorRA">Bisector + Rt ∠</button>
+                  <button id="makePerpBisectorTicks">Bisector + MP Ticks</button>
+                  <button id="makePerpBisectorBoth">Bisector + Rt ∠ + MP</button>
+                </div>
+              </details>
+              <details class="annotate-group">
+                <summary>Angle Bisector</summary>
+                <div class="annotate-subgrid">
+                  <button id="makeAngleBisector">Bisector</button>
+                  <button id="makeAngleBisectorTick1">Bisector 1 Tick</button>
+                  <button id="makeAngleBisectorTick2">Bisector 2 Ticks</button>
+                  <button id="makeAngleBisectorTick3">Bisector 3 Ticks</button>
+                </div>
+              </details>
+            </div>
+          </details>
+          <details class="annotate-group annotate-group--section">
+            <summary>Shapes</summary>
+            <div class="annotate-subgrid">
+              <details id="triangleMenuPanel" class="annotate-group">
+                <summary id="triangleMenuBtn">Triangles</summary>
+                <div class="annotate-subgrid">
+                  <button type="button" data-triangle-mode="three-point">3-Point Triangle</button>
+                  <button type="button" data-triangle-mode="right">Right Triangle</button>
+                  <button type="button" data-triangle-mode="isosceles">Isosceles Triangle</button>
+                  <button type="button" data-triangle-mode="equilateral">Equilateral</button>
+                </div>
+              </details>
+              <details class="annotate-group">
+                <summary>Regular Polygon</summary>
+                <div class="annotate-subgrid">
+                  <button id="makeRegularPolygonPlain">n Sides</button>
+                  <button id="makeRegularPolygonTicks">n Sides + Ticks</button>
+                  <button id="makeRegularPolygonArcTicks">n Sides + Arc Tick</button>
+                  <button id="makeRegularPolygonPlainCenter">n Sides + Center</button>
+                  <button id="makeRegularPolygonTicksCenter">n Sides + Ticks + Center</button>
+                  <button id="makeRegularPolygonArcTicksCenter">n Sides + Arc Tick + Center</button>
+                </div>
+              </details>
+              <details class="annotate-group">
+                <summary>Congruent/Similar Triangles</summary>
+                <div class="annotate-subgrid">
+                  <button id="makeCongruentTriangle">Congruent △</button>
+                  <button id="makeSimilarTriangle">Similar △</button>
+                  <button id="transformSelectedTriangle">Rotate/Slide Triangle</button>
+                </div>
+              </details>
+            </div>
+          </details>
+          <details class="annotate-group annotate-group--section">
+            <summary>Circle Constructions</summary>
+            <div class="annotate-subgrid">
+              <details class="annotate-group">
+                <summary>Circles</summary>
+                <div class="annotate-subgrid">
+                  <button id="makeInscribedCircle">Inscribed</button>
+                  <button id="makeInscribedCircleCenter">Inscribed + Incenter</button>
+                  <button id="makeCircumscribedCircle">Circumscribed</button>
+                  <button id="makeCircumscribedCircleCenter">Circumscribed + Cctr</button>
+                  <button data-mode="arc-3pt">Arc: 3 Pts On</button>
+                  <button data-mode="arc-cse">Arc: Ctr–Start–End</button>
+                  <button id="makeInscribedQuad">Circle Inscribed in Quad</button>
+                  <button id="makeInscribedNGon">Circle Inscribed in n-gon</button>
+                  <button id="makeTangentToCircle">Tangent (Pt→Circle)</button>
+                  <button id="makeTangentAtCirclePoint">Tangent at Pt on Circle</button>
+                </div>
+              </details>
+            </div>
+          </details>
         </section>
 
         <section>
@@ -174,8 +184,8 @@
         <section>
           <h2>Edit</h2>
           <div class="grid-buttons">
-            <button id="undoBtn">Undo</button>
-            <button id="redoBtn">Redo</button>
+            <button id="undoBtn" data-action="undo">Undo</button>
+            <button id="redoBtn" data-action="redo">Redo</button>
             <button id="hideSelected">Hide Selected</button>
             <button id="showAll">Show All</button>
             <button id="deleteSelected">Delete Selected</button>
