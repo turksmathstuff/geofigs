@@ -21,10 +21,13 @@ export function createCircleToolWorkflow(ctx) {
       const arcId = makeId("arc");
       addObject({ id: arcId, type: "arc-cse", pointIds: pointsForCreate, swapStartEnd, style });
       session.arcCSESwapStartEnd = false;
-      // Constrain end point to slide along the arc's circle
+      // Constrain a *free* end point to slide along the arc's circle. Never
+      // override an existing constraint (e.g. a regular-polygon vertex), or the
+      // point gets re-tied to the arc's own circle and the figure feeds back on
+      // itself.
       const centerPt = getPointById(pointsForCreate[0]);
       const endPt = getPointById(pointsForCreate[2]);
-      if (centerPt && endPt) {
+      if (centerPt && endPt && !endPt.constraint) {
         const angle = Math.atan2(endPt.y - centerPt.y, endPt.x - centerPt.x);
         endPt.constraint = { kind: "onObject", sourceObjectId: arcId, attach: { type: "circle", angle } };
       }

@@ -71,6 +71,11 @@ export function createMarqueeSelectionWorkflow(ctx) {
     }
   }
 
+  function clearMarqueeState() {
+    removeMarqueeRect();
+    session.marqueeState = null;
+  }
+
   function startMarqueeSelection() {
     if (!boardEl) {
       return;
@@ -80,10 +85,20 @@ export function createMarqueeSelectionWorkflow(ctx) {
       if (session.currentMode !== ToolMode.SELECT || evt.button !== 0) {
         return;
       }
+      // Construction sessions are click-to-pick / click-to-place flows. Arming a
+      // marquee here is both unwanted and unsafe: a synchronous prompt() (e.g.
+      // the polygon side-count box) can swallow the matching mouseup, leaving a
+      // stale marquee that draws a phantom rectangle on the next move.
+      if (session.constructionSelectionSession) {
+        return;
+      }
       const tag = String(evt.target?.tagName || "").toLowerCase();
       if (tag !== "svg" && evt.target !== boardEl) {
         return;
       }
+      // Drop any stale marquee (e.g. one whose mouseup was swallowed by a modal)
+      // before arming a new one, so its rectangle can't be orphaned.
+      clearMarqueeState();
       const rect = boardEl.getBoundingClientRect();
       const wrapRect = boardEl.parentElement.getBoundingClientRect();
       session.marqueeState = {
@@ -101,6 +116,14 @@ export function createMarqueeSelectionWorkflow(ctx) {
 
     win.addEventListener("mousemove", (evt) => {
       if (!session.marqueeState || session.currentMode !== ToolMode.SELECT) {
+        return;
+      }
+      // The primary button is no longer held — the mouseup that should have
+      // ended this marquee never reached us (commonly swallowed by a modal such
+      // as the polygon side-count prompt). Abandon it instead of drawing a
+      // phantom rectangle that tracks the cursor.
+      if ((evt.buttons & 1) === 0) {
+        clearMarqueeState();
         return;
       }
       session.marqueeState.lastX = evt.clientX;
