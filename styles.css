@@ -101,10 +101,23 @@ h2 {
   color: #314152;
 }
 
+.toolbar-subhead {
+  margin: 0.75rem 0 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #7a8694;
+}
+
 .grid-buttons {
   display: grid;
   gap: 0.45rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-buttons + .grid-buttons {
+  margin-top: 0.45rem;
 }
 
 .triangle-menu {
@@ -145,6 +158,10 @@ h2 {
   border-radius: 8px;
   background: #f9fbfd;
   padding: 0.25rem 0.35rem 0.35rem;
+}
+
+.export-advanced {
+  margin-top: 0.6rem;
 }
 
 .annotate-group summary {
