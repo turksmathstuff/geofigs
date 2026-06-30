@@ -7,3 +7,7 @@ Thumbs.db
 guide.md
 guide.pdf
 CODE_REVIEW.md
+
+# Dev-only documentation recorder — never shipped (see src/recorder.js header)
+src/recorder.js
+figure-walkthrough.md
