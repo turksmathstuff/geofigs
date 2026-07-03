@@ -300,10 +300,10 @@ General:
 - Hidden items are excluded because they are not rendered.
 - Constrained intersection points export in black by default (same behavior as SVG export).
 
-### Save `.geojson`
+### Save `.geofig`
 - Saves editable document state (objects, annotations, styles, metadata) as JSON.
 
-### Open `.geojson`
+### Open `.geofig`
 - Loads a saved document.
 - Replaces current document state.
 - Clears undo stack after loading.

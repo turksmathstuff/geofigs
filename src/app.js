@@ -2136,6 +2136,8 @@ function handleBoardClick(coords, evt) {
   }
 }
 
+const handledObjectClicks = new WeakMap();
+
 function handleObjectClick(id, type, evt) {
   if (session.tangentPickState) {
     const eventType = String(evt?.type || "").toLowerCase();
@@ -2151,17 +2153,15 @@ function handleObjectClick(id, type, evt) {
   if (evt && typeof evt === "object") {
     const clickKey = `${type}:${id}`;
     const dedupeStamp = `${eventType}:${Number(evt.timeStamp || 0)}`;
-    if (evt.__codexHandledObjectClicksStamp !== dedupeStamp) {
-      evt.__codexHandledObjectClicksStamp = dedupeStamp;
-      evt.__codexHandledObjectClicks = [];
+    let handled = handledObjectClicks.get(evt);
+    if (!handled || handled.stamp !== dedupeStamp) {
+      handled = { stamp: dedupeStamp, keys: new Set() };
+      handledObjectClicks.set(evt, handled);
     }
-    if (!Array.isArray(evt.__codexHandledObjectClicks)) {
-      evt.__codexHandledObjectClicks = [];
-    }
-    if (evt.__codexHandledObjectClicks.includes(clickKey)) {
+    if (handled.keys.has(clickKey)) {
       return;
     }
-    evt.__codexHandledObjectClicks.push(clickKey);
+    handled.keys.add(clickKey);
   }
   const nearPointRedirect = handleObjectClickNearPointRedirect(id, type, evt);
   if (nearPointRedirect.matched) {
@@ -4754,6 +4754,12 @@ async function editLabelText(labelId) {
   });
 }
 
+function isEditorModalOpen() {
+  const exportPreviewEl = document.getElementById("exportPreviewModal");
+  const exportPreviewOpen = !!exportPreviewEl && !exportPreviewEl.hasAttribute("hidden");
+  return Boolean(labelModalResolve || nGonModalResolve || exportPreviewOpen);
+}
+
 function closeNGonModal(n = null) {
   if (!nGonModalEl || !nGonModalResolve) return;
   nGonModalEl.hidden = true;
@@ -4918,7 +4924,7 @@ function saveDoc() {
     null,
     2,
   );
-  const name = `figure-${timestampForFile()}.geojson`;
+  const name = `figure-${timestampForFile()}.geofig`;
   triggerDownload(name, content, "application/json");
 }
 
@@ -5010,7 +5016,6 @@ function openDocFromFile(file) {
       validateFigureDoc(doc);
       store.setBackgroundImageAssets(backgroundImageAssets);
       applyDoc(cloneFigureDoc(doc));
-      store.commandStack.clear();
     } catch (err) {
       alert(`Cannot open document: ${err.message}`);
     }
@@ -5050,6 +5055,7 @@ wireUi({
   updateCompassReadout,
   deleteSelected,
   hideSelected,
+  isEditorModalOpen,
   showAllHidden,
   togglePointObjectsVisibility,
   toggleLineArrowsVisibility,
@@ -5119,7 +5125,7 @@ if (nGonModalDialogEl) {
   nGonModalDialogEl.addEventListener("submit", (evt) => {
     evt.preventDefault();
     const raw = Number(nGonModalInputEl?.value);
-    const n = Number.isInteger(raw) && raw >= 3 && raw <= 20 ? raw : null;
+    const n = Number.isInteger(raw) && raw >= 3 && raw <= 24 ? raw : null;
     closeNGonModal(n);
   });
 }

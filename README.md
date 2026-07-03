@@ -51,8 +51,8 @@ Do not open `index.html` directly with `file://`.
 - Exam mode toggle
 
 ### Export / persistence
-- Save editable figure state as `.geojson`
-- Open `.geojson`
+- Save editable figure state as `.geofig`
+- Open `.geofig` (legacy `.geojson` files from older versions still open)
 - Upload a background image that stays with the saved figure
 - Download SVG (tight export supported)
 - Download PNG (scale 1x/2x/3x)

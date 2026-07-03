@@ -4,8 +4,12 @@ Thumbs.db
 *.tmp
 .vscode/
 .idea/
+# Local-only guide docs; listed in both cases so the intent is clear on
+# case-sensitive filesystems too (macOS matches these case-insensitively).
 guide.md
 guide.pdf
+GUIDE.md
+GUIDE.pdf
 CODE_REVIEW.md
 
 # Dev-only documentation recorder — never shipped (see src/recorder.js header)

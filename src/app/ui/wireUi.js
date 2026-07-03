@@ -344,7 +344,7 @@ function bindStyleActions({ doc, store, applyStyleToSelection, runMutation }) {
   });
 }
 
-function bindKeyboardShortcuts({ win, store, session, setMode, ToolMode, renderCurrentDoc, deleteSelected, hideSelected }) {
+function bindKeyboardShortcuts({ win, store, session, setMode, ToolMode, renderCurrentDoc, deleteSelected, hideSelected, isEditorModalOpen }) {
   win.addEventListener(
     "keydown",
     (evt) => {
@@ -367,7 +367,7 @@ function bindKeyboardShortcuts({ win, store, session, setMode, ToolMode, renderC
         return;
       }
 
-      if (mod && (key === "y" || (key === "z" && evt.shiftKey)) && !isEditable) {
+      if (mod && key === "y" && !isEditable) {
         evt.preventDefault();
         store.commandStack.redo();
         renderCurrentDoc();
@@ -387,6 +387,10 @@ function bindKeyboardShortcuts({ win, store, session, setMode, ToolMode, renderC
         return;
       }
       if (evt.key === "Escape") {
+        // An open modal owns Escape; its own document-level listener closes it.
+        if (isEditorModalOpen?.()) {
+          return;
+        }
         store.clearSelection();
         session.pendingPointIds = [];
         setMode(ToolMode.SELECT);
