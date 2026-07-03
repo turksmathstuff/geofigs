@@ -2456,7 +2456,7 @@ function handleObjectMove(id, type, pos, options = {}) {
     const polyObj = getObjectById(id);
     if (!polyObj || polyObj.type !== "inscribed-polygon") return;
     if (transient) {
-      ensureTransientSnapshot();
+      ensureTransientSnapshot(id);
       polyObj.handleAngles = pos.handleAngles;
       // Sync ghost stub positions from live JSXGraph elements
       for (const vid of (polyObj.vertexIds || [])) {
@@ -2470,7 +2470,7 @@ function handleObjectMove(id, type, pos, options = {}) {
         if (el && stub) { stub.x = el.X(); stub.y = el.Y(); }
       }
     } else {
-      commitTransientSnapshotIfPresent();
+      commitTransientSnapshotIfPresent(id, "inscribed-polygon-drag");
     }
     return;
   }

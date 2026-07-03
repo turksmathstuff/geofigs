@@ -1,3 +1,5 @@
+import { seedIdsFromDoc } from "../../utils/ids.js";
+
 export function createApplyDoc(ctx) {
   const {
     store,
@@ -10,6 +12,7 @@ export function createApplyDoc(ctx) {
 
   return function applyDoc(doc, fromCommand = false) {
     store.setDoc(doc);
+    seedIdsFromDoc(store.doc);
     store.doc.styles.rayExtension = normalizedRayExtension(store.doc.styles.rayExtension);
     store.doc.styles.lineExtensionStart = normalizedLineExtension(store.doc.styles.lineExtensionStart);
     store.doc.styles.lineExtensionEnd = normalizedLineExtension(store.doc.styles.lineExtensionEnd);
