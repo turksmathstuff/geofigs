@@ -15,34 +15,11 @@ function parseViewBox(viewBoxText) {
   return { x: values[0], y: values[1], width: values[2], height: values[3] };
 }
 
-function normalizeSvgMarkup(svgString) {
-  let out = String(svgString || "");
-  if (!out) {
-    return out;
-  }
-  const needsXlink = /xlink:href\s*=/i.test(out) && !/xmlns:xlink\s*=/i.test(out);
-  const needsSvgNs = /<svg\b/i.test(out) && !/xmlns\s*=\s*["']http:\/\/www\.w3\.org\/2000\/svg["']/i.test(out);
-  if (!needsXlink && !needsSvgNs) {
-    return out;
-  }
-  out = out.replace(/<svg\b([^>]*)>/i, (match, attrs) => {
-    let nextAttrs = attrs;
-    if (needsSvgNs) {
-      nextAttrs += ' xmlns="http://www.w3.org/2000/svg"';
-    }
-    if (needsXlink) {
-      nextAttrs += ' xmlns:xlink="http://www.w3.org/1999/xlink"';
-    }
-    return `<svg${nextAttrs}>`;
-  });
-  return out;
-}
-
 export function replaceExportLabels(svgString, labels = []) {
   if (!labels.length) {
     return svgString;
   }
-  const xml = new DOMParser().parseFromString(normalizeSvgMarkup(svgString), "image/svg+xml");
+  const xml = new DOMParser().parseFromString(svgString, "image/svg+xml");
   if (xml.querySelector("parsererror")) {
     return svgString;
   }
@@ -139,7 +116,7 @@ function padBounds(bounds, padding = 0) {
 
 export function exportSVG(svgString, options = {}) {
   const parser = new DOMParser();
-  const xml = parser.parseFromString(normalizeSvgMarkup(svgString), "image/svg+xml");
+  const xml = parser.parseFromString(svgString, "image/svg+xml");
   const svg = xml.documentElement;
   if (!svg || svg.nodeName.toLowerCase() !== "svg") {
     return svgString;

@@ -21,5 +21,7 @@ export function createEditorSession() {
     tangentAtPointPlacement: null,
     transientDragSnapshots: new Map(),
     exportPointHighlightsBlack: false,
+    exportPointScale: null,
+    arcCSESwapStartEnd: false,
   };
 }

@@ -145,7 +145,7 @@ Use this checklist on the current `main` branch build. Go in order.
 ---
 
 ## 8. Undo / Redo
-Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded content becomes the new baseline, and undo/redo should apply to actions performed after opening.
+Note: Opening a `.geofig` is expected to reset/replace the undo history. Loaded content becomes the new baseline, and undo/redo should apply to actions performed after opening.
 
 1. Create several objects (point, segment, triangle).
 2. Press `Cmd/Ctrl+Z` multiple times and confirm actions undo in order.
@@ -297,9 +297,9 @@ Note: Opening a `.geojson` is expected to reset/replace the undo history. Loaded
 
 ## 15. Save / Open (Persistence)
 1. Create a mixed figure (triangle, circle, labels, annotations).
-2. Save/export the editable figure as `.geojson`.
+2. Save/export the editable figure as `.geofig`.
 3. Clear the board (or reload page) and confirm canvas resets.
-4. Open/import the saved `.geojson`.
+4. Open/import the saved `.geofig`.
 5. Confirm all geometry, annotations, and labels are restored correctly.
 6. Confirm imported objects remain selectable and draggable.
 7. Upload a background image, save, reload, and confirm the image is restored.
