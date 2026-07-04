@@ -1053,8 +1053,12 @@ export class BoardController {
     return sourceLine;
   }
 
+  getBoardBBox() {
+    return this.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+  }
+
   defaultCanvasSpanningLineExtension() {
-    const bbox = this.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+    const bbox = this.getBoardBBox();
     const minX = Math.min(bbox[0], bbox[2]);
     const maxX = Math.max(bbox[0], bbox[2]);
     const minY = Math.min(bbox[1], bbox[3]);
@@ -1100,7 +1104,7 @@ export class BoardController {
   }
 
   canvasInsetLineExtents(throughPoint, baseA, baseB) {
-    const bbox = this.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+    const bbox = this.getBoardBBox();
     const rawMinX = Math.min(bbox[0], bbox[2]);
     const rawMaxX = Math.max(bbox[0], bbox[2]);
     const rawMinY = Math.min(bbox[1], bbox[3]);
