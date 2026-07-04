@@ -154,3 +154,70 @@ export function intersectLineAndCircle(lineDef, circleDef) {
     { x: x1 + t2 * dx, y: y1 + t2 * dy },
   ];
 }
+
+export function intersectDefinitions(def1, def2) {
+  if (!def1 || !def2) {
+    return [];
+  }
+  if (def1.kind !== "circle" && def2.kind !== "circle") {
+    const pt = intersectInfiniteLines(def1, def2);
+    if (!pt) {
+      return [];
+    }
+    if (!pointFitsLinearDef(pt, def1) || !pointFitsLinearDef(pt, def2)) {
+      return [];
+    }
+    return [pt];
+  }
+  if (def1.kind === "circle" && def2.kind === "circle") {
+    return [];
+  }
+  const lineDef = def1.kind === "circle" ? def2 : def1;
+  const circleDef = def1.kind === "circle" ? def1 : def2;
+  return intersectLineAndCircle(lineDef, circleDef).filter(
+    (pt) => pointFitsLinearDef(pt, lineDef) && pointFitsIntersectionDef(pt, circleDef)
+  );
+}
+
+export function nearestPointTo(referencePoint, candidates) {
+  if (!referencePoint || !candidates?.length) {
+    return null;
+  }
+  let best = null;
+  let bestDist = Infinity;
+  for (const candidate of candidates) {
+    const d = distance(referencePoint, candidate);
+    if (d < bestDist) {
+      best = candidate;
+      bestDist = d;
+    }
+  }
+  return best ? { point: best, distance: bestDist } : null;
+}
+
+export function pointFromConstraintOnObject(def, attach) {
+  if (!def || !attach) {
+    return null;
+  }
+  if (attach.type === "circle") {
+    if (def.kind !== "circle") {
+      return null;
+    }
+    const angle = Number(attach.angle || 0);
+    return {
+      x: def.center.x + Math.cos(angle) * def.radius,
+      y: def.center.y + Math.sin(angle) * def.radius,
+    };
+  }
+  if (attach.type === "linear") {
+    if (def.kind === "circle") {
+      return null;
+    }
+    const t = Number(attach.t || 0);
+    return {
+      x: def.a.x + (def.b.x - def.a.x) * t,
+      y: def.a.y + (def.b.y - def.a.y) * t,
+    };
+  }
+  return null;
+}

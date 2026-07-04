@@ -24,7 +24,19 @@ import {
   nearestPointOnCircleDef,
   nearestPointOnDef,
   intersectLineAndCircle,
+  intersectDefinitions,
+  nearestPointTo,
 } from "./app/geometry/intersections.js";
+import {
+  angleBisectorDirectionPoint,
+  perpendicularBisectorEndpointPoint,
+  rightTriangleApexFromCursor,
+  isoscelesApexFromCursor,
+  equilateralApexFromCursor,
+  regularPolygonVerticesFromEdge,
+  regularPolygonCenterFromEdge,
+} from "./app/geometry/constructions.js";
+import { constraintEntry } from "./app/constraints/registry.js";
 import { angleDegrees, nestedAngleArcRadii } from "./app/geometry/angles.js";
 import {
   transformPointAround,
@@ -382,108 +394,28 @@ function maybeAxisLockDraggedPoint(pointId, pos, options = {}) {
   return snapToAxis(anchor, pos);
 }
 
+// Doc-dependent lookups handed to constraint registry entries.
+const constraintCtx = {
+  getPointById: (id) => getPointById(id),
+  getObjectById: (id) => getObjectById(id),
+  getIntersectionDefinition: (obj) => getIntersectionDefinition(obj),
+};
+
 function applyPointConstraintToDraggedPosition(pointObj, pos) {
   if (!pointObj?.constraint || !pos) {
     return { pos, changedConstraint: false };
   }
-  if (
-    pointObj.constraint.kind === "intersection" ||
-    pointObj.constraint.kind === "midpoint" ||
-    pointObj.constraint.kind === "angleBisectorRay" ||
-    pointObj.constraint.kind === "equilateralApex" ||
-    pointObj.constraint.kind === "regularPolygonVertex" ||
-    pointObj.constraint.kind === "regularPolygonCenter" ||
-    pointObj.constraint.kind === "circleTangentPoint"
-  ) {
+  const entry = constraintEntry(pointObj.constraint);
+  if (!entry) {
+    return { pos, changedConstraint: false };
+  }
+  if (entry.dragPinned) {
     return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
   }
-  if (pointObj.constraint.kind === "perpendicularBisectorEndpoint") {
-    const [id1, id2] = pointObj.constraint.sourcePointIds || [];
-    const p1 = getPointById(id1);
-    const p2 = getPointById(id2);
-    if (!p1 || !p2) {
-      return { pos, changedConstraint: false };
-    }
-    const mx = (p1.x + p2.x) / 2;
-    const my = (p1.y + p2.y) / 2;
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 1e-9) {
-      return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
-    }
-    const px = -dy / len;
-    const py = dx / len;
-    const vx = pos.x - mx;
-    const vy = pos.y - my;
-    const signed = vx * px + vy * py;
-    const side = signed >= 0 ? 1 : -1;
-    const halfLength = Math.max(0.2, Math.abs(signed));
-    pointObj.constraint.side = side;
-    pointObj.constraint.halfLength = halfLength;
-    return {
-      pos: { x: mx + px * halfLength * side, y: my + py * halfLength * side },
-      changedConstraint: true,
-    };
+  if (entry.applyDrag) {
+    return entry.applyDrag(pointObj, pos, constraintCtx);
   }
-  if (pointObj.constraint.kind === "tangentAtPointEndpoint") {
-    const source = getPointById(pointObj.constraint.sourcePointId);
-    const circleObj = getObjectById(pointObj.constraint.circleId);
-    const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
-    if (!source || !center) {
-      return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
-    }
-    const len = Math.hypot(source.x - center.x, source.y - center.y);
-    if (len < 1e-9) {
-      return { pos: { x: pointObj.x, y: pointObj.y }, changedConstraint: false };
-    }
-    const tx = -(source.y - center.y) / len;
-    const ty = (source.x - center.x) / len;
-    const vx = pos.x - source.x;
-    const vy = pos.y - source.y;
-    const signed = vx * tx + vy * ty;
-    const side = signed >= 0 ? 1 : -1;
-    const dist = Math.max(0.2, Math.abs(signed));
-    pointObj.constraint.side = side;
-    pointObj.constraint.distance = dist;
-    return {
-      pos: { x: source.x + tx * dist * side, y: source.y + ty * dist * side },
-      changedConstraint: true,
-    };
-  }
-  if (pointObj.constraint.kind === "rightTriangleApex") {
-    const rightVertex = getPointById(pointObj.constraint.rightVertexId);
-    const baseVertex = getPointById(pointObj.constraint.baseVertexId);
-    if (!rightVertex || !baseVertex) {
-      return { pos, changedConstraint: false };
-    }
-    const projected = rightTriangleApexFromCursor(rightVertex, baseVertex, pos);
-    if (!projected) {
-      return { pos, changedConstraint: false };
-    }
-    pointObj.constraint.height = projected.height;
-    return {
-      pos: { x: projected.x, y: projected.y },
-      changedConstraint: true,
-    };
-  }
-  if (pointObj.constraint.kind !== "onObject") {
-    return { pos, changedConstraint: false };
-  }
-  const source = getObjectById(pointObj.constraint.sourceObjectId);
-  const def = getIntersectionDefinition(source);
-  if (!def) {
-    return { pos, changedConstraint: false };
-  }
-  const projected = nearestPointOnDef(pos, def);
-  if (!projected) {
-    return { pos, changedConstraint: false };
-  }
-  pointObj.constraint.attach = { ...projected.attach };
-  return {
-    pos: { x: projected.x, y: projected.y },
-    changedConstraint: true,
-  };
+  return { pos, changedConstraint: false };
 }
 
 function getAutoLabelObjectByTargetId(targetId) {
@@ -614,32 +546,6 @@ function maybeCreateMidpointPoint(pointAId, pointBId) {
   return id;
 }
 
-function angleBisectorDirectionPoint(pointA, vertex, pointB, distanceOut = 1) {
-  if (!pointA || !vertex || !pointB) {
-    return null;
-  }
-  const ax = pointA.x - vertex.x;
-  const ay = pointA.y - vertex.y;
-  const bx = pointB.x - vertex.x;
-  const by = pointB.y - vertex.y;
-  const alen = Math.hypot(ax, ay);
-  const blen = Math.hypot(bx, by);
-  if (alen < 1e-9 || blen < 1e-9) {
-    return null;
-  }
-  const sx = ax / alen + bx / blen;
-  const sy = ay / alen + by / blen;
-  const slen = Math.hypot(sx, sy);
-  if (slen < 1e-9) {
-    return null;
-  }
-  const out = Math.max(0.5, Number(distanceOut) || 1);
-  return {
-    x: vertex.x + (sx / slen) * out,
-    y: vertex.y + (sy / slen) * out,
-  };
-}
-
 function maybeCreateAngleBisectorDirectionPoint(pointAId, vertexId, pointBId) {
   const pointA = getPointById(pointAId);
   const vertex = getPointById(vertexId);
@@ -664,25 +570,6 @@ function maybeCreateAngleBisectorDirectionPoint(pointAId, vertexId, pointBId) {
     style: { ...defaultStyle(), fixed: true },
   });
   return id;
-}
-
-function perpendicularBisectorEndpointPoint(pointA, pointB, side, halfLength) {
-  if (!pointA || !pointB) {
-    return null;
-  }
-  const mx = (pointA.x + pointB.x) / 2;
-  const my = (pointA.y + pointB.y) / 2;
-  const dx = pointB.x - pointA.x;
-  const dy = pointB.y - pointA.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 1e-9) {
-    return null;
-  }
-  const px = -dy / len;
-  const py = dx / len;
-  const s = side >= 0 ? 1 : -1;
-  const h = Math.max(0.2, Number(halfLength) || 1);
-  return { x: mx + px * h * s, y: my + py * h * s };
 }
 
 function maybeCreatePerpendicularBisectorEndpointPoint(pointAId, pointBId, side, halfLength) {
@@ -734,27 +621,6 @@ function triangleVerticesFromVariant(pointA, pointB) {
   }
 
   return null;
-}
-
-function rightTriangleApexFromCursor(pointRight, pointBase, cursor, options = {}) {
-  const baseLen = distance(pointRight, pointBase);
-  if (baseLen < 0.0001) {
-    return null;
-  }
-  const vx = pointBase.x - pointRight.x;
-  const vy = pointBase.y - pointRight.y;
-  const perpX = -vy / baseLen;
-  const perpY = vx / baseLen;
-  const rawHeight = (cursor.x - pointRight.x) * perpX + (cursor.y - pointRight.y) * perpY;
-  let height = Math.abs(rawHeight) < 0.0001 ? baseLen * 0.8 : rawHeight;
-  if (options.forceIsosceles) {
-    height = baseLen * (rawHeight < 0 ? -1 : 1);
-  }
-  return {
-    x: pointRight.x + perpX * height,
-    y: pointRight.y + perpY * height,
-    height,
-  };
 }
 
 function ccwAnglePointIds(p1Id, vertexId, p3Id) {
@@ -1120,47 +986,6 @@ function getPointInputCoords(rawCoords, evt) {
   return snapToAxis(anchor, rawCoords);
 }
 
-function isoscelesApexFromCursor(pointA, pointB, cursor) {
-  const baseLen = distance(pointA, pointB);
-  if (baseLen < 0.0001) {
-    return null;
-  }
-  const vx = pointB.x - pointA.x;
-  const vy = pointB.y - pointA.y;
-  const perpX = -vy / baseLen;
-  const perpY = vx / baseLen;
-  const midX = (pointA.x + pointB.x) / 2;
-  const midY = (pointA.y + pointB.y) / 2;
-
-  const projectedHeight = (cursor.x - midX) * perpX + (cursor.y - midY) * perpY;
-  const fallbackHeight = baseLen * 0.6;
-  const height = Math.abs(projectedHeight) < 0.0001 ? fallbackHeight : projectedHeight;
-  return {
-    x: midX + perpX * height,
-    y: midY + perpY * height,
-  };
-}
-
-function equilateralApexFromCursor(pointA, pointB, cursor) {
-  const baseLen = distance(pointA, pointB);
-  if (baseLen < 0.0001) {
-    return null;
-  }
-  const midX = (pointA.x + pointB.x) / 2;
-  const midY = (pointA.y + pointB.y) / 2;
-  const vx = pointB.x - pointA.x;
-  const vy = pointB.y - pointA.y;
-  const perpX = -vy / baseLen;
-  const perpY = vx / baseLen;
-  const signedSide = (cursor.x - midX) * perpX + (cursor.y - midY) * perpY;
-  const side = signedSide < 0 ? -1 : 1;
-  const height = (Math.sqrt(3) / 2) * baseLen;
-  return {
-    x: midX + perpX * height * side,
-    y: midY + perpY * height * side,
-    side,
-  };
-}
 
 function getLinearDefinition(obj) {
   if (!obj) {
@@ -1281,73 +1106,6 @@ function getIntersectionDefinition(obj) {
   return getLinearDefinition(obj) || getCircleDefinition(obj);
 }
 
-function pointFromConstraintOnObject(def, attach) {
-  if (!def || !attach) {
-    return null;
-  }
-  if (attach.type === "circle") {
-    if (def.kind !== "circle") {
-      return null;
-    }
-    const angle = Number(attach.angle || 0);
-    return {
-      x: def.center.x + Math.cos(angle) * def.radius,
-      y: def.center.y + Math.sin(angle) * def.radius,
-    };
-  }
-  if (attach.type === "linear") {
-    if (def.kind === "circle") {
-      return null;
-    }
-    const t = Number(attach.t || 0);
-    return {
-      x: def.a.x + (def.b.x - def.a.x) * t,
-      y: def.a.y + (def.b.y - def.a.y) * t,
-    };
-  }
-  return null;
-}
-
-function intersectDefinitions(def1, def2) {
-  if (!def1 || !def2) {
-    return [];
-  }
-  if (def1.kind !== "circle" && def2.kind !== "circle") {
-    const pt = intersectInfiniteLines(def1, def2);
-    if (!pt) {
-      return [];
-    }
-    if (!pointFitsLinearDef(pt, def1) || !pointFitsLinearDef(pt, def2)) {
-      return [];
-    }
-    return [pt];
-  }
-  if (def1.kind === "circle" && def2.kind === "circle") {
-    return [];
-  }
-  const lineDef = def1.kind === "circle" ? def2 : def1;
-  const circleDef = def1.kind === "circle" ? def1 : def2;
-  return intersectLineAndCircle(lineDef, circleDef).filter(
-    (pt) => pointFitsLinearDef(pt, lineDef) && pointFitsIntersectionDef(pt, circleDef)
-  );
-}
-
-function nearestPointTo(referencePoint, candidates) {
-  if (!referencePoint || !candidates?.length) {
-    return null;
-  }
-  let best = null;
-  let bestDist = Infinity;
-  for (const candidate of candidates) {
-    const d = distance(referencePoint, candidate);
-    if (d < bestDist) {
-      best = candidate;
-      bestDist = d;
-    }
-  }
-  return best ? { point: best, distance: bestDist } : null;
-}
-
 function findIntersectionSnapPoint(rawPoint) {
   const defs = store.doc.objects.map(getIntersectionDefinition).filter(Boolean);
   if (defs.length < 2) {
@@ -1412,180 +1170,10 @@ function recomputeConstrainedPoints() {
     if (obj.type !== "point" || !obj.constraint) {
       continue;
     }
-    if (obj.constraint.kind === "intersection") {
-      const [id1, id2] = obj.constraint.sourceObjectIds || [];
-      if (!id1 || !id2) {
-        continue;
-      }
-      const def1 = getIntersectionDefinition(getObjectById(id1));
-      const def2 = getIntersectionDefinition(getObjectById(id2));
-      if (!def1 || !def2) {
-        continue;
-      }
-      const candidates = intersectDefinitions(def1, def2);
-      const nearest = nearestPointTo({ x: obj.x, y: obj.y }, candidates);
-      if (!nearest) {
-        continue;
-      }
-      obj.x = nearest.point.x;
-      obj.y = nearest.point.y;
-      continue;
-    }
-    if (obj.constraint.kind === "onObject") {
-      const source = getObjectById(obj.constraint.sourceObjectId);
-      const def = getIntersectionDefinition(source);
-      const point = pointFromConstraintOnObject(def, obj.constraint.attach);
-      if (!point) {
-        continue;
-      }
-      obj.x = point.x;
-      obj.y = point.y;
-      continue;
-    }
-    if (obj.constraint.kind === "midpoint") {
-      const [id1, id2] = obj.constraint.sourcePointIds || [];
-      const p1 = getPointById(id1);
-      const p2 = getPointById(id2);
-      if (!p1 || !p2) {
-        continue;
-      }
-      obj.x = (p1.x + p2.x) / 2;
-      obj.y = (p1.y + p2.y) / 2;
-      continue;
-    }
-    if (obj.constraint.kind === "angleBisectorRay") {
-      const [id1, id2, id3] = obj.constraint.sourcePointIds || [];
-      const p1 = getPointById(id1);
-      const vertex = getPointById(id2);
-      const p3 = getPointById(id3);
-      const next = angleBisectorDirectionPoint(p1, vertex, p3, obj.constraint.distance);
-      if (!next) {
-        continue;
-      }
+    const next = constraintEntry(obj.constraint)?.recompute?.(obj, constraintCtx);
+    if (next) {
       obj.x = next.x;
       obj.y = next.y;
-      continue;
-    }
-    if (obj.constraint.kind === "perpendicularBisectorEndpoint") {
-      const [id1, id2] = obj.constraint.sourcePointIds || [];
-      const p1 = getPointById(id1);
-      const p2 = getPointById(id2);
-      const next = perpendicularBisectorEndpointPoint(
-        p1,
-        p2,
-        obj.constraint.side,
-        obj.constraint.halfLength
-      );
-      if (!next) {
-        continue;
-      }
-      obj.x = next.x;
-      obj.y = next.y;
-      continue;
-    }
-    if (obj.constraint.kind === "rightTriangleApex") {
-      const rightVertex = getPointById(obj.constraint.rightVertexId);
-      const baseVertex = getPointById(obj.constraint.baseVertexId);
-      if (!rightVertex || !baseVertex) {
-        continue;
-      }
-      const baseLen = distance(rightVertex, baseVertex);
-      if (baseLen < 0.0001) {
-        continue;
-      }
-      const vx = baseVertex.x - rightVertex.x;
-      const vy = baseVertex.y - rightVertex.y;
-      const perpX = -vy / baseLen;
-      const perpY = vx / baseLen;
-      const height = Number.isFinite(obj.constraint.height) ? obj.constraint.height : baseLen * 0.8;
-      obj.x = rightVertex.x + perpX * height;
-      obj.y = rightVertex.y + perpY * height;
-      continue;
-    }
-    if (obj.constraint.kind === "equilateralApex") {
-      const [id1, id2] = obj.constraint.sourcePointIds || [];
-      const p1 = getPointById(id1);
-      const p2 = getPointById(id2);
-      if (!p1 || !p2) {
-        continue;
-      }
-      const baseLen = distance(p1, p2);
-      if (baseLen < 0.0001) {
-        continue;
-      }
-      const midX = (p1.x + p2.x) / 2;
-      const midY = (p1.y + p2.y) / 2;
-      const vx = p2.x - p1.x;
-      const vy = p2.y - p1.y;
-      const perpX = -vy / baseLen;
-      const perpY = vx / baseLen;
-      const side = Number(obj.constraint.side) < 0 ? -1 : 1;
-      const height = (Math.sqrt(3) / 2) * baseLen;
-      obj.x = midX + perpX * height * side;
-      obj.y = midY + perpY * height * side;
-      continue;
-    }
-    if (obj.constraint.kind === "regularPolygonVertex") {
-      const [id1, id2] = obj.constraint.sourcePointIds || [];
-      const p1 = getPointById(id1);
-      const p2 = getPointById(id2);
-      const sideCount = Number(obj.constraint.sideCount);
-      const vertexIndex = Number(obj.constraint.vertexIndex);
-      const next = regularPolygonVertexPoint(p1, p2, sideCount, vertexIndex);
-      if (!next) {
-        continue;
-      }
-      obj.x = next.x;
-      obj.y = next.y;
-      continue;
-    }
-    if (obj.constraint.kind === "regularPolygonCenter") {
-      const [id1, id2] = obj.constraint.sourcePointIds || [];
-      const p1 = getPointById(id1);
-      const p2 = getPointById(id2);
-      const sideCount = Number(obj.constraint.sideCount);
-      const next = regularPolygonCenterFromEdge(p1, p2, sideCount);
-      if (!next) {
-        continue;
-      }
-      obj.x = next.x;
-      obj.y = next.y;
-      continue;
-    }
-    if (obj.constraint.kind === "circleTangentPoint") {
-      const source = getPointById(obj.constraint.sourcePointId);
-      const circleObj = getObjectById(obj.constraint.circleId);
-      const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
-      const through = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
-      if (!source || !center || !through) {
-        continue;
-      }
-      const r = Math.hypot(through.x - center.x, through.y - center.y);
-      const tps = computeTangentPoints(source, center, r);
-      if (!tps) {
-        obj.constraint.invalid = true;
-        continue;
-      }
-      obj.constraint.invalid = false;
-      const tp = tps[obj.constraint.side];
-      obj.x = tp.x;
-      obj.y = tp.y;
-      continue;
-    }
-    if (obj.constraint.kind === "tangentAtPointEndpoint") {
-      const source = getPointById(obj.constraint.sourcePointId);
-      const circleObj = getObjectById(obj.constraint.circleId);
-      const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
-      if (!source || !center) {
-        continue;
-      }
-      const next = computeTangentAtPointPosition(source, center, obj.constraint.side, obj.constraint.distance);
-      if (!next) {
-        continue;
-      }
-      obj.x = next.x;
-      obj.y = next.y;
-      continue;
     }
   }
   purgeStaleShadeRegions();
@@ -2531,58 +2119,9 @@ function removeWithDependencies(selectedSet) {
         selectedSet.add(obj.id);
         changed = true;
       }
-      if (obj.constraint?.kind === "intersection" && obj.constraint.sourceObjectIds?.some((srcId) => selectedSet.has(srcId))) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (obj.constraint?.kind === "onObject" && selectedSet.has(obj.constraint.sourceObjectId)) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (obj.constraint?.kind === "midpoint" && obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (obj.constraint?.kind === "angleBisectorRay" && obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (
-        obj.constraint?.kind === "perpendicularBisectorEndpoint" &&
-        obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))
-      ) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (obj.constraint?.kind === "equilateralApex" && obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (
-        obj.constraint?.kind === "regularPolygonVertex" &&
-        obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))
-      ) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (
-        obj.constraint?.kind === "regularPolygonCenter" &&
-        obj.constraint.sourcePointIds?.some((pid) => selectedSet.has(pid))
-      ) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (
-        obj.constraint?.kind === "circleTangentPoint" &&
-        (selectedSet.has(obj.constraint.sourcePointId) || selectedSet.has(obj.constraint.circleId))
-      ) {
-        selectedSet.add(obj.id);
-        changed = true;
-      }
-      if (
-        obj.constraint?.kind === "tangentAtPointEndpoint" &&
-        (selectedSet.has(obj.constraint.sourcePointId) || selectedSet.has(obj.constraint.circleId))
-      ) {
+      const constraintDeps =
+        constraintEntry(obj.constraint)?.dependencyIds?.(obj.constraint) || [];
+      if (constraintDeps.some((depId) => selectedSet.has(depId))) {
         selectedSet.add(obj.id);
         changed = true;
       }
@@ -2720,8 +2259,7 @@ function buildPointMap() {
       map.set(obj.id, pt);
       continue;
     }
-    const isPerpBisectorEndpoint = obj.constraint?.kind === "perpendicularBisectorEndpoint" ||
-      obj.constraint?.kind === "tangentAtPointEndpoint";
+    const pointConstraintEntry = constraintEntry(obj.constraint);
     const isPolygonControlPoint = polygonControlIds.has(obj.id);
     const isArcControlPoint = arcControlIds.has(obj.id);
     const isCircleRadiusPoint = circleRadiusIds.has(obj.id);
@@ -2746,14 +2284,10 @@ function buildPointMap() {
             : obj.constraint ? 4 : obj.style?.size,
           layer: obj.constraint ? 10 : obj.style?.layer,
           fixed:
-            isPerpBisectorEndpoint
+            pointConstraintEntry?.selectDraggable
               ? session.currentMode !== ToolMode.SELECT
               : session.currentMode !== ToolMode.SELECT ||
-                obj.constraint?.kind === "intersection" ||
-                obj.constraint?.kind === "midpoint" ||
-                obj.constraint?.kind === "angleBisectorRay" ||
-                obj.constraint?.kind === "equilateralApex" ||
-                obj.constraint?.kind === "circleTangentPoint" ||
+                Boolean(pointConstraintEntry?.renderPinnedInSelect) ||
                 obj.style?.fixed,
         });
     const hasLabel = obj.name || store.doc.objects.some((o) => o.type === "label" && o.targetId === obj.id);
@@ -3457,68 +2991,6 @@ function promptRegularPolygonSideCount() {
     max: 24,
     submitLabel: "Create",
   });
-}
-
-function regularPolygonVerticesFromEdge(pointA, pointB, sideCount) {
-  const dx = pointB.x - pointA.x;
-  const dy = pointB.y - pointA.y;
-  const sideLength = Math.hypot(dx, dy);
-  if (sideLength < 1e-9 || sideCount < 3) {
-    return null;
-  }
-  const turn = (2 * Math.PI) / sideCount;
-  const cosTurn = Math.cos(turn);
-  const sinTurn = Math.sin(turn);
-  const vertices = [{ x: pointA.x, y: pointA.y }, { x: pointB.x, y: pointB.y }];
-  let edgeX = dx;
-  let edgeY = dy;
-  while (vertices.length < sideCount) {
-    const prev = vertices[vertices.length - 1];
-    const nextX = prev.x + edgeX * cosTurn - edgeY * sinTurn;
-    const nextY = prev.y + edgeX * sinTurn + edgeY * cosTurn;
-    vertices.push({ x: nextX, y: nextY });
-    const rotX = edgeX * cosTurn - edgeY * sinTurn;
-    const rotY = edgeX * sinTurn + edgeY * cosTurn;
-    edgeX = rotX;
-    edgeY = rotY;
-  }
-  return vertices;
-}
-
-function regularPolygonCenterFromEdge(pointA, pointB, sideCount) {
-  const dx = pointB.x - pointA.x;
-  const dy = pointB.y - pointA.y;
-  const sideLength = Math.hypot(dx, dy);
-  if (sideLength < 1e-9 || sideCount < 3) {
-    return null;
-  }
-  const apothem = sideLength / (2 * Math.tan(Math.PI / sideCount));
-  const midX = (pointA.x + pointB.x) / 2;
-  const midY = (pointA.y + pointB.y) / 2;
-  const ux = dx / sideLength;
-  const uy = dy / sideLength;
-  return {
-    x: midX - uy * apothem,
-    y: midY + ux * apothem,
-  };
-}
-
-function regularPolygonVertexPoint(pointA, pointB, sideCount, vertexIndex) {
-  if (!pointA || !pointB || sideCount < 3) {
-    return null;
-  }
-  const index = Number(vertexIndex);
-  if (!Number.isInteger(index) || index < 0 || index >= sideCount) {
-    return null;
-  }
-  if (index === 0) {
-    return { x: pointA.x, y: pointA.y };
-  }
-  if (index === 1) {
-    return { x: pointB.x, y: pointB.y };
-  }
-  const vertices = regularPolygonVerticesFromEdge(pointA, pointB, sideCount);
-  return vertices?.[index] || null;
 }
 
 function circleRadiusPointIds() {
