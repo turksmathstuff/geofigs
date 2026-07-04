@@ -1695,242 +1695,114 @@ function handleObjectDoubleClick(id, type, evt) {
   return true;
 }
 
-const { startMarqueeSelection } = createMarqueeSelectionWorkflow({
-  store,
-  session,
-  boardEl,
-  boardController,
-  ToolMode,
-  getPointById,
-  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+// Shared dependency bag for all workflow factories (§3.3). Each factory
+// destructures only the keys it needs; wireWorkflow merges every factory's
+// returned API back into the bag so later factories can consume the outputs
+// of earlier ones (e.g. boardMovePreview uses the tangent previews).
+// renderCurrentDoc/applyDoc are consts defined after this block, so they are
+// exposed as thunks.
+const workflowCtx = {
+  JXG,
   doc: document,
   win: window,
-});
-
-const { handleSelectBoardClick, handleSelectObjectClick } = createSelectionClickWorkflow({
-  store,
-  session,
-  ToolMode,
+  dom,
   boardEl,
-  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
-  updateModeUi: () => updateModeUi(),
-});
-
-const { handlePointModeBoardClick } = createPointPlacementClickWorkflow({
-  session,
-  ToolMode,
-  findPreferredPointSnap,
-  runMutation,
-  maybeCreateIntersectionPoint,
-  maybeCreateAttachedPoint,
-  maybeCreatePoint,
-});
-
-const { handlePointCollectionBoardClick } = createPointCollectionBoardClickWorkflow({
-  session,
-  ToolMode,
-  pointNeeds,
-  rightTriangleIsoModifierActive,
-  findNearbyVisiblePoint,
-  addPointInput,
-  runMutation,
-  findPreferredPointSnap,
-  maybeCreateIntersectionPoint,
-  maybeCreateAttachedPoint,
-  maybeCreatePoint,
-});
-
-const { handlePointCollectionObjectClick } = createPointCollectionObjectClickWorkflow({
-  session,
-  ToolMode,
-  pointNeeds,
-  rightTriangleIsoModifierActive,
-  addPointInput,
-});
-
-const { addManualLabelAtCoords, addManualLabelForTarget, toggleManualLabelMode } =
-  createLabelManagementWorkflow({
-    session,
-    ToolMode,
-    runMutation,
-    openLabelModal,
-    getObjectById,
-    autoLabelAnchorForObject,
-    followLabelForTargetObject,
-    setMode,
-    makeId,
-    addObject,
-    defaultStyle,
-  });
-
-const { handleObjectClickModeBranches } = createObjectClickModeBranchesWorkflow({
-  session,
+  statusEl,
   ToolMode,
   store,
+  session,
+  boardController,
+  modeLabel,
+  updateModeUi,
+  setMode,
+  showNotice,
+  makeId,
+  defaultStyle,
+  pointNeeds,
+  getPointById,
+  getObjectById,
+  selectedOfTypes,
+  addObject,
+  addAnnotation,
+  addPointInput,
+  addTriangleEdges,
   deleteSelected,
-  addManualLabelForTarget,
-  toggleAutoLabelForObject,
-});
-
-const { handleObjectClickConstructionSelection } = createObjectClickConstructionSelectionWorkflow({
-  session,
-  store,
-  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
-  maybeCompleteConstructionSelectionSession: (...args) => maybeCompleteConstructionSelectionSession(...args),
-});
-
-const { handleObjectClickNearPointRedirect } = createObjectClickNearPointRedirectWorkflow({
-  boardController,
-  findNearbyVisiblePoint,
-  handleObjectClick: (...args) => handleObjectClick(...args),
-});
-
-const { handlePerpendicularBisectorPlacementBoardClick } = createPerpendicularBisectorPlacementBoardClickWorkflow({
-  session,
-  boardEl,
-  getPointInputCoords,
-  updatePerpendicularBisectorPreview,
-  boardController,
   runMutation,
+  ensureTransientSnapshot,
+  commitTransientSnapshotIfPresent,
+  updateConstrainedPointsLive,
+  recomputeConstrainedPoints,
+  syncPointIdsToBoard,
+  setBackgroundImageAsset,
+  openLabelModal,
+  autoLabelAnchorForObject,
+  followLabelForTargetObject,
+  toggleAutoLabelForObject,
+  labelFollowBaseAnchor,
+  findPreferredPointSnap,
+  findNearbyVisiblePoint,
+  maybeCreatePoint,
+  maybeCreateIntersectionPoint,
+  maybeCreateAttachedPoint,
   maybeCreateMidpointPoint,
   maybeCreatePerpendicularBisectorEndpointPoint,
-  makeId,
-  addObject,
-  defaultStyle,
-  addAnnotation,
-  store,
-  updateModeUi: (...args) => updateModeUi(...args),
-});
-
-const { handleAngleModeBoardClick } = createAngleModeBoardClickWorkflow({
-  session,
-  ToolMode,
-  statusEl,
-  modeLabel,
-});
-
-const { handlePointInputLinearCircleCreate } = createPointInputLinearCircleCreateWorkflow({
-  ToolMode,
-  addObject,
-  makeId,
-  normalizedLineExtension,
-  normalizedRayExtension,
-  store,
-});
-
-const { handlePointInputAngleCreate } = createPointInputAngleCreateWorkflow({
-  ToolMode,
-  session,
-  addAnnotation,
-  makeId,
-  store,
-});
-
-const { handlePointInputArcCreate } = createCircleToolWorkflow({
-  ToolMode,
-  session,
-  addObject,
-  makeId,
-  store,
-  getPointById,
-});
-
-const { handlePointInputTriangleCreate } = createPointInputTriangleCreateWorkflow({
-  ToolMode,
-  session,
-  getPointById,
+  maybeAxisLockDraggedPoint,
+  applyPointConstraintToDraggedPosition,
   rightTriangleApexFromCursor,
   isoscelesApexFromCursor,
   equilateralApexFromCursor,
   triangleVerticesFromVariant,
-  addTriangleEdges,
-  addAnnotation,
-  addObject,
-  makeId,
   ccwAnglePointIds,
-});
-
-const { handleObjectMoveAngle } = createObjectMoveAngleWorkflow({
-  store,
-  session,
-  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  runMutation,
-});
-
-const { handleObjectMoveRayVisibleResize } = createObjectMoveRayVisibleResizeWorkflow({
-  session,
+  rightTriangleIsoModifierActive,
   normalizedRayExtension,
-  getRayExtensionForObject,
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  updateConstrainedPointsLive,
-  runMutation,
-});
-
-const { handleObjectMoveLineVisibleResize } = createObjectMoveLineVisibleResizeWorkflow({
-  store,
-  session,
   normalizedLineExtension,
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  updateConstrainedPointsLive,
-  runMutation,
-});
+  getRayExtensionForObject,
+  getPointInputCoords,
+  updateLinearPreview,
+  updateCirclePreview,
+  updateAnglePreview,
+  updateTrianglePreview,
+  updateArc3PtPreview,
+  updateArcCSEPreview,
+  updatePerpendicularBisectorPreview,
+  startConstructionSelectionSession,
+  maybeCompleteConstructionSelectionSession,
+  handleObjectClick,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+  applyDoc: (...args) => applyDoc(...args),
+};
 
-const { handleObjectMoveSegment } = createObjectMoveSegmentWorkflow({
-  session,
-  getPointById,
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  syncPointIdsToBoard,
-  updateConstrainedPointsLive,
-  runMutation,
-});
+function wireWorkflow(factory) {
+  const api = factory(workflowCtx);
+  Object.assign(workflowCtx, api);
+  return api;
+}
 
-const { handleObjectMoveCircle } = createObjectMoveCircleWorkflow({
-  session,
-  getPointById,
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  updateConstrainedPointsLive,
-  runMutation,
-});
-
-const { handleObjectMoveRay } = createObjectMoveRayWorkflow({
-  session,
-  getPointById,
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  updateConstrainedPointsLive,
-  runMutation,
-});
-
-const { handleObjectMoveLine } = createObjectMoveLineWorkflow({
-  session,
-  getPointById,
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  updateConstrainedPointsLive,
-  runMutation,
-});
-
-const { handleObjectMovePointLabel } = createObjectMovePointLabelWorkflow({
-  session,
-  JXG,
-  boardController,
-  getObjectById,
-  maybeAxisLockDraggedPoint,
-  applyPointConstraintToDraggedPosition,
-  labelFollowBaseAnchor,
-  ensureTransientSnapshot,
-  commitTransientSnapshotIfPresent,
-  syncPointIdsToBoard,
-  updateConstrainedPointsLive,
-  recomputeConstrainedPoints,
-  runMutation,
-});
+const { startMarqueeSelection } = wireWorkflow(createMarqueeSelectionWorkflow);
+const { handleSelectBoardClick, handleSelectObjectClick } = wireWorkflow(createSelectionClickWorkflow);
+const { handlePointModeBoardClick } = wireWorkflow(createPointPlacementClickWorkflow);
+const { handlePointCollectionBoardClick } = wireWorkflow(createPointCollectionBoardClickWorkflow);
+const { handlePointCollectionObjectClick } = wireWorkflow(createPointCollectionObjectClickWorkflow);
+const { addManualLabelAtCoords, addManualLabelForTarget, toggleManualLabelMode } =
+  wireWorkflow(createLabelManagementWorkflow);
+const { handleObjectClickModeBranches } = wireWorkflow(createObjectClickModeBranchesWorkflow);
+const { handleObjectClickConstructionSelection } = wireWorkflow(createObjectClickConstructionSelectionWorkflow);
+const { handleObjectClickNearPointRedirect } = wireWorkflow(createObjectClickNearPointRedirectWorkflow);
+const { handlePerpendicularBisectorPlacementBoardClick } =
+  wireWorkflow(createPerpendicularBisectorPlacementBoardClickWorkflow);
+const { handleAngleModeBoardClick } = wireWorkflow(createAngleModeBoardClickWorkflow);
+const { handlePointInputLinearCircleCreate } = wireWorkflow(createPointInputLinearCircleCreateWorkflow);
+const { handlePointInputAngleCreate } = wireWorkflow(createPointInputAngleCreateWorkflow);
+const { handlePointInputArcCreate } = wireWorkflow(createCircleToolWorkflow);
+const { handlePointInputTriangleCreate } = wireWorkflow(createPointInputTriangleCreateWorkflow);
+const { handleObjectMoveAngle } = wireWorkflow(createObjectMoveAngleWorkflow);
+const { handleObjectMoveRayVisibleResize } = wireWorkflow(createObjectMoveRayVisibleResizeWorkflow);
+const { handleObjectMoveLineVisibleResize } = wireWorkflow(createObjectMoveLineVisibleResizeWorkflow);
+const { handleObjectMoveSegment } = wireWorkflow(createObjectMoveSegmentWorkflow);
+const { handleObjectMoveCircle } = wireWorkflow(createObjectMoveCircleWorkflow);
+const { handleObjectMoveRay } = wireWorkflow(createObjectMoveRayWorkflow);
+const { handleObjectMoveLine } = wireWorkflow(createObjectMoveLineWorkflow);
+const { handleObjectMovePointLabel } = wireWorkflow(createObjectMovePointLabelWorkflow);
 
 const {
   showTangentPickGhosts,
@@ -1941,38 +1813,9 @@ const {
   commitTangentAtPointPlacement,
   launchTangentToCircle,
   launchTangentAtCirclePoint,
-} = createTangentToolsWorkflow({
-  ToolMode,
-  session,
-  store,
-  boardController,
-  statusEl,
-  getPointById,
-  getObjectById,
-  selectedOfTypes,
-  makeId,
-  runMutation,
-  addObject,
-  defaultStyle,
-  showNotice,
-  setMode,
-  startConstructionSelectionSession,
-  updateModeUi,
-  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
-});
+} = wireWorkflow(createTangentToolsWorkflow);
 
-const { handleBoardMove } = createBoardMovePreviewWorkflow({
-  getPointInputCoords,
-  updateTangentPickPreview,
-  updateTangentAtPointPreview,
-  updatePerpendicularBisectorPreview,
-  updateLinearPreview,
-  updateCirclePreview,
-  updateAnglePreview,
-  updateTrianglePreview,
-  updateArc3PtPreview,
-  updateArcCSEPreview,
-});
+const { handleBoardMove } = wireWorkflow(createBoardMovePreviewWorkflow);
 
 function handleObjectMove(id, type, pos, options = {}) {
   const transient = !!options?.transient;
@@ -2388,26 +2231,7 @@ const {
   updateMoveReadouts,
   updateCompassReadout,
   angleFromCompassEvent,
-} = createTriangleCopyTransformWorkflow({
-  ToolMode,
-  session,
-  store,
-  dom,
-  boardController,
-  getPointById,
-  getObjectById,
-  selectedOfTypes,
-  makeId,
-  runMutation,
-  addObject,
-  addTriangleEdges,
-  defaultStyle,
-  showNotice,
-  setMode,
-  startConstructionSelectionSession,
-  renderCurrentDoc,
-  applyDoc,
-});
+} = wireWorkflow(createTriangleCopyTransformWorkflow);
 
 function applyStyleToSelection() {
   const color = strokeColorEl.value;
@@ -3504,13 +3328,7 @@ const {
   previewExport,
   downloadPreviewSvg,
   downloadPreviewPng,
-} = createExportActionsWorkflow({
-  doc: document,
-  dom,
-  session,
-  boardController,
-  renderCurrentDoc,
-});
+} = wireWorkflow(createExportActionsWorkflow);
 
 function saveDoc() {
   const content = JSON.stringify(
@@ -3522,14 +3340,8 @@ function saveDoc() {
   triggerDownload(name, content, "application/json");
 }
 
-const { uploadBackgroundImageFromFile, clearBackgroundImage } = createBackgroundImageWorkflow({
-  store,
-  boardController,
-  makeId,
-  runMutation,
-  setBackgroundImageAsset,
-  showNotice,
-});
+const { uploadBackgroundImageFromFile, clearBackgroundImage } =
+  wireWorkflow(createBackgroundImageWorkflow);
 
 function openDocFromFile(file) {
   const reader = new FileReader();
