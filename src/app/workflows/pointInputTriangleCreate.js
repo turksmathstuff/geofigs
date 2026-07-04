@@ -14,6 +14,44 @@ export function createPointInputTriangleCreateWorkflow(ctx) {
     ccwAnglePointIds,
   } = ctx;
 
+  // Variants that reposition the third (cursor) point onto a computed apex.
+  // `constraintFor` pins the apex point; `afterEdges` adds variant decorations.
+  const apexVariants = {
+    right: {
+      computeApex: (pointA, pointB, cursorPoint) =>
+        rightTriangleApexFromCursor(pointA, pointB, cursorPoint, {
+          forceIsosceles: session.pendingRightTriangleForceIso,
+        }),
+      constraintFor: (apex, pointIds) => ({
+        kind: "rightTriangleApex",
+        rightVertexId: pointIds[0],
+        baseVertexId: pointIds[1],
+        height: apex.height,
+      }),
+      afterEdges: (pointIds, style) => {
+        addAnnotation({
+          id: makeId("ang"),
+          type: "angle",
+          pointIds: ccwAnglePointIds(pointIds[1], pointIds[0], pointIds[2]),
+          right: true,
+          arcCount: 1,
+          style,
+        });
+      },
+    },
+    isosceles: {
+      computeApex: (pointA, pointB, cursorPoint) => isoscelesApexFromCursor(pointA, pointB, cursorPoint),
+    },
+    equilateral: {
+      computeApex: (pointA, pointB, cursorPoint) => equilateralApexFromCursor(pointA, pointB, cursorPoint),
+      constraintFor: (apex, pointIds) => ({
+        kind: "equilateralApex",
+        sourcePointIds: [pointIds[0], pointIds[1]],
+        side: apex.side,
+      }),
+    },
+  };
+
   function handlePointInputTriangleCreate(modeForCreate, pointsForCreate, style) {
     if (modeForCreate !== ToolMode.TRIANGLE) {
       return false;
@@ -24,75 +62,25 @@ export function createPointInputTriangleCreateWorkflow(ctx) {
       return true;
     }
 
-    if (session.triangleVariant === "right") {
-      const pointRight = getPointById(pointsForCreate[0]);
-      const pointBase = getPointById(pointsForCreate[1]);
-      const cursorPoint = getPointById(pointsForCreate[2]);
-      if (!pointRight || !pointBase || !cursorPoint) {
-        return true;
-      }
-      const apex = rightTriangleApexFromCursor(pointRight, pointBase, cursorPoint, {
-        forceIsosceles: session.pendingRightTriangleForceIso,
-      });
-      if (!apex) {
-        return true;
-      }
-      cursorPoint.x = apex.x;
-      cursorPoint.y = apex.y;
-      cursorPoint.constraint = {
-        kind: "rightTriangleApex",
-        rightVertexId: pointsForCreate[0],
-        baseVertexId: pointsForCreate[1],
-        height: apex.height,
-      };
-      addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
-      addAnnotation({
-        id: makeId("ang"),
-        type: "angle",
-        pointIds: ccwAnglePointIds(pointsForCreate[1], pointsForCreate[0], pointsForCreate[2]),
-        right: true,
-        arcCount: 1,
-        style,
-      });
-      return true;
-    }
-
-    if (session.triangleVariant === "isosceles") {
+    const variant = apexVariants[session.triangleVariant];
+    if (variant) {
       const pointA = getPointById(pointsForCreate[0]);
       const pointB = getPointById(pointsForCreate[1]);
       const cursorPoint = getPointById(pointsForCreate[2]);
       if (!pointA || !pointB || !cursorPoint) {
         return true;
       }
-      const apex = isoscelesApexFromCursor(pointA, pointB, cursorPoint);
+      const apex = variant.computeApex(pointA, pointB, cursorPoint);
       if (!apex) {
         return true;
       }
       cursorPoint.x = apex.x;
       cursorPoint.y = apex.y;
-      addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
-      return true;
-    }
-
-    if (session.triangleVariant === "equilateral") {
-      const pointA = getPointById(pointsForCreate[0]);
-      const pointB = getPointById(pointsForCreate[1]);
-      const cursorPoint = getPointById(pointsForCreate[2]);
-      if (!pointA || !pointB || !cursorPoint) {
-        return true;
+      if (variant.constraintFor) {
+        cursorPoint.constraint = variant.constraintFor(apex, pointsForCreate);
       }
-      const apex = equilateralApexFromCursor(pointA, pointB, cursorPoint);
-      if (!apex) {
-        return true;
-      }
-      cursorPoint.x = apex.x;
-      cursorPoint.y = apex.y;
-      cursorPoint.constraint = {
-        kind: "equilateralApex",
-        sourcePointIds: [pointsForCreate[0], pointsForCreate[1]],
-        side: apex.side,
-      };
       addTriangleEdges([pointsForCreate[0], pointsForCreate[1], pointsForCreate[2]], style);
+      variant.afterEdges?.(pointsForCreate, style);
       return true;
     }
 

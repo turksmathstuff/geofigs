@@ -76,6 +76,14 @@ const {
   statusEl,
   drawingHintEl,
   autoLabelBtn,
+  bgModeEl,
+  exportLabelScaleEl,
+  exportPointScaleEl,
+  tightSvgEl,
+  pngScaleEl,
+  strokeColorEl,
+  strokeWidthEl,
+  lineStyleEl,
   boardEl,
   transformPanelEl,
   transformTitleEl,
@@ -291,26 +299,19 @@ function setTriangleMode(variant) {
   setMode(ToolMode.TRIANGLE);
 }
 
+const POINTS_NEEDED = {
+  [ToolMode.SEGMENT]: 2,
+  [ToolMode.LINE]: 2,
+  [ToolMode.RAY]: 2,
+  [ToolMode.CIRCLE]: 2,
+  [ToolMode.TRIANGLE]: 3,
+  [ToolMode.ANGLE]: 3,
+  [ToolMode.ARC_3PT]: 3,
+  [ToolMode.ARC_CSE]: 3,
+};
+
 function pointNeeds(mode) {
-  if (mode === ToolMode.SEGMENT || mode === ToolMode.LINE || mode === ToolMode.RAY) {
-    return 2;
-  }
-  if (mode === ToolMode.TRIANGLE) {
-    return 3;
-  }
-  if (mode === ToolMode.ANGLE) {
-    return 3;
-  }
-  if (mode === ToolMode.CIRCLE) {
-    return 2;
-  }
-  if (mode === ToolMode.ARC_3PT) {
-    return 3;
-  }
-  if (mode === ToolMode.ARC_CSE) {
-    return 3;
-  }
-  return 0;
+  return POINTS_NEEDED[mode] ?? 0;
 }
 
 function getObjectById(id) {
@@ -1698,100 +1699,38 @@ function updateLinearPreview(cursorCoords) {
   return true;
 }
 
+const TRIANGLE_PREVIEW_APEX_FNS = {
+  "three-point": (p1, p2, cursor) => cursor,
+  right: (p1, p2, cursor, evt) =>
+    rightTriangleApexFromCursor(p1, p2, cursor, { forceIsosceles: rightTriangleIsoModifierActive(evt) }),
+  isosceles: (p1, p2, cursor) => isoscelesApexFromCursor(p1, p2, cursor),
+  equilateral: (p1, p2, cursor) => equilateralApexFromCursor(p1, p2, cursor),
+};
+
 function updateTrianglePreview(cursorCoords, evt) {
   if (session.currentMode !== ToolMode.TRIANGLE) {
     boardController.clearPreview();
     return;
   }
-
-  if (session.triangleVariant === "three-point") {
-    if (session.pendingPointIds.length < 2) {
-      boardController.clearPreview();
-      return;
-    }
-    const p1 = getPointById(session.pendingPointIds[0]);
-    const p2 = getPointById(session.pendingPointIds[1]);
-    if (!p1 || !p2) {
-      boardController.clearPreview();
-      return;
-    }
-    boardController.showPreviewTriangle(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords);
-    return;
-  }
-
-  if (session.triangleVariant === "right") {
-    if (session.pendingPointIds.length < 2) {
-      boardController.clearPreview();
-      return;
-    }
-    const p1 = getPointById(session.pendingPointIds[0]);
-    const p2 = getPointById(session.pendingPointIds[1]);
-    if (!p1 || !p2) {
-      boardController.clearPreview();
-      return;
-    }
-    const p3 = rightTriangleApexFromCursor(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords, {
-      forceIsosceles: rightTriangleIsoModifierActive(evt),
-    });
-    if (!p3) {
-      boardController.clearPreview();
-      return;
-    }
-    boardController.showPreviewTriangle(pointObjectFromCoords(p1), pointObjectFromCoords(p2), p3);
-    return;
-  }
-
-  if (session.triangleVariant === "isosceles") {
-    if (session.pendingPointIds.length < 2) {
-      boardController.clearPreview();
-      return;
-    }
-    const p1 = getPointById(session.pendingPointIds[0]);
-    const p2 = getPointById(session.pendingPointIds[1]);
-    if (!p1 || !p2) {
-      boardController.clearPreview();
-      return;
-    }
-    const p3 = isoscelesApexFromCursor(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords);
-    if (!p3) {
-      boardController.clearPreview();
-      return;
-    }
-    boardController.showPreviewTriangle(pointObjectFromCoords(p1), pointObjectFromCoords(p2), p3);
-    return;
-  }
-
-  if (session.triangleVariant === "equilateral") {
-    if (session.pendingPointIds.length < 2) {
-      boardController.clearPreview();
-      return;
-    }
-    const p1 = getPointById(session.pendingPointIds[0]);
-    const p2 = getPointById(session.pendingPointIds[1]);
-    if (!p1 || !p2) {
-      boardController.clearPreview();
-      return;
-    }
-    const p3 = equilateralApexFromCursor(pointObjectFromCoords(p1), pointObjectFromCoords(p2), cursorCoords);
-    if (!p3) {
-      boardController.clearPreview();
-      return;
-    }
-    boardController.showPreviewTriangle(pointObjectFromCoords(p1), pointObjectFromCoords(p2), p3);
-    return;
-  }
-
-  if (session.pendingPointIds.length < 1) {
+  const apexFn = TRIANGLE_PREVIEW_APEX_FNS[session.triangleVariant];
+  if (!apexFn || session.pendingPointIds.length < 2) {
     boardController.clearPreview();
     return;
   }
-
   const p1 = getPointById(session.pendingPointIds[0]);
-  if (!p1) {
+  const p2 = getPointById(session.pendingPointIds[1]);
+  if (!p1 || !p2) {
     boardController.clearPreview();
     return;
   }
-  boardController.clearPreview();
+  const a = pointObjectFromCoords(p1);
+  const b = pointObjectFromCoords(p2);
+  const apex = apexFn(a, b, cursorCoords, evt);
+  if (!apex) {
+    boardController.clearPreview();
+    return;
+  }
+  boardController.showPreviewTriangle(a, b, apex);
 }
 
 function updateCirclePreview(cursorCoords) {
@@ -3006,7 +2945,7 @@ function chooseCopyOffset(sourcePoints, span, offsetFactorX, offsetFactorY) {
   const xs = sourcePoints.map((p) => p.x);
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
-  const bbox = boardController.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+  const bbox = boardController.getBoardBBox();
   const boardLeft = Math.min(bbox[0], bbox[2]);
   const boardRight = Math.max(bbox[0], bbox[2]);
   const leftRoom = minX - boardLeft;
@@ -3262,10 +3201,7 @@ function angleFromCompassEvent(evt) {
   return (rad * 180) / Math.PI;
 }
 
-function transformSelectedTriangle() {
-  if (!startTriangleTransformSession("transform")) {
-    return;
-  }
+function beginTransformPanel() {
   session.transformSession.dx = 0;
   session.transformSession.dy = 0;
   session.transformSession.angleDeg = 0;
@@ -3281,6 +3217,13 @@ function transformSelectedTriangle() {
   updateMoveReadouts();
   updateCompassReadout();
   applyTransformPreview();
+}
+
+function transformSelectedTriangle() {
+  if (!startTriangleTransformSession("transform")) {
+    return;
+  }
+  beginTransformPanel();
 }
 
 function launchTriangleCopy(kind, buttonId) {
@@ -3299,21 +3242,7 @@ function launchTriangleCopy(kind, buttonId) {
 
 function launchTriangleTransform(buttonId) {
   if (startTriangleTransformSession("transform", { quiet: true })) {
-    session.transformSession.dx = 0;
-    session.transformSession.dy = 0;
-    session.transformSession.angleDeg = 0;
-    session.transformSession.mirrorX = 1;
-    session.transformSession.mirrorY = 1;
-    showTransformPanel();
-    if (moveXSliderEl) {
-      moveXSliderEl.value = "0";
-    }
-    if (moveYSliderEl) {
-      moveYSliderEl.value = "0";
-    }
-    updateMoveReadouts();
-    updateCompassReadout();
-    applyTransformPreview();
+    beginTransformPanel();
     return;
   }
   startConstructionSelectionSession({
@@ -3325,30 +3254,16 @@ function launchTriangleTransform(buttonId) {
       if (!startTriangleTransformSession("transform", { quiet: true })) {
         return false;
       }
-      session.transformSession.dx = 0;
-      session.transformSession.dy = 0;
-      session.transformSession.angleDeg = 0;
-      session.transformSession.mirrorX = 1;
-      session.transformSession.mirrorY = 1;
-      showTransformPanel();
-      if (moveXSliderEl) {
-        moveXSliderEl.value = "0";
-      }
-      if (moveYSliderEl) {
-        moveYSliderEl.value = "0";
-      }
-      updateMoveReadouts();
-      updateCompassReadout();
-      applyTransformPreview();
+      beginTransformPanel();
       return true;
     },
   });
 }
 
 function applyStyleToSelection() {
-  const color = document.getElementById("strokeColor").value;
-  const width = Number(document.getElementById("strokeWidth").value);
-  const lineStyle = document.getElementById("lineStyle").value;
+  const color = strokeColorEl.value;
+  const width = Number(strokeWidthEl.value);
+  const lineStyle = lineStyleEl.value;
   const dash = lineStyle === "dashed" ? 2 : 0;
   const selectedIds = store.selectedIds();
   if (!selectedIds.length) {
@@ -4807,11 +4722,11 @@ function clearBoard() {
 
 function readExportSettings() {
   return {
-    background: document.getElementById("bgMode").value,
-    fontScale: Number(document.getElementById("exportLabelScale").value) || 1,
-    pointScale: Number(document.getElementById("exportPointScale").value) || 1,
-    tight: document.getElementById("tightSvg").checked,
-    pngScale: Number(document.getElementById("pngScale").value),
+    background: bgModeEl.value,
+    fontScale: Number(exportLabelScaleEl.value) || 1,
+    pointScale: Number(exportPointScaleEl.value) || 1,
+    tight: tightSvgEl.checked,
+    pngScale: Number(pngScaleEl.value),
   };
 }
 
@@ -4906,7 +4821,7 @@ function saveDoc() {
 }
 
 function fitBackgroundImageToBoard(naturalWidth, naturalHeight) {
-  const bbox = boardController.board?.getBoundingBox?.() || [-10, 10, 10, -10];
+  const bbox = boardController.getBoardBBox();
   const minX = Math.min(bbox[0], bbox[2]);
   const maxX = Math.max(bbox[0], bbox[2]);
   const minY = Math.min(bbox[1], bbox[3]);
