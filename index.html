@@ -287,28 +287,18 @@
 
       <section class="canvas-wrap">
         <div id="drawingHint" class="drawing-hint" hidden>Select points counterclockwise.</div>
-        <div id="labelModal" class="app-modal" hidden>
-          <div id="labelModalBackdrop" class="app-modal-backdrop"></div>
-          <form id="labelModalDialog" class="app-modal-dialog" aria-labelledby="labelModalTitle">
-            <h3 id="labelModalTitle">Add Label</h3>
-            <label class="app-modal-label" for="labelModalInput">Label text</label>
-            <input id="labelModalInput" type="text" autocomplete="off" />
-            <p class="app-modal-help">Examples: `sqrt(x+3)`, `x^2`, `A_1`, `x^o` for degrees.</p>
+        <div id="appModal" class="app-modal" hidden>
+          <div id="appModalBackdrop" class="app-modal-backdrop"></div>
+          <form id="appModalDialog" class="app-modal-dialog" aria-labelledby="appModalTitle">
+            <h3 id="appModalTitle"></h3>
+            <p id="appModalMessage" class="app-modal-message" hidden></p>
+            <label id="appModalInputLabel" class="app-modal-label" for="appModalInput"></label>
+            <input id="appModalInput" type="text" autocomplete="off" />
+            <p id="appModalHelp" class="app-modal-help" hidden></p>
+            <p id="appModalError" class="app-modal-error" hidden></p>
             <div class="app-modal-actions">
-              <button id="labelModalCancel" type="button">Cancel</button>
-              <button id="labelModalSubmit" type="submit">Add Label</button>
-            </div>
-          </form>
-        </div>
-        <div id="nGonModal" class="app-modal" hidden>
-          <div id="nGonModalBackdrop" class="app-modal-backdrop"></div>
-          <form id="nGonModalDialog" class="app-modal-dialog" aria-labelledby="nGonModalTitle">
-            <h3 id="nGonModalTitle">Circle Inscribed in n-gon</h3>
-            <label class="app-modal-label" for="nGonModalInput">Number of sides</label>
-            <input id="nGonModalInput" type="number" min="3" max="24" value="5" autocomplete="off" />
-            <div class="app-modal-actions">
-              <button id="nGonModalCancel" type="button">Cancel</button>
-              <button id="nGonModalSubmit" type="submit">Create</button>
+              <button id="appModalCancel" type="button">Cancel</button>
+              <button id="appModalSubmit" type="submit">OK</button>
             </div>
           </form>
         </div>
