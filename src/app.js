@@ -8,10 +8,8 @@ import {
   serializeFigureDocPackage,
   validateFigureDoc,
 } from "./state/figureDoc.js";
-import { exportSVG, replaceExportLabels, triggerDownload } from "./export/exportSvg.js";
-import { exportPNG, downloadBlob } from "./export/exportPng.js";
-import { initPreviewLabelDrag } from "./export/previewLabelDrag.js";
-import { arc3ptNeedsSwap, arcCSENeedsSwap, computeIncenter, computeInradius, computeCircumcenter, computeTangentPoints, computeTangentAtPointPosition } from "./app/geometry/circles.js";
+import { triggerDownload } from "./export/exportSvg.js";
+import { arc3ptNeedsSwap, arcCSENeedsSwap, computeIncenter, computeInradius, computeCircumcenter } from "./app/geometry/circles.js";
 import { createCircleToolWorkflow } from "./app/workflows/circleToolWorkflow.js";
 import { makeId } from "./utils/ids.js";
 import { timestampForFile } from "./utils/time.js";
@@ -38,14 +36,6 @@ import {
 } from "./app/geometry/constructions.js";
 import { constraintEntry } from "./app/constraints/registry.js";
 import { angleDegrees, nestedAngleArcRadii } from "./app/geometry/angles.js";
-import {
-  transformPointAround,
-  transformPointBySession,
-  projectPolygon,
-  polygonsOverlap,
-  centroid,
-  minVertexDistance,
-} from "./app/geometry/transforms.js";
 import { normalizedRayExtension, normalizedLineExtension, rayEndpoint } from "./app/geometry/linear.js";
 import { createEditorSession } from "./app/session/editorSession.js";
 import { createDomRefs } from "./app/dom/domRefs.js";
@@ -78,6 +68,10 @@ import { createObjectMoveCircleWorkflow } from "./app/workflows/objectMoveCircle
 import { createObjectMoveRayWorkflow } from "./app/workflows/objectMoveRay.js";
 import { createObjectMoveLineWorkflow } from "./app/workflows/objectMoveLine.js";
 import { createObjectMovePointLabelWorkflow } from "./app/workflows/objectMovePointLabel.js";
+import { createTangentToolsWorkflow } from "./app/workflows/tangentTools.js";
+import { createTriangleCopyTransformWorkflow, segmentConnects } from "./app/workflows/triangleCopyTransform.js";
+import { createExportActionsWorkflow } from "./app/workflows/exportActions.js";
+import { createBackgroundImageWorkflow } from "./app/workflows/backgroundImage.js";
 import { launchShadeRegionFill } from "./app/workflows/shadeRegionFill.js";
 
 const store = new AppStore();
@@ -88,24 +82,10 @@ const {
   statusEl,
   drawingHintEl,
   autoLabelBtn,
-  bgModeEl,
-  exportLabelScaleEl,
-  exportPointScaleEl,
-  tightSvgEl,
-  pngScaleEl,
   strokeColorEl,
   strokeWidthEl,
   lineStyleEl,
   boardEl,
-  transformPanelEl,
-  transformTitleEl,
-  moveXSliderEl,
-  moveYSliderEl,
-  moveXValueEl,
-  moveYValueEl,
-  rotationCompassEl,
-  compassArmEl,
-  rotateValueEl,
   modeButtons,
   triangleMenuBtn,
   triangleMenuPanel,
@@ -1952,6 +1932,35 @@ const { handleObjectMovePointLabel } = createObjectMovePointLabelWorkflow({
   runMutation,
 });
 
+const {
+  showTangentPickGhosts,
+  updateTangentPickPreview,
+  finalizeTangentPickSession,
+  handleTangentPickBoardClick,
+  updateTangentAtPointPreview,
+  commitTangentAtPointPlacement,
+  launchTangentToCircle,
+  launchTangentAtCirclePoint,
+} = createTangentToolsWorkflow({
+  ToolMode,
+  session,
+  store,
+  boardController,
+  statusEl,
+  getPointById,
+  getObjectById,
+  selectedOfTypes,
+  makeId,
+  runMutation,
+  addObject,
+  defaultStyle,
+  showNotice,
+  setMode,
+  startConstructionSelectionSession,
+  updateModeUi,
+  renderCurrentDoc: (...args) => renderCurrentDoc(...args),
+});
+
 const { handleBoardMove } = createBoardMovePreviewWorkflow({
   getPointInputCoords,
   updateTangentPickPreview,
@@ -2369,430 +2378,36 @@ function selectedOfTypes(types) {
   });
 }
 
-function pointsAreNonCollinear(pointIds) {
-  if (pointIds.length !== 3) {
-    return false;
-  }
-  const p1 = getPointById(pointIds[0]);
-  const p2 = getPointById(pointIds[1]);
-  const p3 = getPointById(pointIds[2]);
-  if (!p1 || !p2 || !p3) {
-    return false;
-  }
-  const twiceArea = Math.abs((p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x));
-  return twiceArea > 1e-5;
-}
-
-function segmentConnects(a, b, segment) {
-  const [s1, s2] = segment.pointIds;
-  return (s1 === a && s2 === b) || (s1 === b && s2 === a);
-}
-
-function findTriangleFromSelection() {
-  const selectedPoints = selectedOfTypes(["point"]);
-  if (selectedPoints.length === 3 && pointsAreNonCollinear(selectedPoints)) {
-    return selectedPoints;
-  }
-
-  const selectedSegments = selectedOfTypes(["segment"]).map((id) => getObjectById(id));
-  if (selectedSegments.length !== 3) {
-    return null;
-  }
-  const pointIdSet = new Set();
-  for (const seg of selectedSegments) {
-    pointIdSet.add(seg.pointIds[0]);
-    pointIdSet.add(seg.pointIds[1]);
-  }
-  const pointIds = [...pointIdSet];
-  if (pointIds.length !== 3 || !pointsAreNonCollinear(pointIds)) {
-    return null;
-  }
-
-  const [a, b, c] = pointIds;
-  const closed =
-    selectedSegments.some((s) => segmentConnects(a, b, s)) &&
-    selectedSegments.some((s) => segmentConnects(b, c, s)) &&
-    selectedSegments.some((s) => segmentConnects(c, a, s));
-  return closed ? pointIds : null;
-}
-
-function triangleSegmentIds(pointIds) {
-  const set = new Set(pointIds);
-  return store.doc.objects
-    .filter((o) => o.type === "segment" && set.has(o.pointIds?.[0]) && set.has(o.pointIds?.[1]))
-    .map((o) => o.id);
-}
-
-function resolveTriangleOffsetNoOverlap(sourcePoints, transformedPoints, baseOffset, span) {
-  const srcCent = centroid(sourcePoints);
-  let dir = { x: baseOffset.x, y: baseOffset.y };
-  const dirLen = Math.hypot(dir.x, dir.y);
-  if (dirLen < 1e-9) {
-    dir = { x: 1, y: 0.12 };
-  } else {
-    dir.x /= dirLen;
-    dir.y /= dirLen;
-  }
-
-  let candidate = transformedPoints;
-  let safety = 0;
-  const step = Math.max(0.18 * span, 0.22);
-  while (
-    (polygonsOverlap(sourcePoints, candidate) || minVertexDistance(sourcePoints, candidate, distance) < 0.18 * span) &&
-    safety < 40
-  ) {
-    const shift = step * (safety + 1);
-    candidate = candidate.map((p) => ({ x: p.x + dir.x * shift, y: p.y + dir.y * shift }));
-    safety += 1;
-  }
-
-  // Fallback: if still overlapping, push directly away from source centroid.
-  if (polygonsOverlap(sourcePoints, candidate)) {
-    candidate = candidate.map((p) => {
-      const vx = p.x - srcCent.x;
-      const vy = p.y - srcCent.y;
-      const vLen = Math.hypot(vx, vy) || 1;
-      return {
-        x: p.x + (vx / vLen) * 0.6 * span,
-        y: p.y + (vy / vLen) * 0.6 * span,
-      };
-    });
-  }
-
-  return candidate;
-}
-
-function findTriangleSegmentStyle(pointIds) {
-  for (const obj of store.doc.objects) {
-    if (obj.type !== "segment") {
-      continue;
-    }
-    const [a, b] = obj.pointIds;
-    if (pointIds.includes(a) && pointIds.includes(b)) {
-      return obj.style || defaultStyle();
-    }
-  }
-  return defaultStyle();
-}
-
-function chooseCopyOffset(sourcePoints, span, offsetFactorX, offsetFactorY) {
-  const xs = sourcePoints.map((p) => p.x);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const bbox = boardController.getBoardBBox();
-  const boardLeft = Math.min(bbox[0], bbox[2]);
-  const boardRight = Math.max(bbox[0], bbox[2]);
-  const leftRoom = minX - boardLeft;
-  const rightRoom = boardRight - maxX;
-  const direction = rightRoom >= leftRoom ? 1 : -1;
-  return {
-    x: direction * span * offsetFactorX,
-    y: span * offsetFactorY,
-  };
-}
-
-function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offsetFactorY, label }, options = {}) {
-  const quiet = !!options.quiet;
-  const sourcePointIds = findTriangleFromSelection();
-  if (!sourcePointIds) {
-    if (!quiet) {
-      showNotice("Select one triangle first (3 points or its 3 sides).");
-      setMode(ToolMode.SELECT);
-    }
-    return false;
-  }
-
-  runMutation(label, () => {
-    const sourcePoints = sourcePointIds.map((id) => getPointById(id));
-    const center = {
-      x: (sourcePoints[0].x + sourcePoints[1].x + sourcePoints[2].x) / 3,
-      y: (sourcePoints[0].y + sourcePoints[1].y + sourcePoints[2].y) / 3,
-    };
-    const span = Math.max(
-      distance(sourcePoints[0], sourcePoints[1]),
-      distance(sourcePoints[1], sourcePoints[2]),
-      distance(sourcePoints[2], sourcePoints[0])
-    );
-    const offset = chooseCopyOffset(sourcePoints, span, offsetFactorX, offsetFactorY);
-    const angleRad = (rotateDeg * Math.PI) / 180;
-    const segStyle = findTriangleSegmentStyle(sourcePointIds);
-
-    const transformedPoints = sourcePoints.map((source) =>
-      transformPointAround(source, center, scale, angleRad, offset)
-    );
-    const nonOverlapping = resolveTriangleOffsetNoOverlap(sourcePoints, transformedPoints, offset, span);
-
-    const newPointIds = [];
-    for (let i = 0; i < nonOverlapping.length; i += 1) {
-      const id = makeId("pt");
-      addObject({
-        id,
-        type: "point",
-        x: nonOverlapping[i].x,
-        y: nonOverlapping[i].y,
-        name: "",
-        style: sourcePoints[i].style || defaultStyle(),
-      });
-      newPointIds.push(id);
-    }
-    addTriangleEdges(newPointIds, segStyle);
-    store.clearSelection();
-  });
-  return true;
-}
-
-function createCongruentTriangleCopy(options = {}) {
-  return createTriangleCopyFromSelection({
-    scale: 1,
-    rotateDeg: 0,
-    offsetFactorX: 0.95,
-    offsetFactorY: 0.03,
-    label: "create-congruent-triangle",
-  }, options);
-}
-
-function createSimilarTriangleCopy(options = {}) {
-  return createTriangleCopyFromSelection({
-    scale: 1.45,
-    rotateDeg: 0,
-    offsetFactorX: 1.1,
-    offsetFactorY: 0.03,
-    label: "create-similar-triangle",
-  }, options);
-}
-
-function triangleCentroid(pointIds) {
-  const pts = pointIds.map((id) => getPointById(id)).filter(Boolean);
-  if (pts.length !== 3) {
-    return null;
-  }
-  return {
-    x: (pts[0].x + pts[1].x + pts[2].x) / 3,
-    y: (pts[0].y + pts[1].y + pts[2].y) / 3,
-  };
-}
-
-function startTriangleTransformSession(kind, options = {}) {
-  const quiet = !!options.quiet;
-  const pointIds = findTriangleFromSelection();
-  if (!pointIds) {
-    if (!quiet) {
-      showNotice("Select one triangle first (3 points or its 3 sides).");
-      setMode(ToolMode.SELECT);
-    }
-    return false;
-  }
-
-  const basePoints = {};
-  for (const id of pointIds) {
-    const p = getPointById(id);
-    if (!p) {
-      return false;
-    }
-    basePoints[id] = { x: p.x, y: p.y };
-  }
-  const center = triangleCentroid(pointIds);
-  if (!center) {
-    return false;
-  }
-
-  const triSegmentIds = triangleSegmentIds(pointIds);
-  const targetIds = new Set([...pointIds, ...triSegmentIds]);
-  const labelIds = [];
-  const baseLabelPoints = {};
-  for (const obj of store.doc.objects) {
-    if (obj.type !== "label" || !obj.targetId) {
-      continue;
-    }
-    if (!targetIds.has(obj.targetId)) {
-      continue;
-    }
-    labelIds.push(obj.id);
-    baseLabelPoints[obj.id] = { x: obj.x, y: obj.y };
-  }
-
-  session.transformSession = {
-    kind,
-    pointIds,
-    segmentIds: triSegmentIds,
-    labelIds,
-    center,
-    basePoints,
-    baseLabelPoints,
-    beforeDoc: store.snapshot(),
-    dx: 0,
-    dy: 0,
-    angleDeg: 0,
-    mirrorX: 1,
-    mirrorY: 1,
-  };
-  return true;
-}
-
-function applyTransformPreview() {
-  if (!session.transformSession) {
-    return;
-  }
-  const { pointIds, labelIds, basePoints, baseLabelPoints, center, dx, dy, angleDeg, mirrorX, mirrorY } = session.transformSession;
-  const angleRad = (angleDeg * Math.PI) / 180;
-  for (const id of pointIds) {
-    const base = basePoints[id];
-    const target = getPointById(id);
-    if (!base || !target) {
-      continue;
-    }
-    const transformed = transformPointBySession(base, center, angleRad, { x: dx, y: dy }, mirrorX, mirrorY);
-    target.x = transformed.x;
-    target.y = transformed.y;
-  }
-
-  for (const labelId of labelIds) {
-    const base = baseLabelPoints[labelId];
-    const labelObj = getObjectById(labelId);
-    if (!base || !labelObj || labelObj.type !== "label") {
-      continue;
-    }
-    const transformed = transformPointBySession(base, center, angleRad, { x: dx, y: dy }, mirrorX, mirrorY);
-    labelObj.x = transformed.x;
-    labelObj.y = transformed.y;
-  }
-
-  renderCurrentDoc(false);
-}
-
-function showTransformPanel() {
-  if (!transformPanelEl) {
-    return;
-  }
-  transformPanelEl.hidden = false;
-  transformTitleEl.textContent = "Rotate/Slide Triangle";
-}
-
-function hideTransformPanel() {
-  if (transformPanelEl) {
-    transformPanelEl.hidden = true;
-  }
-  if (rotationCompassEl) {
-    rotationCompassEl.classList.remove("dragging");
-  }
-  session.compassDragging = false;
-}
-
-function commitTransformSession(label) {
-  if (!session.transformSession) {
-    return;
-  }
-  const after = store.snapshot();
-  store.doc.metadata.updatedAt = new Date().toISOString();
-  store.commitSnapshot(label, session.transformSession.beforeDoc, after, applyDoc);
-  session.transformSession = null;
-  hideTransformPanel();
-  renderCurrentDoc();
-}
-
-function cancelTransformSession() {
-  if (!session.transformSession) {
-    hideTransformPanel();
-    return;
-  }
-  store.setDoc(session.transformSession.beforeDoc);
-  session.transformSession = null;
-  hideTransformPanel();
-  renderCurrentDoc();
-}
-
-function updateMoveReadouts() {
-  if (!session.transformSession) {
-    return;
-  }
-  if (moveXValueEl) {
-    moveXValueEl.textContent = session.transformSession.dx.toFixed(1);
-  }
-  if (moveYValueEl) {
-    moveYValueEl.textContent = session.transformSession.dy.toFixed(1);
-  }
-}
-
-function updateCompassReadout() {
-  if (!session.transformSession) {
-    return;
-  }
-  if (rotateValueEl) {
-    rotateValueEl.textContent = `${session.transformSession.angleDeg.toFixed(1)}°`;
-  }
-  if (compassArmEl) {
-    compassArmEl.style.transform = `translateY(-50%) rotate(${session.transformSession.angleDeg}deg)`;
-  }
-}
-
-function angleFromCompassEvent(evt) {
-  const rect = rotationCompassEl.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const dx = evt.clientX - cx;
-  const dy = evt.clientY - cy;
-  const rad = Math.atan2(dy, dx);
-  return (rad * 180) / Math.PI;
-}
-
-function beginTransformPanel() {
-  session.transformSession.dx = 0;
-  session.transformSession.dy = 0;
-  session.transformSession.angleDeg = 0;
-  session.transformSession.mirrorX = 1;
-  session.transformSession.mirrorY = 1;
-  showTransformPanel();
-  if (moveXSliderEl) {
-    moveXSliderEl.value = "0";
-  }
-  if (moveYSliderEl) {
-    moveYSliderEl.value = "0";
-  }
-  updateMoveReadouts();
-  updateCompassReadout();
-  applyTransformPreview();
-}
-
-function transformSelectedTriangle() {
-  if (!startTriangleTransformSession("transform")) {
-    return;
-  }
-  beginTransformPanel();
-}
-
-function launchTriangleCopy(kind, buttonId) {
-  const createFn = kind === "congruent" ? createCongruentTriangleCopy : createSimilarTriangleCopy;
-  if (createFn({ quiet: true })) {
-    return;
-  }
-  startConstructionSelectionSession({
-    kind: `triangle-${kind}`,
-    label: kind === "congruent" ? "Congruent Triangle" : "Similar Triangle",
-    buttonId,
-    instructions: "Select one triangle (3 points or its 3 sides).",
-    tryCreate: () => createFn({ quiet: true }),
-  });
-}
-
-function launchTriangleTransform(buttonId) {
-  if (startTriangleTransformSession("transform", { quiet: true })) {
-    beginTransformPanel();
-    return;
-  }
-  startConstructionSelectionSession({
-    kind: "triangle-transform",
-    label: "Rotate/Slide Triangle",
-    buttonId,
-    instructions: "Select one triangle (3 points or its 3 sides).",
-    tryCreate: () => {
-      if (!startTriangleTransformSession("transform", { quiet: true })) {
-        return false;
-      }
-      beginTransformPanel();
-      return true;
-    },
-  });
-}
+const {
+  findTriangleFromSelection,
+  launchTriangleCopy,
+  launchTriangleTransform,
+  cancelTransformSession,
+  commitTransformSession,
+  applyTransformPreview,
+  updateMoveReadouts,
+  updateCompassReadout,
+  angleFromCompassEvent,
+} = createTriangleCopyTransformWorkflow({
+  ToolMode,
+  session,
+  store,
+  dom,
+  boardController,
+  getPointById,
+  getObjectById,
+  selectedOfTypes,
+  makeId,
+  runMutation,
+  addObject,
+  addTriangleEdges,
+  defaultStyle,
+  showNotice,
+  setMode,
+  startConstructionSelectionSession,
+  renderCurrentDoc,
+  applyDoc,
+});
 
 function applyStyleToSelection() {
   const color = strokeColorEl.value;
@@ -3509,315 +3124,6 @@ async function launchInscribedNGon(buttonId) {
   launchInscribedPolygon(n, buttonId);
 }
 
-// ── Tangent to Circle ─────────────────────────────────────────────────────────
-
-function distanceToSegment(pt, a, b) {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const len2 = dx * dx + dy * dy;
-  if (len2 < 1e-12) return Math.hypot(pt.x - a.x, pt.y - a.y);
-  const t = Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / len2));
-  return Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy));
-}
-
-function computeTangentPickPoints(sourcePointId, circleId) {
-  const source = getPointById(sourcePointId);
-  const circleObj = getObjectById(circleId);
-  const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
-  const through = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
-  if (!source || !center || !through) return null;
-  const r = Math.hypot(through.x - center.x, through.y - center.y);
-  return computeTangentPoints(source, center, r);
-}
-
-function showTangentPickGhosts() {
-  const ps = session.tangentPickState;
-  if (!ps) return;
-  const source = getPointById(ps.sourcePointId);
-  const tps = computeTangentPickPoints(ps.sourcePointId, ps.circleId);
-  if (!source || !tps) return;
-  const stagedSides = new Set(ps.staged.map((s) => s.side));
-  boardController.showTangentPickPreview(source, tps[0], tps[1], stagedSides, ps.hoveredSide);
-}
-
-function updateTangentPickPreview(cursorCoords) {
-  const ps = session.tangentPickState;
-  if (!ps) return false;
-  const source = getPointById(ps.sourcePointId);
-  const tps = computeTangentPickPoints(ps.sourcePointId, ps.circleId);
-  if (!source || !tps) return true;
-  const stagedSides = new Set(ps.staged.map((s) => s.side));
-  const HOVER_THRESHOLD = 0.4;
-  let hovered = null;
-  let bestDist = Infinity;
-  for (let i = 0; i < 2; i++) {
-    if (stagedSides.has(i)) continue;
-    const d = distanceToSegment(cursorCoords, source, tps[i]);
-    if (d < HOVER_THRESHOLD && d < bestDist) {
-      bestDist = d;
-      hovered = i;
-    }
-  }
-  ps.hoveredSide = hovered;
-  boardController.showTangentPickPreview(source, tps[0], tps[1], stagedSides, hovered);
-  return true;
-}
-
-function commitStagedTangent(side) {
-  const ps = session.tangentPickState;
-  if (!ps || ps.staged.some((s) => s.side === side)) return;
-  ps.staged.push({ segmentId: makeId("tseg"), tangentPointId: makeId("ttp"), side });
-  showTangentPickGhosts();
-  updateModeUi();
-  if (ps.staged.length === 2) {
-    finalizeTangentPickSession();
-  }
-}
-
-function finalizeTangentPickSession() {
-  const ps = session.tangentPickState;
-  if (!ps) return;
-  const { sourcePointId, circleId, staged } = ps;
-  session.tangentPickState = null;
-  boardController.clearPreview();
-  updateModeUi();
-  if (!staged.length) {
-    renderCurrentDoc();
-    return;
-  }
-  const tps = computeTangentPickPoints(sourcePointId, circleId);
-  if (!tps) {
-    renderCurrentDoc();
-    return;
-  }
-  runMutation("tangent-to-circle", () => {
-    for (const { segmentId, tangentPointId, side } of staged) {
-      const tp = tps[side];
-      addObject({
-        id: tangentPointId,
-        type: "point",
-        x: tp.x,
-        y: tp.y,
-        tangentPoint: true,
-        constraint: {
-          kind: "circleTangentPoint",
-          sourcePointId,
-          circleId,
-          side,
-        },
-        style: defaultStyle(),
-      });
-      addObject({
-        id: segmentId,
-        type: "segment",
-        pointIds: [sourcePointId, tangentPointId],
-        style: defaultStyle(),
-      });
-    }
-    store.clearSelection();
-  });
-}
-
-function handleTangentPickBoardClick() {
-  const ps = session.tangentPickState;
-  if (!ps) return;
-  if (ps.hoveredSide !== null) {
-    commitStagedTangent(ps.hoveredSide);
-  } else {
-    finalizeTangentPickSession();
-  }
-}
-
-function addTangentToCircle(options = {}) {
-  const quiet = !!options.quiet;
-  const selectedPoints = selectedOfTypes(["point"]);
-  const selectedCircles = selectedOfTypes(["circle"]);
-  if (selectedPoints.length !== 1 || selectedCircles.length !== 1) {
-    if (!quiet) {
-      showNotice("Select exactly one point and one circle.");
-      setMode(ToolMode.SELECT);
-    }
-    return false;
-  }
-  const sourcePointId = selectedPoints[0];
-  const circleId = selectedCircles[0];
-  const tps = computeTangentPickPoints(sourcePointId, circleId);
-  if (!tps) {
-    if (!quiet) {
-      showNotice("Point must be outside the circle.");
-      setMode(ToolMode.SELECT);
-    }
-    return false;
-  }
-  // finishConstructionSelectionSession will be called by maybeCompleteConstructionSelectionSession
-  // after tryCreate returns true; set pick state now so it's in place for that render pass
-  session.tangentPickState = { sourcePointId, circleId, staged: [], hoveredSide: null };
-  store.clearSelection();
-  return true;
-}
-
-function launchTangentToCircle(buttonId) {
-  if (addTangentToCircle({ quiet: true })) {
-    // Called directly (valid selection already present); show ghosts now
-    showTangentPickGhosts();
-    updateModeUi();
-    return;
-  }
-  startConstructionSelectionSession({
-    kind: "tangent-to-circle",
-    label: "Tangent (Pt→Circle)",
-    buttonId,
-    instructions: "Select exactly one point and one circle.",
-    tryCreate: () => addTangentToCircle({ quiet: true }),
-  });
-}
-
-// ── Tangent at Point on Circle ───────────────────────────────────────────────
-
-function updateTangentAtPointPreview(cursorCoords) {
-  if (!session.tangentAtPointPlacement) {
-    return false;
-  }
-  const { sourcePointId, circleId } = session.tangentAtPointPlacement;
-  const source = getPointById(sourcePointId);
-  const circleObj = getObjectById(circleId);
-  const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
-  if (!source || !center) {
-    boardController.clearPreview();
-    return true;
-  }
-  const len = Math.hypot(source.x - center.x, source.y - center.y);
-  if (len < 1e-9) {
-    boardController.clearPreview();
-    return true;
-  }
-  const tx = -(source.y - center.y) / len;
-  const ty = (source.x - center.x) / len;
-  const vx = cursorCoords.x - source.x;
-  const vy = cursorCoords.y - source.y;
-  const signed = vx * tx + vy * ty;
-  const side = signed >= 0 ? 1 : -1;
-  const dist = Math.max(0.2, Math.abs(signed));
-  session.tangentAtPointPlacement.side = side;
-  session.tangentAtPointPlacement.distance = dist;
-  boardController.showPreviewLinear(
-    { x: source.x, y: source.y },
-    { x: source.x + tx * dist * side, y: source.y + ty * dist * side },
-    "segment"
-  );
-  return true;
-}
-
-function commitTangentAtPointPlacement(cursorCoords) {
-  if (!session.tangentAtPointPlacement) {
-    return false;
-  }
-  updateTangentAtPointPreview(cursorCoords);
-  const placement = session.tangentAtPointPlacement;
-  session.tangentAtPointPlacement = null;
-  boardController.clearPreview();
-  const { sourcePointId, circleId, side, distance } = placement;
-  const source = getPointById(sourcePointId);
-  const circleObj = getObjectById(circleId);
-  const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
-  if (!source || !center) {
-    updateModeUi();
-    return true;
-  }
-  const endPos = computeTangentAtPointPosition(source, center, side, distance);
-  if (!endPos) {
-    updateModeUi();
-    return true;
-  }
-  runMutation("tangent-at-circle-point", () => {
-    const endId = makeId("pt");
-    addObject({
-      id: endId,
-      type: "point",
-      x: endPos.x,
-      y: endPos.y,
-      name: "",
-      constraint: {
-        kind: "tangentAtPointEndpoint",
-        sourcePointId,
-        circleId,
-        side: side >= 0 ? 1 : -1,
-        distance: Math.max(0.2, Number(distance) || 1),
-      },
-      style: { ...defaultStyle(), fixed: false },
-    });
-    const segId = makeId("taps");
-    addObject({
-      id: segId,
-      type: "segment",
-      pointIds: [sourcePointId, endId],
-      style: { ...defaultStyle(), dash: 0, fixed: true },
-    });
-    store.clearSelection();
-  });
-  updateModeUi();
-  return true;
-}
-
-function addTangentAtCirclePoint(options = {}) {
-  const quiet = !!options.quiet;
-  const selectedPoints = selectedOfTypes(["point"]);
-  const selectedCircles = selectedOfTypes(["circle"]);
-  if (selectedPoints.length !== 1 || selectedCircles.length !== 1) {
-    if (!quiet) {
-      showNotice("Select exactly one point and one circle.");
-      setMode(ToolMode.SELECT);
-    }
-    return false;
-  }
-  const sourcePointId = selectedPoints[0];
-  const circleId = selectedCircles[0];
-  const source = getPointById(sourcePointId);
-  const circleObj = getObjectById(circleId);
-  const center = circleObj ? getPointById(circleObj.pointIds?.[0]) : null;
-  const through = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
-  if (!source || !center || !through) {
-    if (!quiet) {
-      showNotice("Could not find circle geometry.");
-      setMode(ToolMode.SELECT);
-    }
-    return false;
-  }
-  const r = Math.hypot(through.x - center.x, through.y - center.y);
-  const distToCenter = Math.hypot(source.x - center.x, source.y - center.y);
-  if (distToCenter < 1e-9) {
-    if (!quiet) {
-      showNotice("Point cannot be the circle's center.");
-      setMode(ToolMode.SELECT);
-    }
-    return false;
-  }
-  const initialDist = Math.max(0.6, r * 0.45);
-  session.tangentAtPointPlacement = {
-    sourcePointId,
-    circleId,
-    side: 1,
-    distance: initialDist,
-    buttonId: options.buttonId || null,
-  };
-  statusEl.textContent = "Mode: Tangent at Point (move cursor, click to place segment)";
-  renderCurrentDoc(false);
-  return true;
-}
-
-function launchTangentAtCirclePoint(buttonId) {
-  if (addTangentAtCirclePoint({ quiet: true, buttonId })) {
-    updateModeUi();
-    return;
-  }
-  startConstructionSelectionSession({
-    kind: "tangent-at-circle-point",
-    label: "Tangent at Pt on Circle",
-    buttonId,
-    instructions: "Select exactly one point and one circle.",
-    tryCreate: () => addTangentAtCirclePoint({ quiet: true, buttonId }),
-  });
-}
-
 // ── Arc Ticks ────────────────────────────────────────────────────────────────
 
 function addArcTicks(tickCount, options = {}) {
@@ -4192,95 +3498,19 @@ function clearBoard() {
   });
 }
 
-function readExportSettings() {
-  return {
-    background: bgModeEl.value,
-    fontScale: Number(exportLabelScaleEl.value) || 1,
-    pointScale: Number(exportPointScaleEl.value) || 1,
-    tight: tightSvgEl.checked,
-    pngScale: Number(pngScaleEl.value),
-  };
-}
-
-async function downloadSvg() {
-  const { background, fontScale, pointScale, tight } = readExportSettings();
-  const raw = withExportSettings({ pointScale }, () => boardController.exportBoardSvg());
-  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
-  const svg = exportSVG(withLabels, { background, tight });
-  const name = `figure-${timestampForFile()}.svg`;
-  triggerDownload(name, svg, "image/svg+xml");
-}
-
-async function downloadPng() {
-  const { background, fontScale, pointScale, pngScale } = readExportSettings();
-  const raw = withExportSettings({ pointScale }, () => boardController.exportBoardSvg());
-  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
-  const svg = exportSVG(withLabels, { background, tight: true });
-  const blob = await exportPNG(svg, { background, scale: pngScale });
-  const name = `figure-${timestampForFile()}.png`;
-  downloadBlob(name, blob);
-}
-
-async function previewExport() {
-  const { background, fontScale, pointScale, tight } = readExportSettings();
-  const raw = withExportSettings({ pointScale }, () => boardController.exportBoardSvg());
-  const withLabels = replaceExportLabels(raw, boardController.collectLabelExports(fontScale));
-  const svg = exportSVG(withLabels, { background, tight });
-  const content = document.getElementById("exportPreviewContent");
-  content.innerHTML = svg;
-  const svgEl = content.querySelector("svg");
-  const labelHint = document.getElementById("exportPreviewLabelHint");
-  if (svgEl) {
-    const count = initPreviewLabelDrag(svgEl);
-    if (labelHint) {
-      labelHint.hidden = count === 0;
-    }
-  } else if (labelHint) {
-    labelHint.hidden = true;
-  }
-  document.getElementById("exportPreviewModal").removeAttribute("hidden");
-}
-
-function getPreviewSvgString() {
-  const svgEl = document.querySelector("#exportPreviewContent svg");
-  if (!svgEl) {
-    return null;
-  }
-  return new XMLSerializer().serializeToString(svgEl);
-}
-
-async function downloadPreviewSvg() {
-  const svg = getPreviewSvgString();
-  if (!svg) {
-    return downloadSvg();
-  }
-  const name = `figure-${timestampForFile()}.svg`;
-  triggerDownload(name, svg, "image/svg+xml");
-}
-
-async function downloadPreviewPng() {
-  const svg = getPreviewSvgString();
-  if (!svg) {
-    return downloadPng();
-  }
-  const { background, pngScale } = readExportSettings();
-  const blob = await exportPNG(svg, { background, scale: pngScale });
-  const name = `figure-${timestampForFile()}.png`;
-  downloadBlob(name, blob);
-}
-
-function withExportSettings({ pointScale } = {}, fn) {
-  session.exportPointHighlightsBlack = true;
-  session.exportPointScale = pointScale ?? null;
-  renderCurrentDoc(false);
-  try {
-    return fn();
-  } finally {
-    session.exportPointHighlightsBlack = false;
-    session.exportPointScale = null;
-    renderCurrentDoc(false);
-  }
-}
+const {
+  downloadSvg,
+  downloadPng,
+  previewExport,
+  downloadPreviewSvg,
+  downloadPreviewPng,
+} = createExportActionsWorkflow({
+  doc: document,
+  dom,
+  session,
+  boardController,
+  renderCurrentDoc,
+});
 
 function saveDoc() {
   const content = JSON.stringify(
@@ -4292,84 +3522,14 @@ function saveDoc() {
   triggerDownload(name, content, "application/json");
 }
 
-function fitBackgroundImageToBoard(naturalWidth, naturalHeight) {
-  const bbox = boardController.getBoardBBox();
-  const minX = Math.min(bbox[0], bbox[2]);
-  const maxX = Math.max(bbox[0], bbox[2]);
-  const minY = Math.min(bbox[1], bbox[3]);
-  const maxY = Math.max(bbox[1], bbox[3]);
-  const boardWidth = Math.max(0.0001, maxX - minX);
-  const boardHeight = Math.max(0.0001, maxY - minY);
-  const imageAspect = Math.max(0.0001, Number(naturalWidth) || 0) / Math.max(0.0001, Number(naturalHeight) || 0);
-  const boardAspect = boardWidth / boardHeight;
-
-  let width = boardWidth;
-  let height = boardHeight;
-  if (imageAspect > boardAspect) {
-    height = width / imageAspect;
-  } else {
-    width = height * imageAspect;
-  }
-
-  const x = minX + (boardWidth - width) / 2;
-  const y = minY + (boardHeight - height) / 2;
-  return { x, y, width, height };
-}
-
-function readImageFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Unable to read the image file."));
-    reader.readAsDataURL(file);
-  });
-}
-
-function getImageDimensions(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
-    img.onerror = () => reject(new Error("Unable to load the uploaded image."));
-    img.src = src;
-  });
-}
-
-async function uploadBackgroundImageFromFile(file) {
-  if (!file) {
-    return;
-  }
-  if (!file.type?.startsWith("image/")) {
-    showNotice("Please choose an image file.");
-    return;
-  }
-  try {
-    const src = await readImageFileAsDataUrl(file);
-    const { naturalWidth, naturalHeight } = await getImageDimensions(src);
-    const placement = fitBackgroundImageToBoard(naturalWidth, naturalHeight);
-    const assetId = makeId("bg");
-    setBackgroundImageAsset(assetId, src);
-    runMutation("upload-background-image", () => {
-      store.doc.canvas.backgroundImage = {
-        assetId,
-        naturalWidth,
-        naturalHeight,
-        opacity: 1,
-        ...placement,
-      };
-    });
-  } catch (err) {
-    showNotice(err.message || "Unable to load the image.");
-  }
-}
-
-function clearBackgroundImage() {
-  if (!store.doc.canvas?.backgroundImage) {
-    return;
-  }
-  runMutation("clear-background-image", () => {
-    store.doc.canvas.backgroundImage = null;
-  });
-}
+const { uploadBackgroundImageFromFile, clearBackgroundImage } = createBackgroundImageWorkflow({
+  store,
+  boardController,
+  makeId,
+  runMutation,
+  setBackgroundImageAsset,
+  showNotice,
+});
 
 function openDocFromFile(file) {
   const reader = new FileReader();
