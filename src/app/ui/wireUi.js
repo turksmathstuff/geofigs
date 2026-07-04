@@ -1,3 +1,5 @@
+import { showNotice } from "./modals.js";
+
 function bindModeButtons({ dom, setMode, setTriangleMode }) {
   const { modeButtons, triangleMenuPanel, triangleModeButtons } = dom;
   modeButtons.forEach((btn) => {
@@ -276,19 +278,19 @@ function bindUndoRedoActions({ doc, store, renderCurrentDoc }) {
 
 function bindExportActions({ doc, downloadSvg, downloadPng, previewExport, downloadPreviewSvg, downloadPreviewPng }) {
   doc.getElementById("previewExportBtn").addEventListener("click", () => {
-    previewExport().catch((err) => alert(err.message));
+    previewExport().catch((err) => showNotice(err.message));
   });
   doc.getElementById("downloadSvg").addEventListener("click", () => {
-    downloadSvg().catch((err) => alert(err.message));
+    downloadSvg().catch((err) => showNotice(err.message));
   });
   doc.getElementById("downloadPng").addEventListener("click", () => {
-    downloadPng().catch((err) => alert(err.message));
+    downloadPng().catch((err) => showNotice(err.message));
   });
   doc.getElementById("previewDownloadSvg").addEventListener("click", () => {
-    downloadPreviewSvg().catch((err) => alert(err.message));
+    downloadPreviewSvg().catch((err) => showNotice(err.message));
   });
   doc.getElementById("previewDownloadPng").addEventListener("click", () => {
-    downloadPreviewPng().catch((err) => alert(err.message));
+    downloadPreviewPng().catch((err) => showNotice(err.message));
   });
   const closePreview = () => doc.getElementById("exportPreviewModal").setAttribute("hidden", "");
   doc.getElementById("closeExportPreview").addEventListener("click", closePreview);

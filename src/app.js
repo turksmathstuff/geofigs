@@ -40,6 +40,7 @@ import { createDomRefs } from "./app/dom/domRefs.js";
 import { createModeUi } from "./app/ui/modeUi.js";
 import { syncStyleInputsFromDoc as syncStyleInputsFromDocUi } from "./app/ui/styleUi.js";
 import { wireUi } from "./app/ui/wireUi.js";
+import { openTextModal, openNumberModal, showNotice, isModalOpen } from "./app/ui/modals.js";
 import { createRenderDoc } from "./app/render/renderDoc.js";
 import { createApplyDoc } from "./app/render/docApply.js";
 import { createMarqueeSelectionWorkflow } from "./app/workflows/marqueeSelection.js";
@@ -74,16 +75,6 @@ const dom = createDomRefs(document);
 const {
   statusEl,
   drawingHintEl,
-  labelModalEl,
-  labelModalBackdropEl,
-  labelModalDialogEl,
-  labelModalInputEl,
-  labelModalCancelEl,
-  nGonModalEl,
-  nGonModalBackdropEl,
-  nGonModalDialogEl,
-  nGonModalInputEl,
-  nGonModalCancelEl,
   autoLabelBtn,
   boardEl,
   transformPanelEl,
@@ -101,8 +92,6 @@ const {
   triangleModeButtons,
   angleMarkPresetButtons,
 } = dom;
-let labelModalResolve = null;
-let nGonModalResolve = null;
 const constructionSelectionButtonIds = [
   "makeMidpoint",
   "makeMidpointTick1",
@@ -3034,7 +3023,7 @@ function createTriangleCopyFromSelection({ scale, rotateDeg, offsetFactorX, offs
   const sourcePointIds = findTriangleFromSelection();
   if (!sourcePointIds) {
     if (!quiet) {
-      alert("Select one triangle first (3 points or its 3 sides).");
+      showNotice("Select one triangle first (3 points or its 3 sides).");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3115,7 +3104,7 @@ function startTriangleTransformSession(kind, options = {}) {
   const pointIds = findTriangleFromSelection();
   if (!pointIds) {
     if (!quiet) {
-      alert("Select one triangle first (3 points or its 3 sides).");
+      showNotice("Select one triangle first (3 points or its 3 sides).");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3410,7 +3399,7 @@ function createParallelOrPerpendicular(kind, options = {}) {
 
   if (!sourceLineId || !throughPointId) {
     if (!quiet) {
-      alert("Select a point and one line/segment/parallel/perpendicular.");
+      showNotice("Select a point and one line/segment/parallel/perpendicular.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3442,7 +3431,7 @@ function addTicks(tickCount, options = {}) {
   }
   if (!segments.length && !pointPair) {
     if (!quiet) {
-      alert("Select one or more segments, or exactly two points.");
+      showNotice("Select one or more segments, or exactly two points.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3481,7 +3470,7 @@ function addParallelMarks(markCount, options = {}) {
   const targets = selectedOfTypes(["segment", "line", "parallel", "perpendicular"]);
   if (!targets.length) {
     if (!quiet) {
-      alert("Select one or more segments/lines/parallel/perpendicular objects first.");
+      showNotice("Select one or more segments/lines/parallel/perpendicular objects first.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3545,16 +3534,14 @@ function midpointSelectionEndpoints() {
 }
 
 function promptRegularPolygonSideCount() {
-  const input = prompt("Number of sides (n):", "5");
-  if (input === null) {
-    return null;
-  }
-  const n = Number(input.trim());
-  if (!Number.isInteger(n) || n < 3 || n > 24) {
-    alert("Enter an integer number of sides from 3 to 24.");
-    return null;
-  }
-  return n;
+  return openNumberModal({
+    title: "Regular Polygon",
+    label: "Number of sides (n)",
+    initial: 5,
+    min: 3,
+    max: 24,
+    submitLabel: "Create",
+  });
 }
 
 function regularPolygonVerticesFromEdge(pointA, pointB, sideCount) {
@@ -3677,7 +3664,7 @@ function addMidpoint(tickCount = 0, options = {}) {
   const endpoints = midpointSelectionEndpoints();
   if (!endpoints) {
     if (!quiet) {
-      alert("Select exactly one segment or exactly two points.");
+      showNotice("Select exactly one segment or exactly two points.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3685,7 +3672,7 @@ function addMidpoint(tickCount = 0, options = {}) {
   const [pointAId, pointBId] = endpoints;
   if (!pointAId || !pointBId || pointAId === pointBId) {
     if (!quiet) {
-      alert("Select two distinct endpoints.");
+      showNotice("Select two distinct endpoints.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3694,7 +3681,7 @@ function addMidpoint(tickCount = 0, options = {}) {
   const pointB = getPointById(pointBId);
   if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
     if (!quiet) {
-      alert("Selected endpoints must be distinct points.");
+      showNotice("Selected endpoints must be distinct points.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3724,7 +3711,7 @@ function addAngleBisector(tickCount = 0, options = {}) {
   const pointIds = angleBisectorSelectionPointIds();
   if (!pointIds) {
     if (!quiet) {
-      alert("Select exactly 3 points (with the vertex second) or one angle mark.");
+      showNotice("Select exactly 3 points (with the vertex second) or one angle mark.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3736,7 +3723,7 @@ function addAngleBisector(tickCount = 0, options = {}) {
   const probe = angleBisectorDirectionPoint(pointA, vertex, pointB, 1);
   if (!probe) {
     if (!quiet) {
-      alert("Cannot bisect a degenerate or straight angle selection.");
+      showNotice("Cannot bisect a degenerate or straight angle selection.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3791,7 +3778,7 @@ function createPerpendicularBisectorVariant(options = {}, runtime = {}) {
   const endpoints = midpointSelectionEndpoints();
   if (!endpoints) {
     if (!quiet) {
-      alert("Select exactly one segment or exactly two points.");
+      showNotice("Select exactly one segment or exactly two points.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3801,7 +3788,7 @@ function createPerpendicularBisectorVariant(options = {}, runtime = {}) {
   const pointB = getPointById(pointBId);
   if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
     if (!quiet) {
-      alert("Selected endpoints must be distinct points.");
+      showNotice("Selected endpoints must be distinct points.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3826,7 +3813,7 @@ function addRegularPolygonVariant(options = {}, runtime = {}) {
   const endpoints = midpointSelectionEndpoints();
   if (!endpoints) {
     if (!quiet) {
-      alert("Select exactly one segment or exactly two points.");
+      showNotice("Select exactly one segment or exactly two points.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3834,7 +3821,7 @@ function addRegularPolygonVariant(options = {}, runtime = {}) {
   const [pointAId, pointBId] = endpoints;
   if (!pointAId || !pointBId || pointAId === pointBId) {
     if (!quiet) {
-      alert("Select two distinct endpoints.");
+      showNotice("Select two distinct endpoints.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -3843,19 +3830,26 @@ function addRegularPolygonVariant(options = {}, runtime = {}) {
   const pointB = getPointById(pointBId);
   if (!pointA || !pointB || distance(pointA, pointB) < 1e-9) {
     if (!quiet) {
-      alert("Selected endpoints must be distinct points.");
+      showNotice("Selected endpoints must be distinct points.");
       setMode(ToolMode.SELECT);
     }
     return false;
   }
 
-  const sideCount = promptRegularPolygonSideCount();
+  // Selection is valid; the side-count modal resolves asynchronously and the
+  // construction completes (or is dropped on cancel) when it does.
+  void completeRegularPolygonVariant(options, pointAId, pointBId, pointA, pointB);
+  return true;
+}
+
+async function completeRegularPolygonVariant(options, pointAId, pointBId, pointA, pointB) {
+  const sideCount = await promptRegularPolygonSideCount();
   if (sideCount === null) {
-    return false;
+    return;
   }
   const vertices = regularPolygonVerticesFromEdge(pointA, pointB, sideCount);
   if (!vertices) {
-    return false;
+    return;
   }
   const center = options.withCenter ? regularPolygonCenterFromEdge(pointA, pointB, sideCount) : null;
   const style = defaultStyle();
@@ -3945,7 +3939,6 @@ function addRegularPolygonVariant(options = {}, runtime = {}) {
 
     store.clearSelection();
   });
-  return true;
 }
 
 function launchParallelOrPerpendicular(kind, buttonId = null) {
@@ -3968,7 +3961,7 @@ function addInscribedCircle(withCenter, options = {}) {
   const pointIds = findTriangleFromSelection();
   if (!pointIds) {
     if (!quiet) {
-      alert("Select 3 triangle vertices or the 3 sides first.");
+      showNotice("Select 3 triangle vertices or the 3 sides first.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4003,7 +3996,7 @@ function addCircumscribedCircle(withCenter, options = {}) {
   const pointIds = findTriangleFromSelection();
   if (!pointIds) {
     if (!quiet) {
-      alert("Select 3 triangle vertices or the 3 sides first.");
+      showNotice("Select 3 triangle vertices or the 3 sides first.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4053,7 +4046,7 @@ function addInscribedPolygon(n, options = {}) {
   const selectedCircles = selectedOfTypes(["circle"]);
   if (selectedCircles.length !== 1) {
     if (!quiet) {
-      alert("Select exactly one circle first.");
+      showNotice("Select exactly one circle first.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4253,7 +4246,7 @@ function addTangentToCircle(options = {}) {
   const selectedCircles = selectedOfTypes(["circle"]);
   if (selectedPoints.length !== 1 || selectedCircles.length !== 1) {
     if (!quiet) {
-      alert("Select exactly one point and one circle.");
+      showNotice("Select exactly one point and one circle.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4263,7 +4256,7 @@ function addTangentToCircle(options = {}) {
   const tps = computeTangentPickPoints(sourcePointId, circleId);
   if (!tps) {
     if (!quiet) {
-      alert("Point must be outside the circle.");
+      showNotice("Point must be outside the circle.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4384,7 +4377,7 @@ function addTangentAtCirclePoint(options = {}) {
   const selectedCircles = selectedOfTypes(["circle"]);
   if (selectedPoints.length !== 1 || selectedCircles.length !== 1) {
     if (!quiet) {
-      alert("Select exactly one point and one circle.");
+      showNotice("Select exactly one point and one circle.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4397,7 +4390,7 @@ function addTangentAtCirclePoint(options = {}) {
   const through = circleObj ? getPointById(circleObj.pointIds?.[1]) : null;
   if (!source || !center || !through) {
     if (!quiet) {
-      alert("Could not find circle geometry.");
+      showNotice("Could not find circle geometry.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4406,7 +4399,7 @@ function addTangentAtCirclePoint(options = {}) {
   const distToCenter = Math.hypot(source.x - center.x, source.y - center.y);
   if (distToCenter < 1e-9) {
     if (!quiet) {
-      alert("Point cannot be the circle's center.");
+      showNotice("Point cannot be the circle's center.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4604,7 +4597,7 @@ function addSideMeasure(options = {}) {
   const segments = selectedOfTypes(["segment"]);
   if (segments.length !== 1) {
     if (!quiet) {
-      alert("Select exactly one segment.");
+      showNotice("Select exactly one segment.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4617,28 +4610,34 @@ function addSideMeasure(options = {}) {
   }
   const value = distance(p1, p2);
   const defaultText = value.toFixed(2);
-  const text = prompt("Side length label:", defaultText);
-  if (text === null) {
-    return false;
-  }
-
-  runMutation("add-side-measure", () => {
-    addObject({
-      id: makeId("label"),
-      type: "label",
-      x: (p1.x + p2.x) / 2 + 0.35,
-      y: (p1.y + p2.y) / 2 + 0.35,
-      text: text.trim() || defaultText,
-      targetId: segment.id,
-      follow: {
-        kind: "sideMeasure",
-        segmentId: segment.id,
-        offsetX: 0.35,
-        offsetY: 0.35,
-      },
-      style: defaultStyle(),
+  void (async () => {
+    const text = await openTextModal({
+      title: "Side Length",
+      label: "Side length label",
+      initial: defaultText,
+      submitLabel: "Add Label",
     });
-  });
+    if (text === null) {
+      return;
+    }
+    runMutation("add-side-measure", () => {
+      addObject({
+        id: makeId("label"),
+        type: "label",
+        x: (p1.x + p2.x) / 2 + 0.35,
+        y: (p1.y + p2.y) / 2 + 0.35,
+        text: text.trim() || defaultText,
+        targetId: segment.id,
+        follow: {
+          kind: "sideMeasure",
+          segmentId: segment.id,
+          offsetX: 0.35,
+          offsetY: 0.35,
+        },
+        style: defaultStyle(),
+      });
+    });
+  })();
   return true;
 }
 
@@ -4662,7 +4661,7 @@ function addAngleMeasure(options = {}) {
   const pointIds = resolveAngleMeasurePointIds();
   if (!pointIds) {
     if (!quiet) {
-      alert("Select 3 points or one angle mark.");
+      showNotice("Select 3 points or one angle mark.");
       setMode(ToolMode.SELECT);
     }
     return false;
@@ -4675,31 +4674,37 @@ function addAngleMeasure(options = {}) {
   }
   const deg = angleDegrees(p1, p2, p3);
   const rounded = `${deg.toFixed(0)}°`;
-  const textInput = prompt("Angle measure label:", rounded);
-  if (textInput === null) {
-    return false;
-  }
-  let text = textInput.trim() || rounded;
-  if (!text.includes("°")) {
-    text = `${text}°`;
-  }
-
-  runMutation("add-angle-measure", () => {
-    addObject({
-      id: makeId("label"),
-      type: "label",
-      x: p2.x + 0.55,
-      y: p2.y + 0.55,
-      text,
-      follow: {
-        kind: "angleMeasure",
-        pointIds: [...pointIds],
-        offsetX: 0.55,
-        offsetY: 0.55,
-      },
-      style: defaultStyle(),
+  void (async () => {
+    const textInput = await openTextModal({
+      title: "Angle Measure",
+      label: "Angle measure label",
+      initial: rounded,
+      submitLabel: "Add Label",
     });
-  });
+    if (textInput === null) {
+      return;
+    }
+    let text = textInput.trim() || rounded;
+    if (!text.includes("°")) {
+      text = `${text}°`;
+    }
+    runMutation("add-angle-measure", () => {
+      addObject({
+        id: makeId("label"),
+        type: "label",
+        x: p2.x + 0.55,
+        y: p2.y + 0.55,
+        text,
+        follow: {
+          kind: "angleMeasure",
+          pointIds: [...pointIds],
+          offsetX: 0.55,
+          offsetY: 0.55,
+        },
+        style: defaultStyle(),
+      });
+    });
+  })();
   return true;
 }
 
@@ -4757,57 +4762,29 @@ async function editLabelText(labelId) {
 function isEditorModalOpen() {
   const exportPreviewEl = document.getElementById("exportPreviewModal");
   const exportPreviewOpen = !!exportPreviewEl && !exportPreviewEl.hasAttribute("hidden");
-  return Boolean(labelModalResolve || nGonModalResolve || exportPreviewOpen);
-}
-
-function closeNGonModal(n = null) {
-  if (!nGonModalEl || !nGonModalResolve) return;
-  nGonModalEl.hidden = true;
-  const resolve = nGonModalResolve;
-  nGonModalResolve = null;
-  resolve(n);
+  return Boolean(isModalOpen() || exportPreviewOpen);
 }
 
 function openNGonModal() {
-  if (!nGonModalEl || !nGonModalInputEl) return Promise.resolve(null);
-  if (nGonModalResolve) closeNGonModal(null);
-  nGonModalInputEl.value = "5";
-  nGonModalEl.hidden = false;
-  queueMicrotask(() => {
-    nGonModalInputEl.focus();
-    nGonModalInputEl.select();
-  });
-  return new Promise((resolve) => {
-    nGonModalResolve = resolve;
+  return openNumberModal({
+    title: "Circle Inscribed in n-gon",
+    label: "Number of sides",
+    initial: 5,
+    min: 3,
+    max: 24,
+    submitLabel: "Create",
   });
 }
 
-function closeLabelModal(value = "") {
-  if (!labelModalEl || !labelModalResolve) {
-    return;
-  }
-  labelModalEl.hidden = true;
-  const resolve = labelModalResolve;
-  labelModalResolve = null;
-  resolve(value);
-}
-
-function openLabelModal(initialValue = "") {
-  if (!labelModalEl || !labelModalInputEl) {
-    return Promise.resolve("");
-  }
-  if (labelModalResolve) {
-    closeLabelModal("");
-  }
-  labelModalInputEl.value = String(initialValue ?? "");
-  labelModalEl.hidden = false;
-  queueMicrotask(() => {
-    labelModalInputEl.focus();
-    labelModalInputEl.select();
+async function openLabelModal(initialValue = "") {
+  const value = await openTextModal({
+    title: "Add Label",
+    label: "Label text",
+    initial: initialValue,
+    help: "Examples: `sqrt(x+3)`, `x^2`, `A_1`, `x^o` for degrees.",
+    submitLabel: "Add Label",
   });
-  return new Promise((resolve) => {
-    labelModalResolve = resolve;
-  });
+  return value === null ? "" : normalizeManualLabelText(value);
 }
 
 function autoLabelPoints() {
@@ -4975,7 +4952,7 @@ async function uploadBackgroundImageFromFile(file) {
     return;
   }
   if (!file.type?.startsWith("image/")) {
-    alert("Please choose an image file.");
+    showNotice("Please choose an image file.");
     return;
   }
   try {
@@ -4994,7 +4971,7 @@ async function uploadBackgroundImageFromFile(file) {
       };
     });
   } catch (err) {
-    alert(err.message || "Unable to load the image.");
+    showNotice(err.message || "Unable to load the image.");
   }
 }
 
@@ -5017,7 +4994,7 @@ function openDocFromFile(file) {
       store.setBackgroundImageAssets(backgroundImageAssets);
       applyDoc(cloneFigureDoc(doc));
     } catch (err) {
-      alert(`Cannot open document: ${err.message}`);
+      showNotice(`Cannot open document: ${err.message}`);
     }
   };
   reader.readAsText(file);
@@ -5098,45 +5075,3 @@ if (drawingHintEl) {
   });
 }
 
-if (labelModalBackdropEl) {
-  labelModalBackdropEl.addEventListener("click", () => closeLabelModal(""));
-}
-
-if (labelModalCancelEl) {
-  labelModalCancelEl.addEventListener("click", () => closeLabelModal(""));
-}
-
-if (labelModalDialogEl) {
-  labelModalDialogEl.addEventListener("submit", (evt) => {
-    evt.preventDefault();
-    closeLabelModal(normalizeManualLabelText(labelModalInputEl?.value || ""));
-  });
-}
-
-if (nGonModalBackdropEl) {
-  nGonModalBackdropEl.addEventListener("click", () => closeNGonModal(null));
-}
-
-if (nGonModalCancelEl) {
-  nGonModalCancelEl.addEventListener("click", () => closeNGonModal(null));
-}
-
-if (nGonModalDialogEl) {
-  nGonModalDialogEl.addEventListener("submit", (evt) => {
-    evt.preventDefault();
-    const raw = Number(nGonModalInputEl?.value);
-    const n = Number.isInteger(raw) && raw >= 3 && raw <= 24 ? raw : null;
-    closeNGonModal(n);
-  });
-}
-
-document.addEventListener("keydown", (evt) => {
-  if (evt.key === "Escape" && labelModalResolve) {
-    evt.preventDefault();
-    closeLabelModal("");
-  }
-  if (evt.key === "Escape" && nGonModalResolve) {
-    evt.preventDefault();
-    closeNGonModal(null);
-  }
-});
