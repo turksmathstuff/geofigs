@@ -3326,6 +3326,8 @@ function clearBoard() {
 const {
   downloadSvg,
   downloadPng,
+  copySvg,
+  copyPng,
   previewExport,
   downloadPreviewSvg,
   downloadPreviewPng,
@@ -3400,6 +3402,8 @@ wireUi({
   renderCurrentDoc,
   downloadSvg,
   downloadPng,
+  copySvg,
+  copyPng,
   previewExport,
   downloadPreviewSvg,
   downloadPreviewPng,
