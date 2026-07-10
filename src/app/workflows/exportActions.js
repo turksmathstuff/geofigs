@@ -51,6 +51,29 @@ export function createExportActionsWorkflow(ctx) {
     downloadBlob(name, blob);
   }
 
+  async function copySvg() {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error("Clipboard text copy is not available in this browser.");
+    }
+    const { background, fontScale, pointScale, tight } = readExportSettings();
+    const svg = buildExportSvg({ background, fontScale, pointScale, tight });
+    await navigator.clipboard.writeText(svg);
+  }
+
+  async function copyPng() {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+      throw new Error("Clipboard image copy is not available in this browser.");
+    }
+    const { background, fontScale, pointScale, pngScale } = readExportSettings();
+    const svg = buildExportSvg({ background, fontScale, pointScale, tight: true });
+    const blob = await exportPNG(svg, { background, scale: pngScale });
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        [blob.type || "image/png"]: blob,
+      }),
+    ]);
+  }
+
   async function previewExport() {
     const { background, fontScale, pointScale, tight } = readExportSettings();
     const svg = buildExportSvg({ background, fontScale, pointScale, tight });
@@ -100,6 +123,8 @@ export function createExportActionsWorkflow(ctx) {
   return {
     downloadSvg,
     downloadPng,
+    copySvg,
+    copyPng,
     previewExport,
     downloadPreviewSvg,
     downloadPreviewPng,

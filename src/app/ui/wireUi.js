@@ -276,7 +276,16 @@ function bindUndoRedoActions({ doc, store, renderCurrentDoc }) {
   });
 }
 
-function bindExportActions({ doc, downloadSvg, downloadPng, previewExport, downloadPreviewSvg, downloadPreviewPng }) {
+function bindExportActions({
+  doc,
+  downloadSvg,
+  downloadPng,
+  copySvg,
+  copyPng,
+  previewExport,
+  downloadPreviewSvg,
+  downloadPreviewPng,
+}) {
   doc.getElementById("previewExportBtn").addEventListener("click", () => {
     previewExport().catch((err) => showNotice(err.message));
   });
@@ -285,6 +294,16 @@ function bindExportActions({ doc, downloadSvg, downloadPng, previewExport, downl
   });
   doc.getElementById("downloadPng").addEventListener("click", () => {
     downloadPng().catch((err) => showNotice(err.message));
+  });
+  doc.getElementById("copySvg").addEventListener("click", () => {
+    copySvg()
+      .then(() => showNotice("SVG copied to clipboard."))
+      .catch((err) => showNotice(err.message));
+  });
+  doc.getElementById("copyPng").addEventListener("click", () => {
+    copyPng()
+      .then(() => showNotice("PNG copied to clipboard."))
+      .catch((err) => showNotice(err.message));
   });
   doc.getElementById("previewDownloadSvg").addEventListener("click", () => {
     downloadPreviewSvg().catch((err) => showNotice(err.message));
