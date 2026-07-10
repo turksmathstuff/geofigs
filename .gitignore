@@ -15,3 +15,8 @@ CODE_REVIEW.md
 # Dev-only documentation recorder — never shipped (see src/recorder.js header)
 src/recorder.js
 figure-walkthrough.md
+
+# Browser test harness (Playwright)
+node_modules/
+test-results/
+playwright-report/
