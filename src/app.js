@@ -73,6 +73,7 @@ import { createTriangleCopyTransformWorkflow, segmentConnects } from "./app/work
 import { createExportActionsWorkflow } from "./app/workflows/exportActions.js";
 import { createBackgroundImageWorkflow } from "./app/workflows/backgroundImage.js";
 import { launchShadeRegionFill } from "./app/workflows/shadeRegionFill.js";
+import { installGeoTestHook } from "./app/testHooks.js";
 
 const store = new AppStore();
 // Phase 2 scaffolding: session object will replace file-scope mutable state incrementally.
@@ -3434,3 +3435,4 @@ if (drawingHintEl) {
   });
 }
 
+installGeoTestHook({ window, store, session, boardController });
