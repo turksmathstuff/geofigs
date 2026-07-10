@@ -7,12 +7,13 @@ cd "$(dirname "$0")"
 PORT=8000
 URL="http://localhost:${PORT}"
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is not installed or not on PATH."
+if ! command -v node >/dev/null 2>&1; then
+  echo "Node.js is not installed or not on PATH."
+  echo "Install Node.js, then double-click this file again."
   exit 1
 fi
 
-python3 -m http.server "$PORT" >/tmp/geo-figures-http-server.log 2>&1 &
+node scripts/serve.mjs "$PORT" >/tmp/geo-figures-http-server.log 2>&1 &
 SERVER_PID=$!
 
 cleanup() {
