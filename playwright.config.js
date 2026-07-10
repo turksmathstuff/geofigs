@@ -15,7 +15,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   webServer: {
-    command: `node e2e/serve.mjs ${PORT}`,
+    command: `node scripts/serve.mjs ${PORT}`,
     url: `http://127.0.0.1:${PORT}/`,
     reuseExistingServer: false,
   },

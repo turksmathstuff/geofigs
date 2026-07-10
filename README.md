@@ -8,12 +8,20 @@ This app uses JavaScript modules, so run it from a local web server.
 From this folder:
 
 ```bash
-python3 -m http.server 8000
+npm start
 ```
 
 Then open:
 
 - http://localhost:8000
+
+On macOS, you can also double-click `launch.command` in this folder. It starts the same local server and opens the app in your browser.
+
+To use a different port:
+
+```bash
+npm start -- 9000
+```
 
 Do not open `index.html` directly with `file://`.
 
