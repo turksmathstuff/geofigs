@@ -280,7 +280,6 @@ function bindExportActions({
   doc,
   downloadSvg,
   downloadPng,
-  copySvg,
   copyPng,
   previewExport,
   downloadPreviewSvg,
@@ -294,11 +293,6 @@ function bindExportActions({
   });
   doc.getElementById("downloadPng").addEventListener("click", () => {
     downloadPng().catch((err) => showNotice(err.message));
-  });
-  doc.getElementById("copySvg").addEventListener("click", () => {
-    copySvg()
-      .then(() => showNotice("SVG copied to clipboard."))
-      .catch((err) => showNotice(err.message));
   });
   doc.getElementById("copyPng").addEventListener("click", () => {
     copyPng()

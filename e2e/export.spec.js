@@ -52,15 +52,6 @@ test.describe("export and save", () => {
     expect(doc.objects.filter((o) => o.type === "point")).toHaveLength(2);
   });
 
-  test("Copy SVG writes the exported SVG source to the clipboard", async ({ page }) => {
-    await page.click("#copySvg");
-
-    const copied = await page.evaluate(() => window.__geoClipboard.text);
-    expect(copied).toContain("<svg");
-    expect(copied).toContain("line");
-    await expect(page.locator("#appModalDialog")).toContainText("SVG copied to clipboard.");
-  });
-
   test("Copy PNG writes an image/png clipboard item", async ({ page }) => {
     await page.click("#copyPng");
     await expect(page.locator("#appModalDialog")).toContainText("PNG copied to clipboard.");
