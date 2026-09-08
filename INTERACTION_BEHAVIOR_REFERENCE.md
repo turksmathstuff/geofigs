@@ -136,6 +136,16 @@ General:
 - The third clicked point may be repositioned to the computed isosceles apex location.
 - Creates 3 segment edges.
 
+#### Equilateral Triangle
+- Click two base vertices.
+- A dashed preview shows the equilateral apex on the chosen side of the base.
+- Creates three equal segment edges.
+
+### Regular Polygon menu
+- Choose a plain, tick-marked, or arc-tick variant, with or without a visible center.
+- Enter the number of sides in the in-app dialog, then click two points to define the first edge and orientation.
+- The remaining vertices are constrained to the source edge, so the polygon updates when that edge moves.
+
 ### Parallel
 - This is a button action (not a click-by-click construction mode).
 - Requires a selection containing:
@@ -146,7 +156,7 @@ General:
 - Defaults to solid style.
 - Renders as a finite visible line with arrowheads on both ends, slightly inset from the canvas edges on creation.
 - Arrow tips can be dragged to resize the visible extent.
-- If selection is invalid, shows an alert and returns to `Select` mode.
+- If selection is invalid, shows an in-app notice and returns to `Select` mode.
 
 ### Perpendicular
 - This is a button action (not a click-by-click construction mode).
@@ -158,7 +168,7 @@ General:
 - Defaults to solid style.
 - Renders as a finite visible line with arrowheads on both ends, slightly inset from the canvas edges on creation.
 - Arrow tips can be dragged to resize the visible extent.
-- If selection is invalid, shows an alert and returns to `Select` mode.
+- If selection is invalid, shows an in-app notice and returns to `Select` mode.
 
 ### Congruent/Similar Triangles (details group)
 
@@ -192,7 +202,7 @@ General:
 ### Segment Ticks (1/2/3)
 - Select one or more segments first.
 - Adds tick-mark annotations to each selected segment.
-- If no segment is selected, shows an alert and returns to `Select` mode.
+- If no segment is selected, shows an in-app notice and returns to `Select` mode.
 
 ### Angle Arcs (1/2/3)
 - Two ways to use:
@@ -206,22 +216,22 @@ General:
 ### Parallel Marks (1/2/3)
 - Select one or more `segment` or `line` objects first.
 - Adds parallel chevron marks to each selected target.
-- If no valid target is selected, shows an alert and returns to `Select` mode.
+- If no valid target is selected, shows an in-app notice and returns to `Select` mode.
 
 ### Side Length
 - Requires exactly one selected segment.
-- Prompts for text (default is numeric segment length).
+- Opens an in-app text dialog (default is numeric segment length).
 - Creates a draggable label near the segment midpoint.
-- If selection is invalid, shows an alert and returns to `Select` mode.
+- If selection is invalid, shows an in-app notice and returns to `Select` mode.
 
 ### Angle Measure
 - Requires either:
   - 3 selected points (counterclockwise), or
   - 1 selected angle annotation
-- Prompts for text (default is computed angle measure, rounded, with `°`)
+- Opens an in-app text dialog (default is the computed angle measure, rounded, with `°`).
 - If entered text omits `°`, the app appends it.
 - Creates a draggable label near the angle vertex.
-- If selection is invalid, shows an alert and returns to `Select` mode.
+- If selection is invalid, shows an in-app notice and returns to `Select` mode.
 
 ### Right Angle
 - Two ways to use:
@@ -229,7 +239,7 @@ General:
   - Without valid selection: switches to angle point-picking mode (`Angle`) and expects 3 points
 
 ### Add Label
-- Prompts for label text.
+- Opens an in-app dialog for label text.
 - If a point is selected, places the label near that point.
 - Otherwise places the label at `(0, 0)`.
 - Labels are draggable.
@@ -300,11 +310,22 @@ General:
 - Hidden items are excluded because they are not rendered.
 - Constrained intersection points export in black by default (same behavior as SVG export).
 
+### Copy PNG
+- Writes the current PNG export to the system clipboard using the selected scale and background settings.
+- The former Copy SVG action was removed because browser clipboard support was unreliable.
+
+### Hide Points / Show Points
+- Toggles point markers for presentation and export without deleting points or breaking dependent geometry.
+
+### Hide Arrows / Show Arrows
+- Toggles arrowheads on line-like objects for presentation and export without changing their geometry.
+
 ### Save `.geofig`
 - Saves editable document state (objects, annotations, styles, metadata) as JSON.
 
 ### Open `.geofig`
 - Loads a saved document.
+- Also accepts legacy `.geojson` documents.
 - Replaces current document state.
 - Clears undo stack after loading.
 

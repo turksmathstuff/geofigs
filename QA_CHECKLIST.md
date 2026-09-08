@@ -11,12 +11,12 @@ Use this checklist on the current `main` branch build. Go in order.
 
 | Status | What it covers | Examples |
 |--------|----------------|----------|
-| Automated now | Pure geometry math, document/background-image serialization, and shade-region fill pipeline (flood fill, contour trace, simplification, doc round-trip) | `test/geometry.test.js`, `test/figureDoc.test.js`, `test/shadeRegion.test.js` |
-| Still manual | Live UI behavior, pointer interactions, drag/undo flow, exports, keyboard shortcuts | Tool switching, marquee select, triangle workflows, SVG/PNG export, hide/show |
-| Worth automating next | High-value browser flows that are currently easy to regress | App startup smoke test, upload/save/reopen background image, undo after drag, export preview |
+| Automated now | Pure geometry/constraint logic, document serialization, shade-region processing, and core Chromium UI flows | Unit tests in `test/`; Playwright tests in `e2e/` cover startup, drawing, tool switching, undo/redo, delete, marquee selection, SVG download, `.geofig` save/reopen, and Copy PNG |
+| Still manual | Complex construction workflows, pointer drag behavior, annotation tracking, background-image UI, export preview, and cross-app output validation | Triangle transforms, bisectors/tangents, drag/undo, Word/Docs/LMS checks |
+| Worth automating next | High-value browser flows that remain easy to regress | Background-image upload/save/reopen, undo after drag, export preview label dragging, advanced construction tools |
 
-## Refactor Phase 0 Starter Subset (Fast Baseline)
-- Use this subset before starting `app.js` refactor work and after each refactor phase.
+## Regression Starter Subset (Fast Baseline)
+- Use this subset before and after substantial changes.
 - Goal: catch behavior regressions quickly without running the full checklist every time.
 
 ### Minimum pass (recommended 15-30 minutes)
@@ -46,7 +46,7 @@ Use this checklist on the current `main` branch build. Go in order.
 - After changes touching rendering, event wiring, or drag behavior
 
 ## Test Setup
-1. Start the app (`python3 -m http.server 8000`) and open `http://localhost:8000`.
+1. Start the app (`npm start`) and open `http://localhost:8000`.
 2. Confirm the app loads without a blank canvas or JS errors.
 3. Confirm the board is visible and tools/buttons render.
 4. Optional: Open browser console to catch errors during testing.
@@ -107,19 +107,19 @@ Use this checklist on the current `main` branch build. Go in order.
 ---
 
 ## 6. Triangle Tool - 4 Variants
-### 5A. 3-Point Triangle
+### 6A. 3-Point Triangle
 1. Open `Triangle ▾` and choose `3-Point Triangle`.
 2. Click two points and confirm dashed triangle preview appears while moving to third point.
 3. Click third point and confirm 3 segment edges are created.
 4. Reuse two existing points from that triangle plus a third point to create another triangle.
 
-### 5B. Right Triangle
+### 6B. Right Triangle
 1. Choose `Right Triangle`.
 2. Click first point and move cursor; confirm preview updates.
 3. Click second point and confirm a triangle is created automatically.
 4. Confirm a right-angle annotation is created.
 
-### 5C. Isosceles Triangle (Critical Regression Check)
+### 6C. Isosceles Triangle (Critical Regression Check)
 1. Choose `Isosceles Triangle`.
 2. Create an isosceles triangle with base `A-B` and apex click `C`.
 3. Without changing tools, click the same base points `A` then `B` again.
@@ -128,7 +128,7 @@ Use this checklist on the current `main` branch build. Go in order.
 6. Repeat step 3-5 at least 3 times to confirm stability.
 7. Try clicking near the base segment at an endpoint and confirm it does not accidentally complete a triangle early.
 
-### 5D. Equilateral Triangle
+### 6D. Equilateral Triangle
 1. Choose `Equilateral Triangle`.
 2. Click two base vertices and confirm the apex preview appears on the correct side.
 3. Create the triangle and confirm the three sides match.
@@ -163,7 +163,7 @@ Note: Opening a `.geofig` is expected to reset/replace the undo history. Loaded 
 5. Drag its arrow-tip handles and confirm visible extent changes.
 6. Repeat with `Perpendicular` and confirm perpendicular output.
 7. Use a previously created `parallel` or `perpendicular` as the source line and confirm it works.
-8. Test invalid selection (missing point or missing line-like object) and confirm an alert appears and app returns to `Select` mode.
+8. Test invalid selection (missing point or missing line-like object) and confirm an in-app notice appears and the app returns to `Select` mode.
 
 ---
 
@@ -173,7 +173,7 @@ Note: Opening a `.geofig` is expected to reset/replace the undo history. Loaded 
 2. Click `Midpoint` and confirm a midpoint point is created on the segment.
 3. Repeat using exactly two selected points (no segment) and confirm midpoint creation.
 4. Drag either source endpoint and confirm the midpoint tracks.
-5. Try invalid selection (no segment and not exactly two points) and confirm alert behavior.
+5. Try invalid selection (no segment and not exactly two points) and confirm in-app notice behavior.
 
 ### 10B. Midpoint Tick Variants
 1. Select a segment (or two points) and create `Midpoint 1 Tick`, `2 Ticks`, and `3 Ticks`.
@@ -241,7 +241,7 @@ Note: Opening a `.geofig` is expected to reset/replace the undo history. Loaded 
 1. Select one or more segments.
 2. Add `1` tick, then `2`, then `3` tick marks on test segments.
 3. Confirm marks appear on each selected segment.
-4. Try with no segment selected and confirm alert behavior.
+4. Try with no segment selected and confirm in-app notice behavior.
 
 ### 12B. Angle Arcs + Right Angle
 1. Select 3 points (counterclockwise) and add angle arc `1`.
@@ -254,14 +254,14 @@ Note: Opening a `.geofig` is expected to reset/replace the undo history. Loaded 
 ### 12C. Parallel Marks
 1. Select one or more segments/lines.
 2. Add parallel marks (`1`, `2`, `3`) and confirm chevrons render.
-3. Try with no valid selection and confirm alert behavior.
+3. Try with no valid selection and confirm in-app notice behavior.
 
 ### 12D. Side Length + Angle Measure Labels
 1. Select exactly one segment and click `Side Length`.
-2. Confirm prompt appears with default numeric value.
+2. Confirm the in-app dialog appears with the default numeric value.
 3. Accept default and confirm a draggable label is created.
 4. Select 3 points (or an angle annotation) and click `Angle Measure`.
-5. Confirm prompt appears with a degree-formatted default.
+5. Confirm the in-app dialog appears with a degree-formatted default.
 6. Enter a value without `°` and confirm the app appends `°`.
 7. Drag both labels and confirm they move.
 
@@ -292,6 +292,8 @@ Note: Opening a `.geofig` is expected to reset/replace the undo history. Loaded 
 3. Confirm hidden items are excluded visually but app remains functional.
 4. Click `Show All` and confirm hidden items return.
 5. Undo and redo hide/show actions to confirm command stack behavior remains stable.
+6. Click `Hide Points` and confirm point markers disappear while dependent geometry remains visible; click `Show Points` to restore them.
+7. Click `Hide Arrows` and confirm line/ray arrowheads disappear; click `Show Arrows` to restore them.
 
 ---
 
@@ -315,6 +317,7 @@ Note: Opening a `.geofig` is expected to reset/replace the undo history. Loaded 
 6. Confirm PNG files are created and visually correct.
 7. If using constrained intersection points, confirm exported appearance is acceptable (black by default in export).
 8. Open the export preview, drag labels, and confirm the adjusted positions are used in the downloaded export.
+9. Click `Copy PNG`, paste into an image-capable destination, and confirm the clipboard image matches the current export settings.
 
 ---
 
