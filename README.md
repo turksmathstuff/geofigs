@@ -121,7 +121,7 @@ Runs the `node --test` suites in `test/` (geometry, constraints, document model)
 npm run test:e2e          # headless
 npm run test:e2e:headed   # watch the browser
 ```
-Playwright drives the real app in Chromium (first time: `npm ci && npx playwright install chromium`). The config in `playwright.config.js` starts a local static server (`e2e/serve.mjs`) automatically. Tests live in `e2e/*.spec.js` and use helpers from `e2e/helpers.js` to click the board at math coordinates and assert on the figure document via a test hook that the app exposes only when loaded with `?e2e=1`.
+Playwright drives the real app in Chromium (first time: `npm ci && npx playwright install chromium`). The config in `playwright.config.js` starts the local static server (`scripts/serve.mjs`) automatically. Tests live in `e2e/*.spec.js` and use helpers from `e2e/helpers.js` to click the board at math coordinates and assert on the figure document via a test hook that the app exposes only when loaded with `?e2e=1`.
 
 Both suites run in GitHub Actions for pushes to `main` and for pull requests.
 
