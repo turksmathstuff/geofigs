@@ -1,4 +1,6 @@
-# Toolbar Reorganization Proposal
+# Toolbar Reorganization Proposal (Implemented)
+
+*Status: implemented in July 2026. This file preserves the design rationale and may use historical button labels; see `INTERACTION_BEHAVIOR_REFERENCE.md` for current behavior.*
 
 A pass over the toolbar in `index.html` (the `<aside class="toolbar">`, lines 27–263).
 Goal: order things by how the figure is actually built, surface the common buttons,

@@ -35,7 +35,12 @@ Do not open `index.html` directly with `file://`.
   - 3-Point Triangle
   - Right Triangle
   - Isosceles Triangle
+  - Equilateral Triangle
 - Circle
+- Arc (three points or center/start/end)
+- Regular polygons, with optional center and congruency marks
+- Inscribed and circumscribed circle constructions
+- Tangent lines from an external point or at a point on a circle
 - Parallel / Perpendicular through a selected point
 - Angle Bisector tools (plain, 1/2/3 tick variants)
 - Perpendicular Bisector tools (segment placement variants with optional right-angle / midpoint marks)
@@ -51,6 +56,7 @@ Do not open `index.html` directly with `file://`.
 - Angle measure labels (degree symbol by default)
 - Manual labels
 - Auto Label mode (click objects to add/remove labels)
+- Shade closed regions with configurable fill color and opacity
 
 ### Style
 - Stroke color
@@ -64,6 +70,8 @@ Do not open `index.html` directly with `file://`.
 - Upload a background image that stays with the saved figure
 - Download SVG (tight export supported)
 - Download PNG (scale 1x/2x/3x)
+- Copy PNG directly to the clipboard
+- Hide point markers and line/ray arrows without removing the underlying geometry
 - Hide Selected / Show All (useful for export cleanup)
 
 ## Interaction notes
@@ -114,6 +122,8 @@ npm run test:e2e          # headless
 npm run test:e2e:headed   # watch the browser
 ```
 Playwright drives the real app in Chromium (first time: `npm ci && npx playwright install chromium`). The config in `playwright.config.js` starts a local static server (`e2e/serve.mjs`) automatically. Tests live in `e2e/*.spec.js` and use helpers from `e2e/helpers.js` to click the board at math coordinates and assert on the figure document via a test hook that the app exposes only when loaded with `?e2e=1`.
+
+Both suites run in GitHub Actions for pushes to `main` and for pull requests.
 
 ## Deployment
 This is a static client-side app and can be hosted on GitHub Pages.
