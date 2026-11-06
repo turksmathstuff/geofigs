@@ -13,7 +13,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-node scripts/serve.mjs "$PORT" >/tmp/geo-figures-http-server.log 2>&1 &
+node scripts/serve.mjs "$PORT" >/tmp/geofigs-http-server.log 2>&1 &
 SERVER_PID=$!
 
 cleanup() {
@@ -27,6 +27,6 @@ trap cleanup EXIT INT TERM
 sleep 1
 open "$URL" >/dev/null 2>&1 || true
 
-echo "Serving Geo Figures at $URL"
+echo "Serving GeoFigs at $URL"
 echo "Press Control-C to stop the server."
 wait "$SERVER_PID"
